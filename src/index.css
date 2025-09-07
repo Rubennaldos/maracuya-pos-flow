@@ -8,37 +8,70 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Maracuya Brand Colors - Fresh & Natural */
+    --background: 120 20% 98%;
+    --foreground: 140 25% 15%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 120 30% 96%;
+    --card-foreground: 140 25% 15%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 120 30% 96%;
+    --popover-foreground: 140 25% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary - Fresh Green */
+    --primary: 130 60% 35%;
+    --primary-foreground: 120 20% 98%;
+    --primary-light: 130 40% 45%;
+    --primary-dark: 130 70% 25%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary - Warm Orange */
+    --secondary: 25 85% 60%;
+    --secondary-foreground: 120 20% 98%;
+    --secondary-light: 25 70% 70%;
+    --secondary-dark: 25 90% 50%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Success - Natural Green */
+    --success: 140 60% 40%;
+    --success-foreground: 120 20% 98%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Warning - Golden Orange */
+    --warning: 35 90% 55%;
+    --warning-foreground: 140 25% 15%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Muted tones */
+    --muted: 120 15% 90%;
+    --muted-foreground: 140 10% 45%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --accent: 130 40% 85%;
+    --accent-foreground: 140 25% 15%;
 
-    --radius: 0.5rem;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 120 20% 98%;
 
-    --sidebar-background: 0 0% 98%;
+    --border: 120 20% 85%;
+    --input: 120 30% 94%;
+    --ring: 130 60% 35%;
+
+    --radius: 0.75rem;
+
+    /* POS specific colors */
+    --pos-checkout: 130 50% 92%;
+    --pos-checkout-foreground: 140 25% 15%;
+    --pos-product: 120 30% 96%;
+    --pos-kitchen: 15 80% 88%;
+    --pos-credit: 210 60% 88%;
+
+    /* Gradients for modern design */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-light)));
+    --gradient-secondary: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--secondary-light)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+
+    /* Shadows */
+    --shadow-soft: 0 2px 20px hsla(var(--primary), 0.1);
+    --shadow-medium: 0 4px 30px hsla(var(--primary), 0.15);
+    --shadow-strong: 0 8px 40px hsla(var(--primary), 0.2);
+
+    --sidebar-background: 120 25% 96%;
 
     --sidebar-foreground: 240 5.3% 26.1%;
 
