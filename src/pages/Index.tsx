@@ -3,6 +3,14 @@ import { useAuthStore } from "@/store/authStore";
 import { LoginForm } from "@/components/LoginForm";
 import { Dashboard, ModuleType } from "@/components/Dashboard";
 import { PointOfSale } from "@/components/modules/PointOfSale";
+import { SalesList } from "@/components/modules/SalesList";
+import { Products } from "@/components/modules/Products";
+import { Clients } from "@/components/modules/Clients";
+import { Checkout } from "@/components/modules/Checkout";
+import { AccountsReceivable } from "@/components/modules/AccountsReceivable";
+import { HistoricalSales } from "@/components/modules/HistoricalSales";
+import { Promotions } from "@/components/modules/Promotions";
+import { UnregisteredSales } from "@/components/modules/UnregisteredSales";
 
 const Index = () => {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
@@ -16,7 +24,39 @@ const Index = () => {
     return <PointOfSale onBack={() => setCurrentModule(null)} />;
   }
 
-  // Add other modules here as they are implemented
+  if (currentModule === 'sales') {
+    return <SalesList onBack={() => setCurrentModule(null)} />;
+  }
+
+  if (currentModule === 'products') {
+    return <Products onBack={() => setCurrentModule(null)} />;
+  }
+
+  if (currentModule === 'clients') {
+    return <Clients onBack={() => setCurrentModule(null)} />;
+  }
+
+  if (currentModule === 'checkout') {
+    return <Checkout onBack={() => setCurrentModule(null)} />;
+  }
+
+  if (currentModule === 'accounts') {
+    return <AccountsReceivable onBack={() => setCurrentModule(null)} />;
+  }
+
+  if (currentModule === 'historical') {
+    return <HistoricalSales onBack={() => setCurrentModule(null)} />;
+  }
+
+  if (currentModule === 'promos') {
+    return <Promotions onBack={() => setCurrentModule(null)} />;
+  }
+
+  if (currentModule === 'unregistered') {
+    return <UnregisteredSales onBack={() => setCurrentModule(null)} />;
+  }
+
+  // Other modules still in development
   if (currentModule) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
