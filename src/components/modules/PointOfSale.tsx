@@ -17,6 +17,8 @@ import {
   Save,
   Trash2
 } from "lucide-react";
+import { useGlobalHotkeys } from "@/hooks/useGlobalHotkeys";
+import { useSaleFlow } from "@/hooks/useSaleFlow";
 
 // Mock product data - in production this would come from RTDB
 const MOCK_PRODUCTS = [
@@ -93,6 +95,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [saleType, setSaleType] = useState<'normal' | 'scheduled' | 'lunch'>('normal');
+  const { flowManager, isProcessing, saveDraft } = useSaleFlow();
 
   // Filter products based on search
   const filteredProducts = MOCK_PRODUCTS.filter(product =>
@@ -142,26 +145,42 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const total = subtotal; // Add tax calculation here if needed
 
-  const handleKeyPress = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && cart.length > 0) {
-      // Process sale
-      console.log('Processing sale:', cart);
-    } else if (e.key === 'F2') {
-      // Save as draft
-      console.log('Saving draft:', cart);
-    } else if (e.key === 'F3') {
-      setSaleType('scheduled');
-    } else if (e.key === 'F4') {
-      setSaleType('lunch');
-    } else if (e.key === 'Escape') {
-      clearCart();
-    }
+  const processSale = () => {
+    if (cart.length === 0) return;
+    
+    // Update flow manager with current cart
+    flowManager.updateCart(cart);
+    flowManager.setSaleType(saleType);
+    
+    // Start the flow - will advance to client selection
+    flowManager.handleEnter();
   };
 
+  // Global hotkeys
+  useGlobalHotkeys({
+    onEnter: processSale,
+    onCtrlEnter: processSale,
+    onEscape: clearCart,
+    onF2: () => {
+      if (cart.length > 0) {
+        saveDraft();
+      }
+    },
+    onCtrlS: () => {
+      if (cart.length > 0) {
+        saveDraft();
+      }
+    },
+    onF3: () => setSaleType('scheduled'),
+    onCtrlP: () => setSaleType('scheduled'),
+    onF4: () => setSaleType('lunch'),
+    onCtrlL: () => setSaleType('lunch')
+  });
+
+  // Update flow manager when cart changes
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyPress);
-    return () => document.removeEventListener('keydown', handleKeyPress);
-  }, [cart]);
+    flowManager.updateCart(cart);
+  }, [cart, flowManager]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -356,11 +375,20 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                 <Separator />
                 
                 <div className="space-y-2">
-                  <Button className="w-full h-12 text-lg bg-gradient-to-r from-primary to-primary-light">
-                    Procesar Venta (Enter)
+                  <Button 
+                    className="w-full h-12 text-lg bg-gradient-to-r from-primary to-primary-light"
+                    onClick={processSale}
+                    disabled={isProcessing || cart.length === 0}
+                  >
+                    {isProcessing ? 'Procesando...' : 'Procesar Venta (Enter)'}
                   </Button>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => cart.length > 0 && saveDraft()}
+                      disabled={cart.length === 0}
+                    >
                       <Save className="w-4 h-4 mr-1" />
                       Borrador (F2)
                     </Button>

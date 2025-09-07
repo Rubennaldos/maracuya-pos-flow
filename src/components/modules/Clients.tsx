@@ -41,53 +41,76 @@ const MOCK_CLIENTS: Client[] = [
     id: 'C001',
     names: 'María',
     lastNames: 'García López',
-    parentPhone: '987654321',
-    responsiblePhone: '987654321',
+    payer1Name: 'Juan García',
+    payer1Phone: '987654321',
+    payer2Name: 'Ana López',
+    payer2Phone: '987654322',
     classroom: '3A',
     grade: '3',
     level: 'primaria',
     hasAccount: true,
     isActive: true,
-    debt: 45.50
+    debt: 45.50,
+    isStaff: false
   },
   {
     id: 'C002',
     names: 'Carlos',
     lastNames: 'Ruiz Mendoza',
-    parentPhone: '987654322',
-    responsiblePhone: '987654322',
+    payer1Name: 'Pedro Ruiz',
+    payer1Phone: '987654323',
     classroom: '5B',
     grade: '5',
     level: 'primaria',
     hasAccount: true,
     isActive: true,
-    debt: 0
+    debt: 0,
+    isStaff: false
   },
   {
     id: 'C003',
     names: 'Ana',
     lastNames: 'López Silva',
-    parentPhone: '987654323',
-    responsiblePhone: '987654323',
+    payer1Name: 'María Silva',
+    payer1Phone: '987654324',
     classroom: '2A',
     grade: '2',
     level: 'primaria',
     hasAccount: false,
     isActive: true,
-    debt: 0
+    debt: 0,
+    isStaff: false
+  },
+  {
+    id: 'T001',
+    names: 'Roberto',
+    lastNames: 'Méndez Torres',
+    payer1Name: '',
+    payer1Phone: '',
+    classroom: '',
+    grade: '',
+    level: '',
+    hasAccount: true,
+    isActive: true,
+    debt: 0,
+    isStaff: true,
+    staffType: 'docente',
+    personalEmail: 'roberto.mendez@colegio.edu',
+    personalPhone: '987654325'
   },
   {
     id: 'VARIOS',
     names: 'Clientes',
     lastNames: 'Varios',
-    parentPhone: '',
-    responsiblePhone: '',
+    payer1Name: '',
+    payer1Phone: '',
     classroom: '',
     grade: '',
     level: '',
     hasAccount: false,
     isActive: true,
-    debt: 0
+    debt: 0,
+    isStaff: false
   }
 ];
 
@@ -95,14 +118,20 @@ interface Client {
   id: string;
   names: string;
   lastNames: string;
-  parentPhone: string;
-  responsiblePhone: string;
+  payer1Name: string;
+  payer1Phone: string;
+  payer2Name?: string;
+  payer2Phone?: string;
   classroom: string;
   grade: string;
   level: 'primaria' | 'secundaria' | '';
   hasAccount: boolean;
   isActive: boolean;
   debt: number;
+  isStaff?: boolean;
+  staffType?: 'docente' | 'administrativo' | null;
+  personalEmail?: string;
+  personalPhone?: string;
 }
 
 interface ClientsProps {
@@ -117,14 +146,20 @@ export const Clients = ({ onBack }: ClientsProps) => {
   const [newClient, setNewClient] = useState<Partial<Client>>({
     names: '',
     lastNames: '',
-    parentPhone: '',
-    responsiblePhone: '',
+    payer1Name: '',
+    payer1Phone: '',
+    payer2Name: '',
+    payer2Phone: '',
     classroom: '',
     grade: '',
     level: 'primaria',
     hasAccount: false,
     isActive: true,
-    debt: 0
+    debt: 0,
+    isStaff: false,
+    staffType: null,
+    personalEmail: '',
+    personalPhone: ''
   });
 
   const filteredClients = clients.filter(client =>
@@ -166,14 +201,20 @@ export const Clients = ({ onBack }: ClientsProps) => {
     setNewClient({
       names: '',
       lastNames: '',
-      parentPhone: '',
-      responsiblePhone: '',
+      payer1Name: '',
+      payer1Phone: '',
+      payer2Name: '',
+      payer2Phone: '',
       classroom: '',
       grade: '',
       level: 'primaria',
       hasAccount: false,
       isActive: true,
-      debt: 0
+      debt: 0,
+      isStaff: false,
+      staffType: null,
+      personalEmail: '',
+      personalPhone: ''
     });
   };
 
@@ -252,26 +293,97 @@ export const Clients = ({ onBack }: ClientsProps) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="parentPhone">Teléfono de Padres</Label>
-                    <Input
-                      id="parentPhone"
-                      value={newClient.parentPhone}
-                      onChange={(e) => setNewClient(prev => ({ ...prev, parentPhone: e.target.value }))}
-                      placeholder="987654321"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="responsiblePhone">Teléfono de Responsable</Label>
-                    <Input
-                      id="responsiblePhone"
-                      value={newClient.responsiblePhone}
-                      onChange={(e) => setNewClient(prev => ({ ...prev, responsiblePhone: e.target.value }))}
-                      placeholder="987654321"
-                    />
-                  </div>
+                {/* Staff toggle */}
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="isStaff"
+                    checked={newClient.isStaff}
+                    onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, isStaff: checked }))}
+                  />
+                  <Label htmlFor="isStaff">¿Es personal docente/administrativo?</Label>
                 </div>
+
+                {newClient.isStaff ? (
+                  /* Staff fields */
+                  <>
+                    <div>
+                      <Label>Tipo de Personal</Label>
+                      <Select
+                        value={newClient.staffType || ''}
+                        onValueChange={(value: 'docente' | 'administrativo') => 
+                          setNewClient(prev => ({ ...prev, staffType: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="docente">Docente</SelectItem>
+                          <SelectItem value="administrativo">Administrativo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="personalEmail">Correo Personal</Label>
+                        <Input
+                          id="personalEmail"
+                          type="email"
+                          value={newClient.personalEmail}
+                          onChange={(e) => setNewClient(prev => ({ ...prev, personalEmail: e.target.value }))}
+                          placeholder="ejemplo@correo.com"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="personalPhone">Teléfono Personal</Label>
+                        <Input
+                          id="personalPhone"
+                          value={newClient.personalPhone}
+                          onChange={(e) => setNewClient(prev => ({ ...prev, personalPhone: e.target.value }))}
+                          placeholder="987654321"
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  /* Student fields */
+                  <>
+                    <div>
+                      <Label htmlFor="payer1Name">Responsable de Pago 1 (Obligatorio)</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          id="payer1Name"
+                          value={newClient.payer1Name}
+                          onChange={(e) => setNewClient(prev => ({ ...prev, payer1Name: e.target.value }))}
+                          placeholder="Nombre completo"
+                        />
+                        <Input
+                          value={newClient.payer1Phone}
+                          onChange={(e) => setNewClient(prev => ({ ...prev, payer1Phone: e.target.value }))}
+                          placeholder="Teléfono"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="payer2Name">Responsable de Pago 2 (Opcional)</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          id="payer2Name"
+                          value={newClient.payer2Name}
+                          onChange={(e) => setNewClient(prev => ({ ...prev, payer2Name: e.target.value }))}
+                          placeholder="Nombre completo"
+                        />
+                        <Input
+                          value={newClient.payer2Phone}
+                          onChange={(e) => setNewClient(prev => ({ ...prev, payer2Phone: e.target.value }))}
+                          placeholder="Teléfono"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <Label htmlFor="level">Nivel Educativo</Label>
@@ -422,7 +534,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
                   <>
                     <div className="flex items-center space-x-2">
                       <Phone className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">{client.parentPhone}</span>
+                      <span className="text-sm">{client.payer1Phone}</span>
                     </div>
 
                     <div className="flex items-center justify-between">

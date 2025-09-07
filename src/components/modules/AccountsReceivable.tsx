@@ -10,6 +10,7 @@ import {
   MessageCircle, FileText, AlertTriangle, CheckCircle,
   Clock, CreditCard
 } from "lucide-react";
+import { WhatsAppHelper } from "./WhatsAppHelper";
 import {
   Dialog,
   DialogContent,
@@ -82,6 +83,8 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [paymentMethod, setPaymentMethod] = useState<string>('efectivo');
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
+  const [selectedDebtorForWhatsApp, setSelectedDebtorForWhatsApp] = useState<typeof MOCK_DEBTORS[0] | null>(null);
 
   const filteredDebtors = debtors.filter(debtor =>
     debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -267,28 +270,13 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => sendWhatsApp(debtor, 'simple')}
+                    onClick={() => {
+                      setSelectedDebtorForWhatsApp(debtor);
+                      setShowWhatsAppDialog(true);
+                    }}
                   >
                     <MessageCircle className="w-4 h-4 mr-1" />
-                    Solo Monto
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => sendWhatsApp(debtor, 'detailed')}
-                  >
-                    <FileText className="w-4 h-4 mr-1" />
-                    Con Boletas
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => sendWhatsApp(debtor, 'full')}
-                  >
-                    <FileText className="w-4 h-4 mr-1" />
-                    Detalle Completo
+                    WhatsApp
                   </Button>
 
                   <Button
@@ -401,6 +389,18 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* WhatsApp Helper Dialog */}
+      {selectedDebtorForWhatsApp && (
+        <WhatsAppHelper
+          debtor={selectedDebtorForWhatsApp}
+          isOpen={showWhatsAppDialog}
+          onClose={() => {
+            setShowWhatsAppDialog(false);
+            setSelectedDebtorForWhatsApp(null);
+          }}
+        />
+      )}
     </div>
   );
 };

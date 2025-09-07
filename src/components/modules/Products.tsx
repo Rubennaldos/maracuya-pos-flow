@@ -8,8 +8,9 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { 
   ArrowLeft, Search, Plus, Edit, Trash2, Upload, 
-  Package, DollarSign, Utensils, Eye, EyeOff
+  Package, DollarSign, Utensils, Eye, EyeOff, Image
 } from "lucide-react";
+import { useImageUpload } from "@/hooks/useImageUpload";
 import {
   Dialog,
   DialogContent,
@@ -112,6 +113,7 @@ export const Products = ({ onBack }: ProductsProps) => {
     hasStock: false,
     stock: 0
   });
+  const { uploadImage, isUploading } = useImageUpload();
 
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -178,6 +180,19 @@ export const Products = ({ onBack }: ProductsProps) => {
 
   const deleteProduct = (productId: string) => {
     setProducts(prev => prev.filter(p => p.id !== productId));
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const imageDataUrl = await uploadImage(file);
+      setNewProduct(prev => ({ ...prev, image: imageDataUrl }));
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Error al subir la imagen. Por favor, intenta de nuevo.');
+    }
   };
 
   return (
@@ -290,13 +305,47 @@ export const Products = ({ onBack }: ProductsProps) => {
                 </div>
 
                 <div>
-                  <Label htmlFor="image">URL de Imagen</Label>
-                  <Input
-                    id="image"
-                    value={newProduct.image}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, image: e.target.value }))}
-                    placeholder="https://..."
-                  />
+                  <Label htmlFor="image">Imagen del Producto</Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        id="imageFile"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        disabled={isUploading}
+                        className="file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm file:bg-primary file:text-primary-foreground"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isUploading}
+                      >
+                        <Upload className="w-4 h-4 mr-1" />
+                        {isUploading ? 'Subiendo...' : 'Subir'}
+                      </Button>
+                    </div>
+                    
+                    {newProduct.image && (
+                      <div className="border rounded-lg p-2">
+                        <img
+                          src={newProduct.image}
+                          alt="Vista previa"
+                          className="w-20 h-20 object-cover rounded"
+                        />
+                      </div>
+                    )}
+                    
+                    <div className="text-xs text-muted-foreground">
+                      O ingresa una URL manualmente:
+                    </div>
+                    <Input
+                      placeholder="https://..."
+                      value={typeof newProduct.image === 'string' && newProduct.image.startsWith('http') ? newProduct.image : ''}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, image: e.target.value }))}
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between">
