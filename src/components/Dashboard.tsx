@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Logo } from "@/components/ui/logo";
-import { useAuthStore } from "@/store/authStore";
+import { useSession } from "@/state/session";
 import { 
   ShoppingCart, 
   Package, 
@@ -33,7 +33,7 @@ interface DashboardProps {
 }
 
 export const Dashboard = ({ onModuleSelect }: DashboardProps) => {
-  const { user, logout } = useAuthStore();
+  const { user, logout } = useSession();
 
   const modules = [
     {

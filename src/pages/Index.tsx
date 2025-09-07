@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useAuthStore } from "@/store/authStore";
-import { LoginForm } from "@/components/LoginForm";
+import { useState, useEffect } from "react";
+import { useSession } from "@/state/session";
+import { RTDBLogin } from "@/components/modules/RTDBLogin";
 import { Dashboard, ModuleType } from "@/components/Dashboard";
 import { PointOfSale } from "@/components/modules/PointOfSale";
 import { SalesList } from "@/components/modules/SalesList";
@@ -13,11 +13,11 @@ import { Promotions } from "@/components/modules/Promotions";
 import { UnregisteredSales } from "@/components/modules/UnregisteredSales";
 
 const Index = () => {
-  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const { isAuthenticated } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType | null>(null);
 
   if (!isAuthenticated) {
-    return <LoginForm />;
+    return <RTDBLogin />;
   }
 
   if (currentModule === 'pos') {
