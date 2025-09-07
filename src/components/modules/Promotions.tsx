@@ -39,7 +39,7 @@ const MOCK_PRODUCTS = [
 ];
 
 // Mock promotions data
-const MOCK_PROMOTIONS = [
+const MOCK_PROMOTIONS: Promotion[] = [
   {
     id: '1',
     name: 'Combo Saludable',
@@ -51,7 +51,7 @@ const MOCK_PROMOTIONS = [
     originalPrice: 18.50,
     finalPrice: 15.00,
     discount: 3.50,
-    discountType: 'amount',
+    discountType: 'amount' as 'amount',
     isActive: true
   },
   {

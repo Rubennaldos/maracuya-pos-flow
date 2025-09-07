@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 // Mock clients data
-const MOCK_CLIENTS = [
+const MOCK_CLIENTS: Client[] = [
   {
     id: 'C001',
     names: 'María',
@@ -84,7 +84,7 @@ const MOCK_CLIENTS = [
     responsiblePhone: '',
     classroom: '',
     grade: '',
-    level: '' as '',
+    level: '',
     hasAccount: false,
     isActive: true,
     debt: 0
