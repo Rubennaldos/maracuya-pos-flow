@@ -189,9 +189,9 @@ export const RTDBLogin = () => {
             <div className="mt-6 p-4 bg-muted/50 rounded-lg">
               <p className="text-sm font-medium text-foreground mb-2">PINs de Demo:</p>
               <div className="space-y-1 text-xs text-muted-foreground">
-                <div>• Admin: <code className="bg-muted px-1 rounded">1234</code> (secret)</div>
-                <div>• Cajero: <code className="bg-muted px-1 rounded">5678</code> (1234)</div>
-                <div>• Cobranzas: <code className="bg-muted px-1 rounded">9999</code> (9999)</div>
+                <div>• Admin: <code className="bg-muted px-1 rounded">1234</code></div>
+                <div>• Cajero: <code className="bg-muted px-1 rounded">5678</code></div>
+                <div>• Cobranzas: <code className="bg-muted px-1 rounded">9999</code></div>
               </div>
             </div>
           </CardContent>

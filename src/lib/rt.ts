@@ -143,7 +143,7 @@ export class RTDBHelper {
           id: 'admin',
           name: 'Administrador',
           role: 'admin',
-          pinHash: 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', // "secret" en SHA256
+          pinHash: '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', // "1234" en SHA256
           isActive: true,
           createdAt: new Date().toISOString()
         },
@@ -151,7 +151,7 @@ export class RTDBHelper {
           id: 'cajero',
           name: 'Cajero Principal',
           role: 'cajero',
-          pinHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', // "1234" en SHA256
+          pinHash: 'ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f', // "5678" en SHA256
           isActive: true,
           createdAt: new Date().toISOString()
         },
@@ -159,13 +159,14 @@ export class RTDBHelper {
           id: 'cobranzas',
           name: 'Cobranzas',
           role: 'cobranzas',
-          pinHash: 'c6ee9e33cf5c6715a1d148fd73f7318884b41adcb916021e2bc0e800a5c5dd97', // "9999" en SHA256
+          pinHash: 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb', // "9999" en SHA256 - ¡corregido!
           isActive: true,
           createdAt: new Date().toISOString()
         }
       };
       
       await this.setData(RTDB_PATHS.users, demoUsers);
+      console.log('Demo users initialized with correct PIN hashes');
     }
   }
 

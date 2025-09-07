@@ -34,9 +34,12 @@ export const useSession = create<SessionState>()(
       login: async (pin: string): Promise<boolean> => {
         try {
           const pinHash = hashPin(pin);
+          console.log('Attempting login with PIN:', pin);
+          console.log('Generated hash:', pinHash);
           
           // Get users from RTDB
           const users = await rtdbGet(RTDB_PATHS.users);
+          console.log('Users from RTDB:', users);
           
           if (!users) {
             console.error('No users found in database');
@@ -44,12 +47,14 @@ export const useSession = create<SessionState>()(
           }
 
           // Find user by PIN hash
-          const foundUser = Object.values(users).find((user: any) => 
-            user.pinHash === pinHash && user.isActive
-          );
+          const foundUser = Object.values(users).find((user: any) => {
+            console.log('Checking user:', user.name, 'Hash:', user.pinHash, 'Expected:', pinHash);
+            return user.pinHash === pinHash && user.isActive;
+          });
 
           if (foundUser) {
             const user = foundUser as User;
+            console.log('Login successful for user:', user.name);
             set({ 
               isAuthenticated: true, 
               user: {
@@ -63,6 +68,7 @@ export const useSession = create<SessionState>()(
             return true;
           }
 
+          console.log('Login failed - no matching user found');
           return false;
         } catch (error) {
           console.error('Login error:', error);
