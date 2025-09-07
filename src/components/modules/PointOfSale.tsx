@@ -148,6 +148,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const processSale = () => {
     if (cart.length === 0) return;
     
+    console.log('Processing sale with cart:', cart);
     // Update flow manager with current cart
     flowManager.updateCart(cart);
     flowManager.setSaleType(saleType);
@@ -158,23 +159,46 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
   // Global hotkeys
   useGlobalHotkeys({
-    onEnter: processSale,
-    onCtrlEnter: processSale,
-    onEscape: clearCart,
+    onEnter: () => {
+      console.log('Enter pressed, cart length:', cart.length);
+      processSale();
+    },
+    onCtrlEnter: () => {
+      console.log('Ctrl+Enter pressed');
+      processSale();
+    },
+    onEscape: () => {
+      console.log('Escape pressed');
+      clearCart();
+    },
     onF2: () => {
+      console.log('F2 pressed');
       if (cart.length > 0) {
         saveDraft();
       }
     },
     onCtrlS: () => {
+      console.log('Ctrl+S pressed');
       if (cart.length > 0) {
         saveDraft();
       }
     },
-    onF3: () => setSaleType('scheduled'),
-    onCtrlP: () => setSaleType('scheduled'),
-    onF4: () => setSaleType('lunch'),
-    onCtrlL: () => setSaleType('lunch')
+    onF3: () => {
+      console.log('F3 pressed');
+      setSaleType('scheduled');
+    },
+    onCtrlP: () => {
+      console.log('Ctrl+P pressed');
+      setSaleType('scheduled');
+    },
+    onF4: () => {
+      console.log('F4 pressed');
+      setSaleType('lunch');
+    },
+    onCtrlL: () => {
+      console.log('Ctrl+L pressed');
+      setSaleType('lunch');
+    }
   });
 
   // Update flow manager when cart changes

@@ -171,7 +171,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
                       <Eye className="w-4 h-4 mr-1" />
                       Ver
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => alert('Función de editar próximamente disponible')}>
                       <Edit className="w-4 h-4 mr-1" />
                       Editar
                     </Button>
