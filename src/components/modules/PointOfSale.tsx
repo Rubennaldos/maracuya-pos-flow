@@ -82,6 +82,8 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [saleType, setSaleType] = useState<"normal" | "scheduled" | "lunch">("normal");
+  
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Flujo visual (modales)
   const [step, setStep] = useState<Step>("productos");
@@ -90,7 +92,20 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const [payMethod, setPayMethod] = useState<"efectivo" | "transferencia" | "credito" | "yape" | "plin" | null>(null);
 
   // Hook que guarda en RTDB e imprime cocina si aplica
-  const { flowManager, isProcessing, saveDraft, processSale } = useSaleFlow();
+  const { flowManager, isProcessing, saveDraft, processSale } = useSaleFlow({
+    onComplete: () => {
+      // Resetear todo después de completar la venta
+      setCart([]);
+      setSelectedClient(null);
+      setPayMethod(null);
+      setStep("productos");
+      
+      // Enfocar automáticamente el campo de búsqueda
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    },
+  });
 
   // Load products on mount
   useEffect(() => {
@@ -306,6 +321,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
+                ref={searchInputRef}
                 placeholder="Buscar productos... (Ctrl+F)"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
