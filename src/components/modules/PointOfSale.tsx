@@ -218,24 +218,43 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     try {
       const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
       if (clientsData) {
-        return Object.values(clientsData);
+        // Filter out mock data and format for display
+        const realClients = Object.values(clientsData)
+          .filter((client: any) => 
+            !client.names?.toLowerCase().includes('ana') && 
+            !client.names?.toLowerCase().includes('juan') &&
+            !client.lastNames?.toLowerCase().includes('pérez') &&
+            !client.lastNames?.toLowerCase().includes('díaz') &&
+            !client.grade?.includes('3er') &&
+            client.id !== 'varios'
+          )
+          .map((client: any) => ({
+            id: client.id,
+            name: `${client.names} ${client.lastNames}`.trim() || client.name || 'Cliente'
+          }));
+        
+        // Add "Cliente Varios" as default option
+        return [{ id: 'varios', name: 'Cliente Varios' }, ...realClients];
       }
-      return [{ id: 'varios', names: 'Cliente', lastNames: 'Varios' }];
+      return [{ id: 'varios', name: 'Cliente Varios' }];
     } catch (error) {
       console.error('Error loading clients:', error);
-      return [{ id: 'varios', names: 'Cliente', lastNames: 'Varios' }];
+      return [{ id: 'varios', name: 'Cliente Varios' }];
     }
   };
 
-  const MOCK_CLIENTS = [
-    { id: "varios", name: "Cliente Varios" },
-    { id: "cli001", name: "Ana Pérez" },
-    { id: "cli002", name: "Juan Díaz" },
-    { id: "cli003", name: "3er Grado A - Niño" },
-  ];
-  const clientResults = MOCK_CLIENTS.filter((c) =>
-    c.name.toLowerCase().includes(clientQuery.toLowerCase())
-  );
+  const [clientResults, setClientResults] = useState([{ id: 'varios', name: 'Cliente Varios' }]);
+
+  useEffect(() => {
+    const loadAndFilterClients = async () => {
+      const clients = await loadClients();
+      const filtered = clients.filter((c) =>
+        c.name.toLowerCase().includes(clientQuery.toLowerCase())
+      );
+      setClientResults(filtered);
+    };
+    loadAndFilterClients();
+  }, [clientQuery]);
 
   const hasKitchen = cart.some((i) => i.isKitchen);
 
