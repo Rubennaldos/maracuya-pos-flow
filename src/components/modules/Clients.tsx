@@ -75,7 +75,14 @@ export const Clients = ({ onBack }: ClientsProps) => {
     try {
       const clientsData = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
       if (clientsData) {
-        const clientsArray = Object.values(clientsData);
+        // Filter out mock data that starts with test names
+        const clientsArray = Object.values(clientsData).filter(client => 
+          !client.names.toLowerCase().includes('ana') && 
+          !client.names.toLowerCase().includes('juan') &&
+          !client.lastNames.toLowerCase().includes('pérez') &&
+          !client.lastNames.toLowerCase().includes('díaz') &&
+          !client.grade.includes('3er')
+        );
         setClients(clientsArray);
       }
     } catch (error) {
@@ -115,27 +122,32 @@ export const Clients = ({ onBack }: ClientsProps) => {
     return `C${timestamp}`;
   };
 
-  const saveClient = () => {
-    if (editingClient) {
-      // Edit existing client
-      setClients(prev => prev.map(c => 
-        c.id === editingClient.id 
-          ? { ...newClient as Client, id: editingClient.id }
-          : c
-      ));
-      setEditingClient(null);
-    } else {
-      // Create new client
-      const client: Client = {
-        ...newClient as Client,
-        id: generateClientId(),
-        debt: 0
-      };
-      setClients(prev => [...prev, client]);
+  const saveClient = async () => {
+    try {
+      if (editingClient) {
+        // Edit existing client - save to RTDB
+        const updatedClient = { ...newClient as Client, id: editingClient.id };
+        await RTDBHelper.setData(`${RTDB_PATHS.clients}/${editingClient.id}`, updatedClient);
+        setClients(prev => prev.map(c => 
+          c.id === editingClient.id ? updatedClient : c
+        ));
+        setEditingClient(null);
+      } else {
+        // Create new client - save to RTDB
+        const client: Client = {
+          ...newClient as Client,
+          id: generateClientId(),
+          debt: 0
+        };
+        await RTDBHelper.setData(`${RTDB_PATHS.clients}/${client.id}`, client);
+        setClients(prev => [...prev, client]);
+      }
+      
+      resetForm();
+      setIsCreateDialogOpen(false);
+    } catch (error) {
+      console.error('Error saving client:', error);
     }
-    
-    resetForm();
-    setIsCreateDialogOpen(false);
   };
 
   const resetForm = () => {
@@ -165,14 +177,28 @@ export const Clients = ({ onBack }: ClientsProps) => {
     setIsCreateDialogOpen(true);
   };
 
-  const toggleClientStatus = (clientId: string) => {
-    setClients(prev => prev.map(c => 
-      c.id === clientId ? { ...c, isActive: !c.isActive } : c
-    ));
+  const toggleClientStatus = async (clientId: string) => {
+    try {
+      const client = clients.find(c => c.id === clientId);
+      if (client) {
+        const updatedClient = { ...client, isActive: !client.isActive };
+        await RTDBHelper.setData(`${RTDB_PATHS.clients}/${clientId}`, updatedClient);
+        setClients(prev => prev.map(c => 
+          c.id === clientId ? updatedClient : c
+        ));
+      }
+    } catch (error) {
+      console.error('Error updating client status:', error);
+    }
   };
 
-  const deleteClient = (clientId: string) => {
-    setClients(prev => prev.filter(c => c.id !== clientId));
+  const deleteClient = async (clientId: string) => {
+    try {
+      await RTDBHelper.removeData(`${RTDB_PATHS.clients}/${clientId}`);
+      setClients(prev => prev.filter(c => c.id !== clientId));
+    } catch (error) {
+      console.error('Error deleting client:', error);
+    }
   };
 
   const getGradeBadgeColor = (grade: string) => {

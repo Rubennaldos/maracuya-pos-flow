@@ -8,78 +8,158 @@ import {
   ArrowLeft, Calculator, DollarSign, CreditCard, 
   Banknote, Smartphone, FileText, TrendingUp
 } from "lucide-react";
+import { RTDBHelper } from "@/lib/rt";
+import { RTDB_PATHS } from "@/lib/rtdb";
 
 interface CheckoutProps {
   onBack: () => void;
 }
 
-// Mock data for daily sales
-const DAILY_SALES = {
-  date: '2024-01-15',
-  sales: {
-    efectivo: 450.00,
-    credito: 280.00,
-    transferencia: 150.00,
-    yape: 120.00,
-    plin: 80.00
-  },
-  totalSales: 1080.00,
-  totalCash: 450.00,
-  initialCash: 100.00,
-  expenses: 50.00,
-  expectedCash: 500.00
-};
-
 export const Checkout = ({ onBack }: CheckoutProps) => {
   const [currentCash, setCurrentCash] = useState<number>(0);
-  const [expenses, setExpenses] = useState<number>(DAILY_SALES.expenses);
-  const [initialCash, setInitialCash] = useState<number>(DAILY_SALES.initialCash);
+  const [expenses, setExpenses] = useState<number>(0);
+  const [initialCash, setInitialCash] = useState<number>(100);
   const [difference, setDifference] = useState<number>(0);
+  const [dailySales, setDailySales] = useState({
+    date: new Date().toISOString().split('T')[0],
+    sales: {
+      efectivo: 0,
+      credito: 0,
+      transferencia: 0,
+      yape: 0,
+      plin: 0
+    },
+    totalSales: 0,
+    totalCash: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load today's sales data
+  useEffect(() => {
+    loadTodaysSales();
+  }, []);
 
   useEffect(() => {
-    const expected = DAILY_SALES.initialCash + DAILY_SALES.totalCash - expenses;
+    const expected = initialCash + dailySales.totalCash - expenses;
     setDifference(currentCash - expected);
-  }, [currentCash, expenses]);
+  }, [currentCash, expenses, initialCash, dailySales.totalCash]);
+
+  const loadTodaysSales = async () => {
+    try {
+      setIsLoading(true);
+      const today = new Date().toISOString().split('T')[0];
+      const salesData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.sales);
+      
+      if (salesData) {
+        const todaysSales = Object.values(salesData).filter((sale: any) => {
+          const saleDate = new Date(sale.date || sale.createdAt).toISOString().split('T')[0];
+          return saleDate === today && sale.status === 'completed';
+        });
+
+        const salesByMethod = {
+          efectivo: 0,
+          credito: 0,
+          transferencia: 0,
+          yape: 0,
+          plin: 0
+        };
+
+        let totalSales = 0;
+        let totalCash = 0;
+
+        todaysSales.forEach((sale: any) => {
+          const amount = sale.total || 0;
+          totalSales += amount;
+          
+          const method = sale.paymentMethod?.toLowerCase() || 'efectivo';
+          if (salesByMethod.hasOwnProperty(method)) {
+            salesByMethod[method] += amount;
+          } else {
+            salesByMethod.efectivo += amount; // Default to cash
+          }
+
+          if (method === 'efectivo') {
+            totalCash += amount;
+          }
+        });
+
+        setDailySales({
+          date: today,
+          sales: salesByMethod,
+          totalSales,
+          totalCash
+        });
+      }
+    } catch (error) {
+      console.error('Error loading sales data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const paymentMethods = [
     {
       id: 'efectivo',
       name: 'Efectivo',
-      amount: DAILY_SALES.sales.efectivo,
+      amount: dailySales.sales.efectivo,
       icon: Banknote,
       color: 'text-success'
     },
     {
       id: 'credito',
       name: 'Crédito',
-      amount: DAILY_SALES.sales.credito,
+      amount: dailySales.sales.credito,
       icon: CreditCard,
       color: 'text-warning'
     },
     {
       id: 'transferencia',
       name: 'Transferencia',
-      amount: DAILY_SALES.sales.transferencia,
+      amount: dailySales.sales.transferencia,
       icon: FileText,
       color: 'text-primary'
     },
     {
       id: 'yape',
       name: 'Yape',
-      amount: DAILY_SALES.sales.yape,
+      amount: dailySales.sales.yape,
       icon: Smartphone,
       color: 'text-secondary'
     },
     {
       id: 'plin',
       name: 'Plin',
-      amount: DAILY_SALES.sales.plin,
+      amount: dailySales.sales.plin,
       icon: Smartphone,
       color: 'text-accent'
     }
   ];
 
-  const expectedCash = initialCash + DAILY_SALES.totalCash - expenses;
+  const expectedCash = initialCash + dailySales.totalCash - expenses;
+
+  const saveCashClose = async () => {
+    try {
+      const cashCloseData = {
+        date: dailySales.date,
+        initialCash,
+        expenses,
+        currentCash,
+        expectedCash,
+        difference,
+        salesSummary: dailySales.sales,
+        totalSales: dailySales.totalSales,
+        totalCash: dailySales.totalCash,
+        closedAt: new Date().toISOString(),
+        status: difference === 0 ? 'balanced' : (difference > 0 ? 'surplus' : 'deficit')
+      };
+
+      await RTDBHelper.pushData(RTDB_PATHS.cash_closes, cashCloseData);
+      alert('Cierre de caja guardado correctamente');
+    } catch (error) {
+      console.error('Error saving cash close:', error);
+      alert('Error al guardar el cierre de caja');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,7 +175,7 @@ export const Checkout = ({ onBack }: CheckoutProps) => {
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Fecha</p>
-            <p className="font-semibold">{DAILY_SALES.date}</p>
+            <p className="font-semibold">{dailySales.date}</p>
           </div>
         </div>
       </header>
@@ -110,7 +190,7 @@ export const Checkout = ({ onBack }: CheckoutProps) => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-primary">
-                S/ {DAILY_SALES.totalSales.toFixed(2)}
+                {isLoading ? 'Cargando...' : `S/ ${dailySales.totalSales.toFixed(2)}`}
               </div>
             </CardContent>
           </Card>
@@ -122,7 +202,7 @@ export const Checkout = ({ onBack }: CheckoutProps) => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-success">
-                S/ {DAILY_SALES.totalCash.toFixed(2)}
+                {isLoading ? 'Cargando...' : `S/ ${dailySales.totalCash.toFixed(2)}`}
               </div>
             </CardContent>
           </Card>
@@ -167,7 +247,9 @@ export const Checkout = ({ onBack }: CheckoutProps) => {
               
               <div className="flex items-center justify-between text-lg font-bold">
                 <span>Total Ventas</span>
-                <span className="text-primary">S/ {DAILY_SALES.totalSales.toFixed(2)}</span>
+                <span className="text-primary">
+                  {isLoading ? 'Cargando...' : `S/ ${dailySales.totalSales.toFixed(2)}`}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -237,7 +319,7 @@ export const Checkout = ({ onBack }: CheckoutProps) => {
                 </div>
                 <div className="flex justify-between">
                   <span>+ Ventas en Efectivo:</span>
-                  <span className="text-success">S/ {DAILY_SALES.totalCash.toFixed(2)}</span>
+                  <span className="text-success">S/ {dailySales.totalCash.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>- Gastos:</span>
@@ -279,7 +361,7 @@ export const Checkout = ({ onBack }: CheckoutProps) => {
                 )}
               </div>
 
-              <Button className="w-full mt-6" size="lg">
+              <Button className="w-full mt-6" size="lg" onClick={saveCashClose}>
                 <Calculator className="w-4 h-4 mr-2" />
                 Cerrar Caja
               </Button>

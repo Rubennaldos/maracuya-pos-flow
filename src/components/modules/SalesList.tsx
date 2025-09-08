@@ -32,6 +32,29 @@ export const SalesList = ({ onBack }: SalesListProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSale, setSelectedSale] = useState<any>(null);
 
+  // Load sales from RTDB
+  useEffect(() => {
+    loadSales();
+  }, []);
+
+  const loadSales = async () => {
+    try {
+      const salesData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.sales);
+      if (salesData) {
+        const salesArray = Object.values(salesData).map((sale: any) => ({
+          ...sale,
+          date: new Date(sale.date || sale.createdAt).toLocaleDateString(),
+          time: new Date(sale.date || sale.createdAt).toLocaleTimeString(),
+          client: sale.client?.fullName || sale.client?.name || sale.client || 'Cliente Varios',
+          user: sale.createdBy || sale.cashier || 'Sistema'
+        })).sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+        setSales(salesArray);
+      }
+    } catch (error) {
+      console.error('Error loading sales:', error);
+    }
+  };
+
   const filteredSales = sales.filter(sale =>
     sale.correlative.toLowerCase().includes(searchTerm.toLowerCase()) ||
     sale.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
