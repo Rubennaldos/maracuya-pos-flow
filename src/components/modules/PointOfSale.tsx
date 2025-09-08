@@ -75,6 +75,7 @@ interface PointOfSaleProps {
 
 export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [saleType, setSaleType] = useState<"normal" | "scheduled" | "lunch">("normal");
 
@@ -86,6 +87,11 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
   // Hook que guarda en RTDB e imprime cocina si aplica
   const { flowManager, isProcessing, saveDraft, processSale } = useSaleFlow();
+
+  // Load products on mount
+  useEffect(() => {
+    loadProducts().then(setProducts);
+  }, []);
 
   /* ---------------- Carrito ---------------- */
   const addToCart = (p: any) => {
@@ -105,9 +111,8 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const total = subtotal;
 
   const filteredProducts = products.filter((product: any) =>
-    (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchTerm.toLowerCase())
+    product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   /* ---------------- Flujo con Enter ---------------- */
