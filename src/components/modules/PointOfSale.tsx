@@ -57,7 +57,11 @@ const loadProducts = async () => {
   try {
     const productsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.products);
     if (productsData) {
-      return Object.values(productsData);
+      return Object.values(productsData).map((product: any) => ({
+        ...product,
+        price: Number(product.salePrice || product.price || 0),
+        image: product.image || '/placeholder.svg'
+      }));
     }
     return [];
   } catch (error) {
