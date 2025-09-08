@@ -47,10 +47,10 @@ function Modal({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-[min(560px,95vw)] rounded-xl bg-white shadow-xl border p-4">
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-[min(560px,95vw)] rounded-xl bg-background border border-border shadow-xl p-4 animate-in fade-in-0 zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-lg font-semibold">{title}</h3>
+          <h3 className="text-lg font-semibold text-foreground">{title}</h3>
           <Button size="sm" variant="ghost" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
@@ -106,6 +106,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   // Estado para autorización parental
   const [showParentalAuth, setShowParentalAuth] = useState(false);
   const [currentClientForAuth, setCurrentClientForAuth] = useState<Client | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(false);
 
   // Hook que guarda en RTDB e imprime cocina si aplica
   const { flowManager, isProcessing, saveDraft, processSale } = useSaleFlow({
@@ -162,11 +163,8 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   };
 
   const checkParentalAuth = async (): Promise<boolean> => {
-    console.log('🔍 Checking parental auth for client:', selectedClient);
-    
     if (!selectedClient || selectedClient.id === "varios") {
       // Cliente varios siempre necesita autorización para crédito
-      console.log('✋ Cliente varios - requiere autorización');
       setCurrentClientForAuth(null);
       setShowParentalAuth(true);
       return true; // Needs auth
@@ -174,11 +172,9 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
     // Cargar datos completos del cliente
     const fullClientData = await loadFullClientData(selectedClient.id);
-    console.log('📊 Full client data:', fullClientData);
     
     if (!fullClientData) {
       // Si no se puede cargar los datos, asumir que necesita autorización
-      console.log('❌ No se pudieron cargar datos del cliente - requiere autorización');
       setCurrentClientForAuth(null);
       setShowParentalAuth(true);
       return true; // Needs auth
@@ -188,20 +184,14 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     // IMPORTANTE: Solo NO pedir autorización si EXPLÍCITAMENTE tiene cuenta activa
     // Por defecto, SIEMPRE pedir autorización para crédito
     const hasActiveCredit = (fullClientData.hasCreditAccount === true) && (fullClientData.isActive === true);
-    console.log('💳 Has active credit?', hasActiveCredit, {
-      hasCreditAccount: fullClientData.hasCreditAccount,
-      isActive: fullClientData.isActive
-    });
     
     // Si NO tiene cuenta activa explícita, requiere autorización parental
     if (!hasActiveCredit) {
-      console.log('⚠️ Cliente sin cuenta activa confirmada - requiere autorización parental');
       setCurrentClientForAuth(fullClientData);
       setShowParentalAuth(true);
       return true; // Needs auth
     }
 
-    console.log('✅ Cliente con cuenta activa confirmada - no requiere autorización');
     return false; // No needs auth
   };
 
@@ -241,11 +231,16 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     if (step === "pago") {
       if (!payMethod) return;
       
-      // Si es crédito, validar autorización parental para clientes sin cuenta
+      // Si es crédito, validar autorización parental para clientes sin cuenta de forma no bloqueante
       if (payMethod === "credito") {
-        const needsAuth = await checkParentalAuth();
-        if (needsAuth) {
-          return; // La función ya maneja el flujo
+        setCheckingAuth(true);
+        try {
+          const needsAuth = await checkParentalAuth();
+          if (needsAuth) {
+            return; // La función ya maneja el flujo
+          }
+        } finally {
+          setCheckingAuth(false);
         }
       }
       
@@ -328,10 +323,8 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
   // Clientes demo (buscador simple)
   const loadClients = async () => {
-    console.log('🔄 Loading clients from RTDB...');
     try {
       const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
-      console.log('📋 Raw clients data:', clientsData);
       if (clientsData) {
         // Filter out mock data and format for display
         const realClients = Object.entries(clientsData)
@@ -654,8 +647,8 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
           ))}
         </div>
         <div className="flex justify-end mt-4">
-          <Button disabled={!payMethod} onClick={() => goNext()}>
-            Continuar (Enter)
+          <Button disabled={!payMethod || checkingAuth} onClick={() => goNext()}>
+            {checkingAuth ? "Verificando..." : "Continuar (Enter)"}
           </Button>
         </div>
       </Modal>
