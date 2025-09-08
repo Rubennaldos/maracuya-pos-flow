@@ -57,7 +57,11 @@ const loadProducts = async () => {
   try {
     const productsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.products);
     if (productsData) {
-      return Object.values(productsData);
+      return Object.values(productsData).map((product: any) => ({
+        ...product,
+        price: Number(product.salePrice || product.price || 0),
+        image: product.image || '/placeholder.svg'
+      }));
     }
     return [];
   } catch (error) {
@@ -320,7 +324,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                     <p className="text-xs text-muted-foreground mb-2">{p.category}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-lg font-bold text-primary">
-                        S/ {p.price.toFixed(2)}
+                        S/ {(p.price || 0).toFixed(2)}
                       </span>
                       <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
