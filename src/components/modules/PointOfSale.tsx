@@ -5,6 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Search,
   ShoppingCart,
   Plus,
@@ -16,9 +26,11 @@ import {
   GraduationCap,
   Save,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { bindHotkeys } from "@/lib/hotkeys";
 import { useSaleFlow } from "@/hooks/useSaleFlow";
+import { Client } from "@/types/client";
 
 /* ---------------- Modal simple ---------------- */
 function Modal({
@@ -90,6 +102,10 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const [clientQuery, setClientQuery] = useState("");
   const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
   const [payMethod, setPayMethod] = useState<"efectivo" | "transferencia" | "credito" | "yape" | "plin" | null>(null);
+  
+  // Estado para autorización parental
+  const [showParentalAuth, setShowParentalAuth] = useState(false);
+  const [currentClientForAuth, setCurrentClientForAuth] = useState<Client | null>(null);
 
   // Hook que guarda en RTDB e imprime cocina si aplica
   const { flowManager, isProcessing, saveDraft, processSale } = useSaleFlow({
@@ -134,6 +150,66 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     product.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  /* ---------------- Validación de autorización parental ---------------- */
+  const loadFullClientData = async (clientId: string): Promise<Client | null> => {
+    try {
+      const clientData = await RTDBHelper.getData<any>(`${RTDB_PATHS.clients}/${clientId}`);
+      return clientData || null;
+    } catch (error) {
+      console.error('Error loading client data:', error);
+      return null;
+    }
+  };
+
+  const checkParentalAuth = async (): Promise<boolean> => {
+    if (!selectedClient || selectedClient.id === "varios") {
+      // Cliente varios siempre necesita autorización para crédito
+      setCurrentClientForAuth(null);
+      setShowParentalAuth(true);
+      return true; // Needs auth
+    }
+
+    // Cargar datos completos del cliente
+    const fullClientData = await loadFullClientData(selectedClient.id);
+    
+    if (!fullClientData) {
+      // Si no se puede cargar los datos, asumir que necesita autorización
+      setCurrentClientForAuth(null);
+      setShowParentalAuth(true);
+      return true; // Needs auth
+    }
+
+    // Verificar si el cliente tiene cuenta de crédito activa
+    const hasActiveCredit = fullClientData.hasCreditAccount && fullClientData.isActive;
+    
+    if (!hasActiveCredit) {
+      // Cliente sin cuenta activa necesita autorización parental
+      setCurrentClientForAuth(fullClientData);
+      setShowParentalAuth(true);
+      return true; // Needs auth
+    }
+
+    return false; // No needs auth
+  };
+
+  const handleParentalAuth = (authorized: boolean) => {
+    setShowParentalAuth(false);
+    
+    if (authorized) {
+      // Proceder con la venta
+      setStep("confirm");
+    } else {
+      // Cancelar y mostrar mensaje
+      setPayMethod(null);
+      setStep("productos");
+      // Resetear selecciones
+      setSelectedClient(null);
+      alert("Consulta al padre o apoderado y vuelve a realizar la venta.");
+    }
+    
+    setCurrentClientForAuth(null);
+  };
+
   /* ---------------- Flujo con Enter ---------------- */
   const goNext = async () => {
     if (cart.length === 0 || isProcessing) return;
@@ -151,6 +227,15 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     }
     if (step === "pago") {
       if (!payMethod) return;
+      
+      // Si es crédito, validar autorización parental para clientes sin cuenta
+      if (payMethod === "credito") {
+        const needsAuth = await checkParentalAuth();
+        if (needsAuth) {
+          return; // La función ya maneja el flujo
+        }
+      }
+      
       setStep("confirm");
       return;
     }
@@ -582,6 +667,41 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
           </div>
         </div>
       </Modal>
+
+      {/* Alert Dialog para autorización parental */}
+      <AlertDialog open={showParentalAuth} onOpenChange={setShowParentalAuth}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              Autorización Parental Requerida
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {currentClientForAuth ? (
+                <>
+                  El cliente <strong>{currentClientForAuth.names} {currentClientForAuth.lastNames}</strong> no tiene una cuenta de crédito activa.
+                  <br /><br />
+                  ¿Tiene autorización del padre o apoderado para realizar esta compra a crédito?
+                </>
+              ) : (
+                <>
+                  Para realizar ventas a crédito a "Cliente Varios" se requiere autorización del padre o apoderado.
+                  <br /><br />
+                  ¿Tiene autorización del padre o apoderado para realizar esta compra a crédito?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => handleParentalAuth(false)}>
+              No, cancelar venta
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleParentalAuth(true)}>
+              Sí, tiene autorización
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
