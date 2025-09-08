@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,35 @@ const loadDebtors = async () => {
   try {
     const arData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
     if (arData) {
-      return Object.values(arData);
+      // Procesar datos para agrupar por cliente
+      const debtorMap = new Map();
+      
+      Object.entries(arData).forEach(([clientId, clientData]) => {
+        if (clientData.entries) {
+          const pendingEntries = Object.values(clientData.entries).filter((entry: any) => entry.status === 'pending');
+          
+          if (pendingEntries.length > 0) {
+            const totalDebt = pendingEntries.reduce((sum: number, entry: any) => sum + entry.amount, 0);
+            
+            debtorMap.set(clientId, {
+              id: clientId,
+              name: (pendingEntries[0] as any)?.clientName || clientId,
+              totalDebt,
+              invoices: pendingEntries.map((entry: any) => ({
+                id: entry.correlative || entry.saleId,
+                amount: entry.amount,
+                date: new Date(entry.date).toLocaleDateString(),
+                type: entry.type,
+                products: entry.items?.map((item: any) => item.name) || []
+              })),
+              urgentCollection: false,
+              phone: "999999999" // Placeholder - necesitarías obtener esto de los datos del cliente
+            });
+          }
+        }
+      });
+      
+      return Array.from(debtorMap.values());
     }
     return [];
   } catch (error) {
@@ -48,7 +76,7 @@ interface AccountsReceivableProps {
 }
 
 export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
-  const [debtors, setDebtors] = useState([]);
+  const [debtors, setDebtors] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDebtor, setSelectedDebtor] = useState<any>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -57,6 +85,24 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [selectedDebtorForWhatsApp, setSelectedDebtorForWhatsApp] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Cargar deudores al montar el componente
+  useEffect(() => {
+    const fetchDebtors = async () => {
+      setLoading(true);
+      try {
+        const debtorsData = await loadDebtors();
+        setDebtors(debtorsData);
+      } catch (error) {
+        console.error('Error fetching debtors:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDebtors();
+  }, []);
 
   const filteredDebtors = debtors.filter(debtor =>
     debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -281,13 +327,20 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           ))}
         </div>
 
-        {filteredDebtors.length === 0 && (
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Cargando deudores...</p>
+          </div>
+        ) : filteredDebtors.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">No se encontraron deudores</h3>
-            <p className="text-muted-foreground">Intenta con otros términos de búsqueda</p>
+            <p className="text-muted-foreground">
+              {debtors.length === 0 ? "No hay ventas a crédito registradas" : "Intenta con otros términos de búsqueda"}
+            </p>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Payment Dialog */}

@@ -66,11 +66,13 @@ export const useSaleFlow = (options: SaleFlowOptions = {}) => {
             saleId,
             correlative,
             clientId: saleData.selectedClient.id,
+            clientName: saleData.selectedClient.name || saleData.selectedClient.fullName || "Cliente",
             amount: saleBase.total,
             date: saleBase.date,
             status: "pending",
             type: "sale",
             origin: saleBase.origin,
+            items: saleData.cart, // Incluir items para mostrar productos en AR
           };
           const arPath = `${RTDB_PATHS.accounts_receivable}/${saleData.selectedClient.id}/entries`;
           await RTDBHelper.pushData(arPath, arEntry);
