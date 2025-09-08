@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { SalesEditor } from "./SalesEditor";
+import { PrintManager } from "@/lib/print";
 import { 
   ArrowLeft, Search, Edit, Trash2, Eye, Calendar, User, DollarSign,
-  AlertTriangle, Clock
+  AlertTriangle, Clock, Printer
 } from "lucide-react";
 import {
   AlertDialog,
@@ -31,6 +33,8 @@ export const SalesList = ({ onBack }: SalesListProps) => {
   const [sales, setSales] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [editingSale, setEditingSale] = useState<any>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   // Load sales from RTDB
   useEffect(() => {
@@ -41,8 +45,9 @@ export const SalesList = ({ onBack }: SalesListProps) => {
     try {
       const salesData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.sales);
       if (salesData) {
-        const salesArray = Object.values(salesData).map((sale: any) => ({
+        const salesArray = Object.entries(salesData).map(([id, sale]) => ({
           ...sale,
+          id, // Asegurar que el ID esté presente
           date: new Date(sale.date || sale.createdAt).toLocaleDateString(),
           time: new Date(sale.date || sale.createdAt).toLocaleTimeString(),
           client: sale.client?.fullName || sale.client?.name || sale.client || 'Cliente Varios',
@@ -61,8 +66,54 @@ export const SalesList = ({ onBack }: SalesListProps) => {
     sale.paymentMethod.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const deleteSale = (saleId: string) => {
-    setSales(prev => prev.filter(sale => sale.id !== saleId));
+  const deleteSale = async (saleId: string) => {
+    try {
+      await RTDBHelper.removeData(`${RTDB_PATHS.sales}/${saleId}`);
+      setSales(prev => prev.filter(sale => sale.id !== saleId));
+    } catch (error) {
+      console.error('Error deleting sale:', error);
+    }
+  };
+
+  const handleSaveEdit = async (editedSale: any) => {
+    try {
+      const updates = {
+        [`${RTDB_PATHS.sales}/${editedSale.id}`]: editedSale
+      };
+      await RTDBHelper.updateData(updates);
+      setSales(prev => prev.map(sale => 
+        sale.id === editedSale.id ? editedSale : sale
+      ));
+    } catch (error) {
+      console.error('Error updating sale:', error);
+    }
+  };
+
+  const handleReprintTicket = async (sale: any) => {
+    if (isPrinting) return;
+    
+    setIsPrinting(true);
+    try {
+      const printableOrder = {
+        id: sale.id,
+        correlative: sale.correlative,
+        date: sale.date || new Date(sale.createdAt).toLocaleDateString(),
+        time: sale.time || new Date(sale.createdAt).toLocaleTimeString(),
+        client: sale.client,
+        items: sale.items || [],
+        subtotal: sale.subtotal || sale.total,
+        total: sale.total,
+        paymentMethod: sale.paymentMethod,
+        type: "customer" as const,
+        user: sale.user
+      };
+
+      await PrintManager.printCustomerTicket(printableOrder);
+    } catch (error) {
+      console.error('Error reprinting ticket:', error);
+    } finally {
+      setIsPrinting(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -143,9 +194,18 @@ export const SalesList = ({ onBack }: SalesListProps) => {
                       <Eye className="w-4 h-4 mr-1" />
                       Ver
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => alert('Función de editar próximamente disponible')}>
+                    <Button variant="outline" size="sm" onClick={() => setEditingSale(sale)}>
                       <Edit className="w-4 h-4 mr-1" />
                       Editar
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleReprintTicket(sale)}
+                      disabled={isPrinting}
+                    >
+                      <Printer className="w-4 h-4 mr-1" />
+                      {isPrinting ? 'Imprimiendo...' : 'Reimprimir'}
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -287,6 +347,14 @@ export const SalesList = ({ onBack }: SalesListProps) => {
           </Card>
         </div>
       )}
+
+      {/* Sales Editor */}
+      <SalesEditor
+        sale={editingSale}
+        isOpen={!!editingSale}
+        onClose={() => setEditingSale(null)}
+        onSave={handleSaveEdit}
+      />
     </div>
   );
 };
