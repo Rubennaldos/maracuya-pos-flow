@@ -1,10 +1,10 @@
 // Sale flow management hook
-import { useState, useCallback } from 'react';
-import { EnterFlowManager, FlowStep, Client, PaymentMethod, CartItem } from '@/lib/enterFlow';
-import { RTDBHelper } from '@/lib/rt';
-import { RTDB_PATHS } from '@/lib/rtdb';
-import { PrintManager } from '@/lib/print';
-import { useSession } from '@/state/session';
+import { useState, useCallback, useEffect } from "react";
+import { EnterFlowManager, FlowStep, CartItem } from "@/lib/enterFlow";
+import { RTDBHelper } from "@/lib/rt";
+import { RTDB_PATHS } from "@/lib/rtdb";
+import { PrintManager } from "@/lib/print";
+import { useSession } from "@/state/session";
 
 interface SaleFlowOptions {
   onComplete?: () => void;
@@ -16,105 +16,113 @@ export const useSaleFlow = (options: SaleFlowOptions = {}) => {
   const [flowManager] = useState(() => new EnterFlowManager());
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Setup callbacks
-  flowManager.onStepChange(options.onStepChange || (() => {}));
-  flowManager.onComplete(async (finalState) => {
-    await processSale(finalState);
-    options.onComplete?.();
-  });
+  // Registra callbacks SOLO una vez y cuando cambien las deps
+  useEffect(() => {
+    const onStep = options.onStepChange ?? (() => {});
+    flowManager.onStepChange(onStep);
 
-  const processSale = useCallback(async (saleData: any) => {
-    if (!user) return;
-    
-    setIsProcessing(true);
-    try {
-      // Generate correlative
-      const correlative = await RTDBHelper.getNextCorrelative('sale');
-      
-      // Create sale object
-      const sale = {
-        id: `sale_${Date.now()}`,
-        correlative,
-        date: new Date().toISOString(),
-        cashier: user.id,
-        client: saleData.selectedClient,
-        items: saleData.cart,
-        subtotal: saleData.total,
-        tax: 0, // Add tax calculation if needed
-        total: saleData.total,
-        paymentMethod: saleData.paymentMethod,
-        type: saleData.saleType,
-        status: 'completed',
-        paid: saleData.paymentMethod !== 'credito' ? saleData.total : 0,
-        createdBy: user.id,
-        createdAt: new Date().toISOString()
-      };
+    flowManager.onComplete(async (finalState) => {
+      await processSale(finalState);
+      options.onComplete?.();
+    });
 
-      // Save to RTDB
-      await RTDBHelper.pushData(RTDB_PATHS.sales, sale);
+    // no hay cleanup porque EnterFlowManager administra suscriptores internamente
+  }, [flowManager, options.onComplete, options.onStepChange]);
 
-      // If credit sale, add to accounts receivable
-      if (saleData.paymentMethod === 'credito' && saleData.selectedClient) {
-        const arEntry = {
-          saleId: sale.id,
-          correlative: sale.correlative,
-          clientId: saleData.selectedClient.id,
-          amount: sale.total,
-          date: sale.date,
-          status: 'pending',
-          type: 'sale'
+  const processSale = useCallback(
+    async (saleData: any) => {
+      if (!user) return;
+
+      setIsProcessing(true);
+      try {
+        // 1) Correlativo atómico
+        const correlative = await RTDBHelper.getNextCorrelative("sale");
+
+        // 2) Construye objeto de venta (SIN id; lo pone pushData)
+        const saleBase = {
+          correlative,
+          date: new Date().toISOString(),
+          cashier: user.id,
+          client: saleData.selectedClient ?? null,
+          items: saleData.cart,
+          subtotal: saleData.total,
+          tax: 0,
+          total: saleData.total,
+          paymentMethod: saleData.paymentMethod,
+          type: saleData.saleType,
+          status: "completed",
+          paid: saleData.paymentMethod !== "credito" ? saleData.total : 0,
+          createdBy: user.id,
+          createdAt: new Date().toISOString(),
+          origin: saleData.origin ?? "PV", // PV | VH
         };
-        
-        const arPath = `${RTDB_PATHS.accounts_receivable}/${saleData.selectedClient.id}/entries`;
-        await RTDBHelper.pushData(arPath, arEntry);
-      }
 
-      // Print kitchen order if needed
-      const hasKitchenItems = saleData.cart.some((item: CartItem) => item.isKitchen);
-      if (hasKitchenItems) {
-        const config = await RTDBHelper.getData(RTDB_PATHS.config);
-        if (config?.autoPrintKitchen) {
-          await PrintManager.printKitchenOrder({
-            id: sale.id,
-            correlative: sale.correlative,
-            date: sale.date,
-            time: new Date().toLocaleTimeString(),
-            client: saleData.selectedClient?.fullName || 'Cliente Varios',
-            items: saleData.cart.filter((item: CartItem) => item.isKitchen),
-            subtotal: sale.total,
-            total: sale.total,
-            paymentMethod: sale.paymentMethod,
-            type: sale.type,
-            user: user.name
-          });
+        // 3) Guarda venta; pushData asigna id automáticamente si no existe
+        const saleId = await RTDBHelper.pushData(RTDB_PATHS.sales, saleBase);
+
+        // 4) Si es crédito, registra en cuentas por cobrar
+        if (saleData.paymentMethod === "credito" && saleData.selectedClient) {
+          const arEntry = {
+            saleId,
+            correlative,
+            clientId: saleData.selectedClient.id,
+            amount: saleBase.total,
+            date: saleBase.date,
+            status: "pending",
+            type: "sale",
+            origin: saleBase.origin,
+          };
+          const arPath = `${RTDB_PATHS.accounts_receivable}/${saleData.selectedClient.id}/entries`;
+          await RTDBHelper.pushData(arPath, arEntry);
         }
+
+        // 5) Comanda de cocina automática (según config)
+        const hasKitchenItems = (saleData.cart as CartItem[]).some((i) => i.isKitchen);
+        if (hasKitchenItems) {
+          const config = await RTDBHelper.getData(RTDB_PATHS.config);
+          if (config?.autoPrintKitchen && PrintManager?.printKitchenOrder) {
+            await PrintManager.printKitchenOrder({
+              id: saleId,
+              correlative,
+              date: saleBase.date,
+              time: new Date().toLocaleTimeString(),
+              client: saleData.selectedClient?.fullName || saleData.selectedClient?.name || "Cliente Varios",
+              items: (saleData.cart as CartItem[]).filter((i) => i.isKitchen),
+              subtotal: saleBase.total,
+              total: saleBase.total,
+              paymentMethod: saleBase.paymentMethod,
+              type: saleBase.type,
+              user: (user as any).name ?? user.id,
+            });
+          }
+        }
+
+        // 6) Log de auditoría
+        await RTDBHelper.logAction(
+          user.id,
+          "sale_created",
+          {
+            saleId,
+            correlative,
+            total: saleBase.total,
+            paymentMethod: saleBase.paymentMethod,
+            itemCount: (saleData.cart as CartItem[]).length,
+          },
+          "sale",
+          saleId
+        );
+
+        // 7) Reset del flujo
+        flowManager.resetFlow();
+      } catch (error) {
+        console.error("Error processing sale:", error);
+        throw error;
+      } finally {
+        setIsProcessing(false);
       }
-
-      // Log action
-      await RTDBHelper.logAction(
-        user.id,
-        'sale_created',
-        {
-          saleId: sale.id,
-          correlative: sale.correlative,
-          total: sale.total,
-          paymentMethod: sale.paymentMethod,
-          itemCount: saleData.cart.length
-        },
-        'sale',
-        sale.id
-      );
-
-      // Reset flow
-      flowManager.resetFlow();
-      
-    } catch (error) {
-      console.error('Error processing sale:', error);
-      throw error;
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [user, flowManager]);
+    },
+    [user, flowManager]
+  );
 
   const saveDraft = useCallback(async () => {
     if (!user) return;
@@ -124,22 +132,21 @@ export const useSaleFlow = (options: SaleFlowOptions = {}) => {
 
     try {
       const draft = {
-        id: `draft_${Date.now()}`,
         cashier: user.id,
         cart: state.cart,
         saleType: state.saleType,
         total: state.total,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       };
 
       await RTDBHelper.pushData(RTDB_PATHS.drafts, draft);
-      
-      // Clear current cart
+
+      // Limpia carrito actual
       flowManager.updateCart([]);
-      
-      console.log('Draft saved successfully');
+
+      console.log("Draft saved successfully");
     } catch (error) {
-      console.error('Error saving draft:', error);
+      console.error("Error saving draft:", error);
     }
   }, [user, flowManager]);
 
@@ -147,6 +154,6 @@ export const useSaleFlow = (options: SaleFlowOptions = {}) => {
     flowManager,
     isProcessing,
     processSale,
-    saveDraft
+    saveDraft,
   };
 };
