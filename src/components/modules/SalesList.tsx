@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { RTDBHelper } from "@/lib/rt";
+import { RTDB_PATHS } from "@/lib/rtdb";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,68 +22,15 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Mock sales data - in production this would come from RTDB
-const MOCK_SALES = [
-  {
-    id: '1',
-    correlative: 'B001-00001',
-    date: '2024-01-15',
-    time: '14:30:25',
-    client: 'María García',
-    clientId: 'C001',
-    items: [
-      { name: 'Ensalada César', quantity: 2, price: 12.50 },
-      { name: 'Jugo Natural', quantity: 1, price: 6.00 }
-    ],
-    total: 31.00,
-    paymentMethod: 'efectivo',
-    type: 'normal',
-    user: 'Cajero Principal',
-    status: 'completed'
-  },
-  {
-    id: '2',
-    correlative: 'B001-00002',
-    date: '2024-01-15',
-    time: '15:45:12',
-    client: 'Carlos Ruiz',
-    clientId: 'C002',
-    items: [
-      { name: 'Wrap de Pollo', quantity: 1, price: 14.00 },
-      { name: 'Bowl de Quinoa', quantity: 1, price: 16.00 }
-    ],
-    total: 30.00,
-    paymentMethod: 'credito',
-    type: 'normal',
-    user: 'Administrador',
-    status: 'pending'
-  },
-  {
-    id: '3',
-    correlative: 'A001-00001',
-    date: '2024-01-15',
-    time: '12:15:33',
-    client: 'Ana López - 3er Grado',
-    clientId: 'C003',
-    items: [
-      { name: 'Almuerzo Pequeño', quantity: 1, price: 8.00 }
-    ],
-    total: 8.00,
-    paymentMethod: 'efectivo',
-    type: 'lunch',
-    user: 'Cajero Principal',
-    status: 'delivered'
-  }
-];
 
 interface SalesListProps {
   onBack: () => void;
 }
 
 export const SalesList = ({ onBack }: SalesListProps) => {
-  const [sales, setSales] = useState(MOCK_SALES);
+  const [sales, setSales] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedSale, setSelectedSale] = useState<typeof MOCK_SALES[0] | null>(null);
+  const [selectedSale, setSelectedSale] = useState<any>(null);
 
   const filteredSales = sales.filter(sale =>
     sale.correlative.toLowerCase().includes(searchTerm.toLowerCase()) ||

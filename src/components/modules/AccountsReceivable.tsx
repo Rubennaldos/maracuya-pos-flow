@@ -26,65 +26,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Mock data for accounts receivable
-const MOCK_DEBTORS = [
-  {
-    id: 'C001',
-    name: 'María García López',
-    phone: '987654321',
-    totalDebt: 45.50,
-    invoices: [
-      { id: 'B001-00001', amount: 25.50, date: '2024-01-10', type: 'PV', products: ['Ensalada César', 'Jugo Natural'] },
-      { id: 'B001-00015', amount: 20.00, date: '2024-01-12', type: 'PV', products: ['Wrap de Pollo'] }
-    ],
-    payments: [
-      { id: 'P001', amount: 15.00, date: '2024-01-13', method: 'efectivo', invoices: ['B001-00001'] }
-    ],
-    urgentCollection: true,
-    lastReminder: '2024-01-14'
-  },
-  {
-    id: 'C002',
-    name: 'Carlos Ruiz Mendoza',
-    phone: '987654322',
-    totalDebt: 80.00,
-    invoices: [
-      { id: 'B001-00008', amount: 30.00, date: '2024-01-08', type: 'PV', products: ['Bowl de Quinoa', 'Sandwich Integral'] },
-      { id: 'VH001-00001', amount: 25.00, date: '2024-01-05', type: 'VH', products: ['Almuerzo Completo'] },
-      { id: 'B001-00020', amount: 25.00, date: '2024-01-14', type: 'PV', products: ['Ensalada César', 'Jugo Natural'] }
-    ],
-    payments: [],
-    urgentCollection: false,
-    lastReminder: null
-  },
-  {
-    id: 'C003',
-    name: 'Ana López Silva',
-    phone: '987654323',
-    totalDebt: 18.00,
-    invoices: [
-      { id: 'A001-00005', amount: 18.00, date: '2024-01-14', type: 'PV', products: ['Almuerzo Pequeño'] }
-    ],
-    payments: [],
-    urgentCollection: false,
-    lastReminder: null
+// Load debtors from RTDB
+const loadDebtors = async () => {
+  try {
+    const arData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
+    if (arData) {
+      return Object.values(arData);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error loading debtors:', error);
+    return [];
   }
-];
+};
 
 interface AccountsReceivableProps {
   onBack: () => void;
 }
 
 export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
-  const [debtors, setDebtors] = useState(MOCK_DEBTORS);
+  const [debtors, setDebtors] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDebtor, setSelectedDebtor] = useState<typeof MOCK_DEBTORS[0] | null>(null);
+  const [selectedDebtor, setSelectedDebtor] = useState<any>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<string>('efectivo');
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
-  const [selectedDebtorForWhatsApp, setSelectedDebtorForWhatsApp] = useState<typeof MOCK_DEBTORS[0] | null>(null);
+  const [selectedDebtorForWhatsApp, setSelectedDebtorForWhatsApp] = useState<any>(null);
 
   const filteredDebtors = debtors.filter(debtor =>
     debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -94,7 +63,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const totalDebt = debtors.reduce((sum, debtor) => sum + debtor.totalDebt, 0);
   const urgentCount = debtors.filter(debtor => debtor.urgentCollection).length;
 
-  const generateWhatsAppMessage = (debtor: typeof MOCK_DEBTORS[0], type: 'simple' | 'detailed' | 'full') => {
+  const generateWhatsAppMessage = (debtor: any, type: 'simple' | 'detailed' | 'full') => {
     let message = `Hola ${debtor.name.split(' ')[0]}, `;
     
     if (type === 'simple') {
@@ -118,7 +87,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     return encodeURIComponent(message);
   };
 
-  const sendWhatsApp = (debtor: typeof MOCK_DEBTORS[0], type: 'simple' | 'detailed' | 'full') => {
+  const sendWhatsApp = (debtor: any, type: 'simple' | 'detailed' | 'full') => {
     const message = generateWhatsAppMessage(debtor, type);
     const url = `https://wa.me/51${debtor.phone}?text=${message}`;
     window.open(url, '_blank');

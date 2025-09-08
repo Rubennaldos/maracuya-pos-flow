@@ -29,8 +29,19 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Mock products data
-const MOCK_PRODUCTS = [
+// Load products from RTDB
+const loadProducts = async () => {
+  try {
+    const productsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.products);
+    if (productsData) {
+      return Object.values(productsData);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error loading products:', error);
+    return [];
+  }
+};
   { id: '1', name: 'Ensalada César', price: 12.50 },
   { id: '2', name: 'Sandwich Integral', price: 8.50 },
   { id: '3', name: 'Jugo Natural', price: 6.00 },
@@ -38,8 +49,19 @@ const MOCK_PRODUCTS = [
   { id: '5', name: 'Bowl de Quinoa', price: 16.00 }
 ];
 
-// Mock promotions data
-const MOCK_PROMOTIONS: Promotion[] = [
+// Load promotions from RTDB
+const loadPromotions = async () => {
+  try {
+    const promotionsData = await RTDBHelper.getData<Record<string, Promotion>>(RTDB_PATHS.promotions);
+    if (promotionsData) {
+      return Object.values(promotionsData);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error loading promotions:', error);
+    return [];
+  }
+};
   {
     id: '1',
     name: 'Combo Saludable',

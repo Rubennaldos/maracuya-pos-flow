@@ -49,15 +49,19 @@ function Modal({
   );
 }
 
-/* --------------- Mock de productos --------------- */
-const MOCK_PRODUCTS = [
-  { id: "1", name: "Ensalada César", price: 12.5, cost: 8, image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=300&h=300&fit=crop", isKitchen: true,  category: "Ensaladas" },
-  { id: "2", name: "Sandwich Integral", price: 8.5, cost: 5, image: "https://images.unsplash.com/photo-1553979459-d2229ba7433a?w=300&h=300&fit=crop",  isKitchen: true,  category: "Sandwiches" },
-  { id: "3", name: "Jugo Natural", price: 6, cost: 2.5, image: "https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=300&h=300&fit=crop", isKitchen: false, category: "Bebidas" },
-  { id: "4", name: "Wrap de Pollo", price: 14, cost: 9, image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?w=300&h=300&fit=crop", isKitchen: true,  category: "Wraps" },
-  { id: "5", name: "Snack Saludable", price: 4.5, cost: 2, image: "https://images.unsplash.com/photo-1559181567-c3190ca9959b?w=300&h=300&fit=crop", isKitchen: false, category: "Snacks" },
-  { id: "6", name: "Bowl de Quinoa",  price: 16,  cost: 10, image: "https://images.unsplash.com/photo-1511690743698-d9d85f2fbf38?w=300&h=300&fit=crop", isKitchen: true,  category: "Bowls" },
-];
+/* --------------- Load products from RTDB --------------- */
+const loadProducts = async () => {
+  try {
+    const productsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.products);
+    if (productsData) {
+      return Object.values(productsData);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error loading products:', error);
+    return [];
+  }
+};
 
 type CartItem = { id: string; name: string; price: number; quantity: number; isKitchen: boolean; notes?: string };
 type Step = "productos" | "cliente" | "pago" | "confirm";
@@ -198,6 +202,19 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   }, [cart, flowManager]);
 
   // Clientes demo (buscador simple)
+  const loadClients = async () => {
+    try {
+      const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
+      if (clientsData) {
+        return Object.values(clientsData);
+      }
+      return [{ id: 'varios', names: 'Cliente', lastNames: 'Varios' }];
+    } catch (error) {
+      console.error('Error loading clients:', error);
+      return [{ id: 'varios', names: 'Cliente', lastNames: 'Varios' }];
+    }
+  };
+
   const MOCK_CLIENTS = [
     { id: "varios", name: "Cliente Varios" },
     { id: "cli001", name: "Ana Pérez" },

@@ -32,8 +32,19 @@ export const CollectionChecklist = ({ onBack }: CollectionChecklistProps) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [collections, setCollections] = useState<Record<string, boolean>>({});
 
-  // Mock data - replace with RTDB data
-  const MOCK_COLLECTION_ITEMS: CollectionItem[] = [
+  // Load collection data from RTDB
+  const loadCollectionItems = async () => {
+    try {
+      const arData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
+      if (arData) {
+        return Object.values(arData).filter((item: any) => item.debt > 0);
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading collection items:', error);
+      return [];
+    }
+  };
     {
       id: 'C001',
       name: 'María García López',

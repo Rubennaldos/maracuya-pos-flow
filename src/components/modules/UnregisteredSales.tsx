@@ -20,8 +20,19 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Mock unregistered sales data
-const MOCK_UNREGISTERED_SALES = [
+// Load unregistered sales from RTDB
+const loadUnregisteredSales = async () => {
+  try {
+    const unregSalesData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.unregistered_sales);
+    if (unregSalesData) {
+      return Object.values(unregSalesData);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error loading unregistered sales:', error);
+    return [];
+  }
+};
   {
     id: 'US001',
     date: '2024-01-15',

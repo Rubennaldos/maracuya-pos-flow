@@ -17,8 +17,19 @@ import {
   Trash2
 } from "lucide-react";
 
-// Mock product data
-const MOCK_PRODUCTS = [
+// Load products from RTDB
+const loadProducts = async () => {
+  try {
+    const productsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.products);
+    if (productsData) {
+      return Object.values(productsData);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error loading products:', error);
+    return [];
+  }
+};
   {
     id: '1',
     name: 'Ensalada César',

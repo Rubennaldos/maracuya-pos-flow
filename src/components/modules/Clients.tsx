@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import {
   ArrowLeft, Search, Plus, Edit, Trash2, Users,
   Phone, GraduationCap, CreditCard, User
 } from "lucide-react";
+import { RTDBHelper } from "@/lib/rt";
+import { RTDB_PATHS } from "@/lib/rtdb";
 import {
   Dialog,
   DialogContent,
@@ -35,84 +37,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Mock clients data
-const MOCK_CLIENTS: Client[] = [
-  {
-    id: 'C001',
-    names: 'María',
-    lastNames: 'García López',
-    payer1Name: 'Juan García',
-    payer1Phone: '987654321',
-    payer2Name: 'Ana López',
-    payer2Phone: '987654322',
-    classroom: '3A',
-    grade: '3',
-    level: 'primaria',
-    hasAccount: true,
-    isActive: true,
-    debt: 45.50,
-    isStaff: false
-  },
-  {
-    id: 'C002',
-    names: 'Carlos',
-    lastNames: 'Ruiz Mendoza',
-    payer1Name: 'Pedro Ruiz',
-    payer1Phone: '987654323',
-    classroom: '5B',
-    grade: '5',
-    level: 'primaria',
-    hasAccount: true,
-    isActive: true,
-    debt: 0,
-    isStaff: false
-  },
-  {
-    id: 'C003',
-    names: 'Ana',
-    lastNames: 'López Silva',
-    payer1Name: 'María Silva',
-    payer1Phone: '987654324',
-    classroom: '2A',
-    grade: '2',
-    level: 'primaria',
-    hasAccount: false,
-    isActive: true,
-    debt: 0,
-    isStaff: false
-  },
-  {
-    id: 'T001',
-    names: 'Roberto',
-    lastNames: 'Méndez Torres',
-    payer1Name: '',
-    payer1Phone: '',
-    classroom: '',
-    grade: '',
-    level: '',
-    hasAccount: true,
-    isActive: true,
-    debt: 0,
-    isStaff: true,
-    staffType: 'docente',
-    personalEmail: 'roberto.mendez@colegio.edu',
-    personalPhone: '987654325'
-  },
-  {
-    id: 'VARIOS',
-    names: 'Clientes',
-    lastNames: 'Varios',
-    payer1Name: '',
-    payer1Phone: '',
-    classroom: '',
-    grade: '',
-    level: '',
-    hasAccount: false,
-    isActive: true,
-    debt: 0,
-    isStaff: false
-  }
-];
 
 interface Client {
   id: string;
@@ -139,8 +63,25 @@ interface ClientsProps {
 }
 
 export const Clients = ({ onBack }: ClientsProps) => {
-  const [clients, setClients] = useState<Client[]>(MOCK_CLIENTS);
+  const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Load clients from RTDB
+  useEffect(() => {
+    loadClients();
+  }, []);
+
+  const loadClients = async () => {
+    try {
+      const clientsData = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
+      if (clientsData) {
+        const clientsArray = Object.values(clientsData);
+        setClients(clientsArray);
+      }
+    } catch (error) {
+      console.error('Error loading clients:', error);
+    }
+  };
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [newClient, setNewClient] = useState<Partial<Client>>({
