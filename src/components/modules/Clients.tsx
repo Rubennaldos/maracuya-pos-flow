@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { 
   ArrowLeft, Search, Plus, Edit, Trash2, Users,
-  Phone, GraduationCap, CreditCard, User
+  Phone, GraduationCap, CreditCard, User, Download, Upload
 } from "lucide-react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
+import * as XLSX from 'xlsx';
 import {
   Dialog,
   DialogContent,
@@ -75,7 +76,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
     try {
       const clientsData = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
       if (clientsData) {
-        // Filter out mock data that starts with test names
+        // Filter out mock data
         const clientsArray = Object.values(clientsData).filter(client => 
           !client.names.toLowerCase().includes('ana') && 
           !client.names.toLowerCase().includes('juan') &&
@@ -89,6 +90,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
       console.error('Error loading clients:', error);
     }
   };
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [newClient, setNewClient] = useState<Partial<Client>>({
@@ -208,6 +210,109 @@ export const Clients = ({ onBack }: ClientsProps) => {
     return "bg-primary text-primary-foreground";
   };
 
+  const downloadTemplate = () => {
+    const template = [
+      {
+        'Nombres': 'María',
+        'Apellidos': 'García López',
+        'Responsable1_Nombre': 'Juan García',
+        'Responsable1_Telefono': '987654321',
+        'Responsable2_Nombre': 'Ana López',
+        'Responsable2_Telefono': '987654322',
+        'Grado': '3',
+        'Salon': '3A',
+        'Nivel': 'primaria',
+        'Tiene_Cuenta': 'SI',
+        'Esta_Activo': 'SI',
+        'Es_Personal': 'NO',
+        'Tipo_Personal': '',
+        'Email_Personal': '',
+        'Telefono_Personal': ''
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Plantilla Clientes");
+    
+    // Auto-width columns
+    const colWidths = Object.keys(template[0]).map(key => ({ wch: Math.max(key.length, 15) }));
+    ws['!cols'] = colWidths;
+    
+    XLSX.writeFile(wb, "plantilla_clientes.xlsx");
+  };
+
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        let importedCount = 0;
+        const errors: string[] = [];
+
+        for (const row of jsonData as any[]) {
+          try {
+            if (!row.Nombres || !row.Apellidos) {
+              errors.push(`Fila sin nombre completo: ${JSON.stringify(row)}`);
+              continue;
+            }
+
+            const newClient: Client = {
+              id: generateClientId(),
+              names: row.Nombres?.toString() || '',
+              lastNames: row.Apellidos?.toString() || '',
+              payer1Name: row.Responsable1_Nombre?.toString() || '',
+              payer1Phone: row.Responsable1_Telefono?.toString() || '',
+              payer2Name: row.Responsable2_Nombre?.toString() || '',
+              payer2Phone: row.Responsable2_Telefono?.toString() || '',
+              classroom: row.Salon?.toString() || '',
+              grade: row.Grado?.toString() || '',
+              level: (row.Nivel?.toString().toLowerCase() === 'secundaria') ? 'secundaria' : 'primaria',
+              hasAccount: row.Tiene_Cuenta?.toString().toUpperCase() === 'SI',
+              isActive: row.Esta_Activo?.toString().toUpperCase() === 'SI',
+              debt: 0,
+              isStaff: row.Es_Personal?.toString().toUpperCase() === 'SI',
+              staffType: row.Tipo_Personal?.toString().toLowerCase() === 'administrativo' ? 'administrativo' : 
+                        row.Tipo_Personal?.toString().toLowerCase() === 'docente' ? 'docente' : null,
+              personalEmail: row.Email_Personal?.toString() || '',
+              personalPhone: row.Telefono_Personal?.toString() || ''
+            };
+
+            // Save to RTDB
+            await RTDBHelper.setData(`${RTDB_PATHS.clients}/${newClient.id}`, newClient);
+            importedCount++;
+          } catch (error) {
+            errors.push(`Error procesando fila: ${row.Nombres} ${row.Apellidos} - ${error}`);
+          }
+        }
+
+        // Reload clients
+        await loadClients();
+        
+        alert(`Importación completada:\n- ${importedCount} clientes importados\n${errors.length > 0 ? `- ${errors.length} errores encontrados` : ''}`);
+        
+        if (errors.length > 0) {
+          console.error('Errores de importación:', errors);
+        }
+      } catch (error) {
+        console.error('Error importing file:', error);
+        alert('Error al procesar el archivo. Verifique que sea un archivo Excel válido.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    
+    // Reset input
+    event.target.value = '';
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -221,202 +326,224 @@ export const Clients = ({ onBack }: ClientsProps) => {
             <h1 className="text-2xl font-bold text-foreground">Gestión de Clientes</h1>
           </div>
 
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => {
-                setEditingClient(null);
-                resetForm();
-              }}>
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo Cliente
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}
-                </DialogTitle>
-              </DialogHeader>
-              
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="names">Nombres</Label>
-                    <Input
-                      id="names"
-                      value={newClient.names}
-                      onChange={(e) => setNewClient(prev => ({ ...prev, names: e.target.value }))}
-                      placeholder="Ej: María"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastNames">Apellidos</Label>
-                    <Input
-                      id="lastNames"
-                      value={newClient.lastNames}
-                      onChange={(e) => setNewClient(prev => ({ ...prev, lastNames: e.target.value }))}
-                      placeholder="Ej: García López"
-                    />
-                  </div>
-                </div>
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={downloadTemplate}>
+              <Download className="w-4 h-4 mr-2" />
+              Descargar Plantilla
+            </Button>
+            
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileImport}
+              style={{ display: 'none' }}
+              id="file-import"
+            />
+            <Button 
+              variant="outline" 
+              onClick={() => document.getElementById('file-import')?.click()}
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Importar Excel
+            </Button>
 
-                {/* Staff toggle */}
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="isStaff"
-                    checked={newClient.isStaff}
-                    onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, isStaff: checked }))}
-                  />
-                  <Label htmlFor="isStaff">¿Es personal docente/administrativo?</Label>
-                </div>
-
-                {newClient.isStaff ? (
-                  /* Staff fields */
-                  <>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => {
+                  setEditingClient(null);
+                  resetForm();
+                }}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo Cliente
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}
+                  </DialogTitle>
+                </DialogHeader>
+                
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label>Tipo de Personal</Label>
-                      <Select
-                        value={newClient.staffType || ''}
-                        onValueChange={(value: 'docente' | 'administrativo') => 
-                          setNewClient(prev => ({ ...prev, staffType: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar tipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="docente">Docente</SelectItem>
-                          <SelectItem value="administrativo">Administrativo</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="names">Nombres</Label>
+                      <Input
+                        id="names"
+                        value={newClient.names}
+                        onChange={(e) => setNewClient(prev => ({ ...prev, names: e.target.value }))}
+                        placeholder="Ej: María"
+                      />
                     </div>
+                    <div>
+                      <Label htmlFor="lastNames">Apellidos</Label>
+                      <Input
+                        id="lastNames"
+                        value={newClient.lastNames}
+                        onChange={(e) => setNewClient(prev => ({ ...prev, lastNames: e.target.value }))}
+                        placeholder="Ej: García López"
+                      />
+                    </div>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                  {/* Staff toggle */}
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="isStaff"
+                      checked={newClient.isStaff}
+                      onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, isStaff: checked }))}
+                    />
+                    <Label htmlFor="isStaff">¿Es personal docente/administrativo?</Label>
+                  </div>
+
+                  {newClient.isStaff ? (
+                    /* Staff fields */
+                    <>
                       <div>
-                        <Label htmlFor="personalEmail">Correo Personal</Label>
-                        <Input
-                          id="personalEmail"
-                          type="email"
-                          value={newClient.personalEmail}
-                          onChange={(e) => setNewClient(prev => ({ ...prev, personalEmail: e.target.value }))}
-                          placeholder="ejemplo@correo.com"
-                        />
+                        <Label>Tipo de Personal</Label>
+                        <Select
+                          value={newClient.staffType || ''}
+                          onValueChange={(value: 'docente' | 'administrativo') => 
+                            setNewClient(prev => ({ ...prev, staffType: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="docente">Docente</SelectItem>
+                            <SelectItem value="administrativo">Administrativo</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="personalEmail">Correo Personal</Label>
+                          <Input
+                            id="personalEmail"
+                            type="email"
+                            value={newClient.personalEmail}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, personalEmail: e.target.value }))}
+                            placeholder="ejemplo@correo.com"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="personalPhone">Teléfono Personal</Label>
+                          <Input
+                            id="personalPhone"
+                            value={newClient.personalPhone}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, personalPhone: e.target.value }))}
+                            placeholder="987654321"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    /* Student fields */
+                    <>
                       <div>
-                        <Label htmlFor="personalPhone">Teléfono Personal</Label>
-                        <Input
-                          id="personalPhone"
-                          value={newClient.personalPhone}
-                          onChange={(e) => setNewClient(prev => ({ ...prev, personalPhone: e.target.value }))}
-                          placeholder="987654321"
-                        />
+                        <Label htmlFor="payer1Name">Responsable de Pago 1 (Obligatorio)</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            id="payer1Name"
+                            value={newClient.payer1Name}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, payer1Name: e.target.value }))}
+                            placeholder="Nombre completo"
+                          />
+                          <Input
+                            value={newClient.payer1Phone}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, payer1Phone: e.target.value }))}
+                            placeholder="Teléfono"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </>
-                ) : (
-                  /* Student fields */
-                  <>
-                    <div>
-                      <Label htmlFor="payer1Name">Responsable de Pago 1 (Obligatorio)</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          id="payer1Name"
-                          value={newClient.payer1Name}
-                          onChange={(e) => setNewClient(prev => ({ ...prev, payer1Name: e.target.value }))}
-                          placeholder="Nombre completo"
-                        />
-                        <Input
-                          value={newClient.payer1Phone}
-                          onChange={(e) => setNewClient(prev => ({ ...prev, payer1Phone: e.target.value }))}
-                          placeholder="Teléfono"
-                        />
+
+                      <div>
+                        <Label htmlFor="payer2Name">Responsable de Pago 2 (Opcional)</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            id="payer2Name"
+                            value={newClient.payer2Name}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, payer2Name: e.target.value }))}
+                            placeholder="Nombre completo"
+                          />
+                          <Input
+                            value={newClient.payer2Phone}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, payer2Phone: e.target.value }))}
+                            placeholder="Teléfono"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    </>
+                  )}
 
-                    <div>
-                      <Label htmlFor="payer2Name">Responsable de Pago 2 (Opcional)</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          id="payer2Name"
-                          value={newClient.payer2Name}
-                          onChange={(e) => setNewClient(prev => ({ ...prev, payer2Name: e.target.value }))}
-                          placeholder="Nombre completo"
-                        />
-                        <Input
-                          value={newClient.payer2Phone}
-                          onChange={(e) => setNewClient(prev => ({ ...prev, payer2Phone: e.target.value }))}
-                          placeholder="Teléfono"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div>
-                  <Label htmlFor="level">Nivel Educativo</Label>
-                  <Select value={newClient.level} onValueChange={(value: 'primaria' | 'secundaria') => 
-                    setNewClient(prev => ({ ...prev, level: value }))
-                  }>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar nivel" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="primaria">Primaria</SelectItem>
-                      <SelectItem value="secundaria">Secundaria</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="grade">Grado</Label>
-                    <Input
-                      id="grade"
-                      value={newClient.grade}
-                      onChange={(e) => setNewClient(prev => ({ ...prev, grade: e.target.value }))}
-                      placeholder="Ej: 3"
-                    />
+                    <Label htmlFor="level">Nivel Educativo</Label>
+                    <Select value={newClient.level} onValueChange={(value: 'primaria' | 'secundaria') => 
+                      setNewClient(prev => ({ ...prev, level: value }))
+                    }>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar nivel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="primaria">Primaria</SelectItem>
+                        <SelectItem value="secundaria">Secundaria</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div>
-                    <Label htmlFor="classroom">Salón</Label>
-                    <Input
-                      id="classroom"
-                      value={newClient.classroom}
-                      onChange={(e) => setNewClient(prev => ({ ...prev, classroom: e.target.value }))}
-                      placeholder="Ej: 3A"
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="grade">Grado</Label>
+                      <Input
+                        id="grade"
+                        value={newClient.grade}
+                        onChange={(e) => setNewClient(prev => ({ ...prev, grade: e.target.value }))}
+                        placeholder="Ej: 3"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="classroom">Salón</Label>
+                      <Input
+                        id="classroom"
+                        value={newClient.classroom}
+                        onChange={(e) => setNewClient(prev => ({ ...prev, classroom: e.target.value }))}
+                        placeholder="Ej: 3A"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="hasAccount"
+                      checked={newClient.hasAccount}
+                      onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, hasAccount: checked }))}
                     />
+                    <Label htmlFor="hasAccount">¿Tiene cuenta de crédito?</Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="isActive"
+                      checked={newClient.isActive}
+                      onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, isActive: checked }))}
+                    />
+                    <Label htmlFor="isActive">Cliente Activo</Label>
+                  </div>
+
+                  <div className="flex space-x-2 pt-4">
+                    <Button onClick={saveClient} className="flex-1">
+                      {editingClient ? 'Actualizar' : 'Crear'} Cliente
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                      Cancelar
+                    </Button>
                   </div>
                 </div>
-
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="hasAccount"
-                    checked={newClient.hasAccount}
-                    onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, hasAccount: checked }))}
-                  />
-                  <Label htmlFor="hasAccount">¿Tiene cuenta de crédito?</Label>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="isActive"
-                    checked={newClient.isActive}
-                    onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, isActive: checked }))}
-                  />
-                  <Label htmlFor="isActive">Cliente Activo</Label>
-                </div>
-
-                <div className="flex space-x-2 pt-4">
-                  <Button onClick={saveClient} className="flex-1">
-                    {editingClient ? 'Actualizar' : 'Crear'} Cliente
-                  </Button>
-                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </header>
 
@@ -515,72 +642,57 @@ export const Clients = ({ onBack }: ClientsProps) => {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <CreditCard className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm">
-                          {client.hasAccount ? 'Con cuenta' : 'Sin cuenta'}
-                        </span>
+                      <div className="flex space-x-2">
+                        {client.hasAccount && (
+                          <Badge variant="outline" className="text-xs">
+                            <CreditCard className="w-3 h-3 mr-1" />
+                            Cuenta
+                          </Badge>
+                        )}
+                        {client.isStaff && (
+                          <Badge variant="secondary" className="text-xs">
+                            <User className="w-3 h-3 mr-1" />
+                            {client.staffType}
+                          </Badge>
+                        )}
                       </div>
-                      {client.debt > 0 && (
-                        <Badge variant="destructive">
-                          Debe S/ {client.debt.toFixed(2)}
-                        </Badge>
-                      )}
+                      <div className="flex space-x-1">
+                        <Button variant="ghost" size="sm" onClick={() => startEdit(client)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleClientStatus(client.id)}
+                          className={client.isActive ? "text-warning" : "text-success"}
+                        >
+                          {client.isActive ? "🟢" : "🔴"}
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="text-destructive">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Eliminar cliente?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción no se puede deshacer. El cliente {client.names} {client.lastNames} será eliminado permanentemente.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteClient(client.id)}>
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
                   </>
                 )}
-
-                {client.id === 'VARIOS' && (
-                  <div className="text-center py-4">
-                    <User className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">Cliente especial para ventas al contado</p>
-                  </div>
-                )}
-
-                <div className="flex space-x-2 pt-2">
-                  {client.id !== 'VARIOS' && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => startEdit(client)}
-                        className="flex-1"
-                      >
-                        <Edit className="w-3 h-3 mr-1" />
-                        Editar
-                      </Button>
-
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Eliminar cliente?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta acción no se puede deshacer. El cliente "{client.names} {client.lastNames}" será eliminado permanentemente.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deleteClient(client.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Eliminar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </>
-                  )}
-                </div>
               </CardContent>
             </Card>
           ))}
@@ -590,7 +702,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">No se encontraron clientes</h3>
-            <p className="text-muted-foreground">Intenta con otros términos de búsqueda</p>
+            <p className="text-muted-foreground">Intenta con otros términos de búsqueda o crea un nuevo cliente.</p>
           </div>
         )}
       </div>
