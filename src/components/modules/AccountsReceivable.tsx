@@ -27,6 +27,9 @@ import {
 } from "@/components/ui/select";
 
 // Load debtors from RTDB
+import { RTDBHelper } from "@/lib/rt";
+import { RTDB_PATHS } from "@/lib/rtdb";
+
 const loadDebtors = async () => {
   try {
     const arData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);

@@ -1,17 +1,18 @@
-// Collection checklist component for tracking daily collections
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { 
-  ArrowLeft, Search, Download, Users, DollarSign,
-  CheckCircle, Clock, Calendar
-} from 'lucide-react';
-import { RTDBHelper } from '@/lib/rt';
-import { RTDB_PATHS } from '@/lib/rtdb';
+  ArrowLeft, Search, Download, CheckCircle2, Users,
+  Calendar, FileText, Phone, AlertCircle
+} from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { RTDBHelper } from "@/lib/rt";
+import { RTDB_PATHS } from "@/lib/rtdb";
 
 interface CollectionItem {
   id: string;
@@ -28,9 +29,9 @@ interface CollectionChecklistProps {
 
 export const CollectionChecklist = ({ onBack }: CollectionChecklistProps) => {
   const [collectionItems, setCollectionItems] = useState<CollectionItem[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [collections, setCollections] = useState<Record<string, boolean>>({});
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedDate] = useState(new Date());
 
   // Load collection data from RTDB
   const loadCollectionItems = async () => {
@@ -45,40 +46,16 @@ export const CollectionChecklist = ({ onBack }: CollectionChecklistProps) => {
       return [];
     }
   };
-    {
-      id: 'C001',
-      name: 'María García López',
-      phone: '987654321',
-      totalDebt: 45.50,
-      urgentCollection: true,
-      collected: false
-    },
-    {
-      id: 'C002',
-      name: 'Carlos Ruiz Mendoza',
-      phone: '987654322',
-      totalDebt: 80.00,
-      urgentCollection: false,
-      collected: false
-    },
-    {
-      id: 'C003',
-      name: 'Ana López Silva',
-      phone: '987654323',
-      totalDebt: 18.00,
-      urgentCollection: false,
-      collected: false
-    }
-  ];
 
   useEffect(() => {
-    setCollectionItems(MOCK_COLLECTION_ITEMS);
-    loadCollections();
-  }, [selectedDate]);
+    loadCollectionItems().then(items => {
+      setCollectionItems(items);
+    });
+  }, []);
 
   const loadCollections = async () => {
     try {
-      const collectionsPath = `collections/${selectedDate}`;
+      const collectionsPath = `collections/${format(selectedDate, 'yyyy-MM-dd')}`;
       const todayCollections = await RTDBHelper.getData(collectionsPath) || {};
       setCollections(todayCollections);
     } catch (error) {
@@ -86,32 +63,45 @@ export const CollectionChecklist = ({ onBack }: CollectionChecklistProps) => {
     }
   };
 
-  const toggleCollection = async (clientId: string) => {
-    const newStatus = !collections[clientId];
-    const updatedCollections = {
-      ...collections,
-      [clientId]: newStatus
-    };
-
-    setCollections(updatedCollections);
-
+  const toggleCollection = async (clientId: string, collected: boolean) => {
     try {
-      const collectionsPath = `collections/${selectedDate}`;
-      await RTDBHelper.setData(collectionsPath, updatedCollections);
+      const dateKey = format(selectedDate, 'yyyy-MM-dd');
+      const collectionPath = `collections/${dateKey}/${clientId}`;
+      
+      if (collected) {
+        await RTDBHelper.setData(collectionPath, {
+          collected: true,
+          collectedAt: new Date().toISOString(),
+          collectedBy: 'current-user' // Replace with actual user from auth context
+        });
+      } else {
+        await RTDBHelper.removeData(collectionPath);
+      }
+      
+      setCollections(prev => ({
+        ...prev,
+        [clientId]: collected
+      }));
+      
+      // Update local state
+      setCollectionItems(items => 
+        items.map(item => 
+          item.id === clientId ? { ...item, collected } : item
+        )
+      );
     } catch (error) {
-      console.error('Error saving collection status:', error);
+      console.error('Error updating collection status:', error);
     }
   };
 
   const exportToCSV = () => {
     const csvData = collectionItems.map(item => ({
-      'ID Cliente': item.id,
-      'Nombre': item.name,
-      'Teléfono': item.phone,
-      'Deuda Total': item.totalDebt.toFixed(2),
-      'Urgente': item.urgentCollection ? 'Sí' : 'No',
-      'Cobrado': collections[item.id] ? 'Sí' : 'No',
-      'Fecha': selectedDate
+      Cliente: item.name,
+      Telefono: item.phone,
+      Deuda: item.totalDebt,
+      Urgente: item.urgentCollection ? 'Sí' : 'No',
+      Cobrado: collections[item.id] ? 'Sí' : 'No',
+      Fecha: format(selectedDate, 'dd/MM/yyyy')
     }));
 
     const csvContent = [
@@ -120,108 +110,106 @@ export const CollectionChecklist = ({ onBack }: CollectionChecklistProps) => {
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cobranza_${selectedDate}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cobranzas_${format(selectedDate, 'yyyy-MM-dd')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const filteredItems = collectionItems.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.id.toLowerCase().includes(searchTerm.toLowerCase())
+    item.phone.includes(searchTerm)
   );
 
-  const totalDebt = filteredItems.reduce((sum, item) => sum + item.totalDebt, 0);
-  const collectedCount = filteredItems.filter(item => collections[item.id]).length;
-  const pendingCount = filteredItems.length - collectedCount;
+  const totalPending = filteredItems.filter(item => !collections[item.id]).length;
+  const totalCollected = filteredItems.filter(item => collections[item.id]).length;
+  const totalAmount = filteredItems.reduce((sum, item) => sum + item.totalDebt, 0);
+  const collectedAmount = filteredItems
+    .filter(item => collections[item.id])
+    .reduce((sum, item) => sum + item.totalDebt, 0);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button variant="outline" onClick={onBack}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Volver
-            </Button>
-            <h1 className="text-2xl font-bold text-foreground">Ruta de Cobranza</h1>
-          </div>
+      <div className="container mx-auto p-6">
+        <Button 
+          variant="outline" 
+          onClick={onBack}
+          className="mb-6 flex items-center gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver al Dashboard
+        </Button>
 
-          <div className="flex items-center space-x-2">
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-auto"
-            />
-            <Button variant="outline" onClick={exportToCSV}>
-              <Download className="w-4 h-4 mr-2" />
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <CheckCircle2 className="h-6 w-6" />
+            Lista de Cobranza - {format(selectedDate, 'dd/MM/yyyy', { locale: es })}
+          </h2>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              onClick={exportToCSV}
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
               Exportar CSV
             </Button>
           </div>
         </div>
-      </header>
 
-      <div className="p-6">
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Clientes</CardTitle>
-              <Users className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{filteredItems.length}</div>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-orange-500" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Pendientes</p>
+                  <p className="text-2xl font-bold">{totalPending}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
-
+          
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Cobrados Hoy</CardTitle>
-              <CheckCircle className="w-4 h-4 text-success" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-success">{collectedCount}</div>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Cobrados</p>
+                  <p className="text-2xl font-bold">{totalCollected}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
-
+          
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-              <Clock className="w-4 h-4 text-warning" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-warning">{pendingCount}</div>
+            <CardContent className="p-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Monto Total</p>
+                <p className="text-2xl font-bold">S/ {totalAmount.toFixed(2)}</p>
+              </div>
             </CardContent>
           </Card>
-
+          
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Deuda</CardTitle>
-              <DollarSign className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">S/ {totalDebt.toFixed(2)}</div>
+            <CardContent className="p-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Cobrado Hoy</p>
+                <p className="text-2xl font-bold text-green-600">S/ {collectedAmount.toFixed(2)}</p>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Date and Search */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-5 h-5 text-muted-foreground" />
-            <span className="font-medium">
-              Cobranza del {new Date(selectedDate).toLocaleDateString()}
-            </span>
-          </div>
-
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+        {/* Search */}
+        <div className="mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar clientes..."
+              placeholder="Buscar por nombre o teléfono..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -232,35 +220,49 @@ export const CollectionChecklist = ({ onBack }: CollectionChecklistProps) => {
         {/* Collection List */}
         <Card>
           <CardHeader>
-            <CardTitle>Lista de Cobranza</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Clientes con Deudas Pendientes
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {filteredItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center space-x-4">
+                <div 
+                  key={item.id} 
+                  className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
+                    collections[item.id] ? 'bg-green-50 border-green-200' : 'bg-background'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
                     <Checkbox
                       checked={collections[item.id] || false}
-                      onCheckedChange={() => toggleCollection(item.id)}
-                      className="w-5 h-5"
+                      onCheckedChange={(checked) => toggleCollection(item.id, checked as boolean)}
                     />
-                    
                     <div className="flex-1">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center gap-2">
                         <h3 className="font-medium">{item.name}</h3>
                         {item.urgentCollection && (
-                          <Badge variant="destructive" className="text-xs">Urgente</Badge>
+                          <Badge variant="destructive" className="text-xs">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            URGENTE
+                          </Badge>
                         )}
                         {collections[item.id] && (
-                          <Badge variant="default" className="text-xs bg-success">Cobrado</Badge>
+                          <Badge variant="default" className="text-xs bg-green-600">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            COBRADO
+                          </Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {item.id} • {item.phone}
-                      </p>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3 w-3" />
+                          {item.phone}
+                        </span>
+                      </div>
                     </div>
                   </div>
-
                   <div className="text-right">
                     <p className="font-bold text-lg">S/ {item.totalDebt.toFixed(2)}</p>
                   </div>

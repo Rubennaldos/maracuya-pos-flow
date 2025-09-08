@@ -50,6 +50,9 @@ function Modal({
 }
 
 /* --------------- Load products from RTDB --------------- */
+import { RTDBHelper } from "@/lib/rt";
+import { RTDB_PATHS } from "@/lib/rtdb";
+
 const loadProducts = async () => {
   try {
     const productsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.products);
@@ -85,7 +88,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const { flowManager, isProcessing, saveDraft, processSale } = useSaleFlow();
 
   /* ---------------- Carrito ---------------- */
-  const addToCart = (p: typeof MOCK_PRODUCTS[number]) => {
+  const addToCart = (p: any) => {
     setCart((prev) => {
       const ex = prev.find((i) => i.id === p.id);
       return ex
@@ -101,7 +104,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
   const total = subtotal;
 
-  const filteredProducts = MOCK_PRODUCTS.filter(
+  const filteredProducts = products.filter((product: any) =>
     (p) =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.category.toLowerCase().includes(searchTerm.toLowerCase())

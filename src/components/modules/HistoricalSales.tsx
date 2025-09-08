@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,16 +6,16 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { 
-  Search, 
-  ShoppingCart, 
-  Plus, 
-  Minus, 
-  X, 
-  ArrowLeft,
-  Calendar,
-  Save,
-  Trash2
+  ArrowLeft, Search, Plus, Minus, Calendar, 
+  ShoppingCart, Clock, User, DollarSign
 } from "lucide-react";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+import { RTDBHelper } from "@/lib/rt";
+import { RTDB_PATHS } from "@/lib/rtdb";
 
 // Load products from RTDB
 const loadProducts = async () => {
@@ -30,37 +30,13 @@ const loadProducts = async () => {
     return [];
   }
 };
-  {
-    id: '1',
-    name: 'Ensalada César',
-    price: 12.50,
-    cost: 8.00,
-    image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=300&h=300&fit=crop',
-    category: 'Ensaladas'
-  },
-  {
-    id: '2', 
-    name: 'Sandwich Integral',
-    price: 8.50,
-    cost: 5.00,
-    image: 'https://images.unsplash.com/photo-1553979459-d2229ba7433a?w=300&h=300&fit=crop',
-    category: 'Sandwiches'
-  },
-  {
-    id: '3',
-    name: 'Jugo Natural',
-    price: 6.00,
-    cost: 2.50,
-    image: 'https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=300&h=300&fit=crop',
-    category: 'Bebidas'
-  }
-];
 
 interface CartItem {
   id: string;
   name: string;
   price: number;
   quantity: number;
+  notes?: string;
 }
 
 interface HistoricalSalesProps {
@@ -68,251 +44,278 @@ interface HistoricalSalesProps {
 }
 
 export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
+  const [products, setProducts] = useState([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
-  const filteredProducts = MOCK_PRODUCTS.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.category.toLowerCase().includes(searchTerm.toLowerCase())
+  // Load products from RTDB
+  useEffect(() => {
+    loadProducts().then(productsData => {
+      setProducts(productsData);
+    });
+  }, []);
+
+  const filteredProducts = products.filter((product: any) =>
+    product.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const addToCart = (product: typeof MOCK_PRODUCTS[0]) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        return prev.map(item =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      } else {
-        return [...prev, {
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          quantity: 1
-        }];
-      }
-    });
-  };
-
-  const updateQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      setCart(prev => prev.filter(item => item.id !== id));
-    } else {
-      setCart(prev => prev.map(item =>
-        item.id === id ? { ...item, quantity: newQuantity } : item
+  const addToCart = (product: any) => {
+    const existingItem = cart.find(item => item.id === product.id);
+    if (existingItem) {
+      setCart(cart.map(item => 
+        item.id === product.id 
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
       ));
+    } else {
+      setCart([...cart, { 
+        id: product.id, 
+        name: product.name, 
+        price: product.salePrice || product.price || 0, 
+        quantity: 1 
+      }]);
     }
   };
 
-  const removeFromCart = (id: string) => {
-    setCart(prev => prev.filter(item => item.id !== id));
+  const removeFromCart = (productId: string) => {
+    const existingItem = cart.find(item => item.id === productId);
+    if (existingItem && existingItem.quantity > 1) {
+      setCart(cart.map(item => 
+        item.id === productId 
+          ? { ...item, quantity: item.quantity - 1 }
+          : item
+      ));
+    } else {
+      setCart(cart.filter(item => item.id !== productId));
+    }
+  };
+
+  const getTotalAmount = () => {
+    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
   const clearCart = () => {
     setCart([]);
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const processHistoricalSale = async () => {
+    if (cart.length === 0) {
+      alert('Agregue productos al carrito');
+      return;
+    }
 
-  const processSale = () => {
-    if (cart.length === 0) return;
-    
-    console.log('Processing historical sale:', {
-      date: saleDate,
-      items: cart,
-      total: subtotal
-    });
-    
-    // Clear cart after processing
-    clearCart();
+    if (!selectedDate) {
+      alert('Seleccione una fecha');
+      return;
+    }
+
+    try {
+      // Generate correlative for historical sales
+      const correlative = await RTDBHelper.getNextCorrelative('historical');
+      
+      const saleData = {
+        correlative,
+        date: format(selectedDate, 'yyyy-MM-dd'),
+        items: cart,
+        total: getTotalAmount(),
+        paymentMethod: 'credito', // Historical sales are always credit
+        type: 'historical',
+        user: 'Sistema', // You might want to get this from auth context
+        status: 'completed',
+        createdAt: new Date().toISOString()
+      };
+
+      // Save to RTDB
+      const saleId = await RTDBHelper.pushData(RTDB_PATHS.sales, saleData);
+      
+      // Register in accounts receivable
+      // You'll need to implement client selection for this
+      
+      alert(`Venta histórica registrada con correlativo: ${correlative}`);
+      clearCart();
+    } catch (error) {
+      console.error('Error processing historical sale:', error);
+      alert('Error al procesar la venta histórica');
+    }
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button variant="outline" onClick={onBack}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Volver
-            </Button>
-            <h1 className="text-2xl font-bold text-foreground">Ventas Históricas</h1>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <Label htmlFor="saleDate">Fecha de Venta:</Label>
-              <Input
-                id="saleDate"
-                type="date"
-                value={saleDate}
-                onChange={(e) => setSaleDate(e.target.value)}
-                className="w-auto"
-              />
-            </div>
+      <div className="container mx-auto p-6">
+        <Button 
+          variant="outline" 
+          onClick={onBack}
+          className="mb-6 flex items-center gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver al Dashboard
+        </Button>
+
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Clock className="h-6 w-6" />
+            Ventas Históricas
+          </h2>
+          <div className="flex items-center gap-4">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-[240px] justify-start text-left font-normal",
+                    !selectedDate && "text-muted-foreground"
+                  )}
+                >
+                  <Calendar className="mr-2 h-4 w-4" />
+                  {selectedDate ? (
+                    format(selectedDate, "PPP", { locale: es })
+                  ) : (
+                    <span>Seleccionar fecha</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  disabled={(date) =>
+                    date > new Date() || date < new Date("1900-01-01")
+                  }
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
-      </header>
 
-      <div className="flex h-[calc(100vh-80px)]">
-        {/* Products Grid */}
-        <div className="flex-1 p-4 overflow-y-auto">
-          {/* Search */}
-          <div className="mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Products Panel */}
+          <div className="lg:col-span-2 space-y-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar productos..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 text-lg h-12"
+                className="pl-10"
               />
             </div>
-          </div>
 
-          {/* Product Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filteredProducts.map((product) => (
-              <Card 
-                key={product.id}
-                className="cursor-pointer hover:shadow-medium transition-all duration-200 group border-2 hover:border-primary"
-                onClick={() => addToCart(product)}
-              >
-                <CardContent className="p-0">
-                  <div className="relative">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-40 object-cover rounded-t-lg"
-                    />
-                  </div>
-                  
-                  <div className="p-3">
-                    <h3 className="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
-                      {product.name}
-                    </h3>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      {product.category}
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-primary">
-                        S/ {product.price.toFixed(2)}
-                      </span>
-                      <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* Cart Sidebar */}
-        <div className="w-96 bg-card border-l border-border flex flex-col">
-          {/* Cart Header */}
-          <div className="p-4 border-b border-border">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-foreground flex items-center">
-                <ShoppingCart className="w-5 h-5 mr-2" />
-                Venta Histórica ({cart.length})
-              </h2>
-              {cart.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearCart}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">
-              Fecha: {new Date(saleDate).toLocaleDateString('es-PE')}
-            </p>
-          </div>
-
-          {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {cart.length === 0 ? (
-              <div className="text-center py-8">
-                <ShoppingCart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Carrito vacío</p>
-                <p className="text-sm text-muted-foreground">Seleccione productos para agregar</p>
-              </div>
-            ) : (
-              cart.map((item) => (
-                <Card key={item.id} className="border border-border/50">
-                  <CardContent className="p-3">
-                    <div className="flex items-start justify-between mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+              {filteredProducts.map((product: any) => (
+                <Card 
+                  key={product.id} 
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => addToCart(product)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <h4 className="font-medium text-foreground">{item.name}</h4>
+                        <h3 className="font-medium">{product.name}</h3>
+                        <p className="text-sm text-muted-foreground">{product.category}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline">
+                            <DollarSign className="h-3 w-3 mr-1" />
+                            S/ {(product.salePrice || product.price || 0).toFixed(2)}
+                          </Badge>
+                        </div>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => removeFromCart(item.id)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        >
-                          <Minus className="w-3 h-3" />
-                        </Button>
-                        <span className="w-8 text-center font-medium">{item.quantity}</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <span className="font-bold text-primary">
-                        S/ {(item.price * item.quantity).toFixed(2)}
-                      </span>
+                      {product.image && (
+                        <img 
+                          src={product.image} 
+                          alt={product.name}
+                          className="w-12 h-12 rounded object-cover ml-4"
+                        />
+                      )}
                     </div>
                   </CardContent>
                 </Card>
-              ))
+              ))}
+            </div>
+
+            {filteredProducts.length === 0 && (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">No se encontraron productos</p>
+              </div>
             )}
           </div>
 
-          {/* Cart Footer */}
-          {cart.length > 0 && (
-            <div className="p-4 border-t border-border bg-card">
-              <div className="space-y-3">
-                <div className="flex justify-between text-xl">
-                  <span className="font-bold">Total:</span>
-                  <span className="font-bold text-primary">S/ {subtotal.toFixed(2)}</span>
+          {/* Cart Panel */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  Carrito de Venta
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {cart.map((item) => (
+                    <div key={item.id} className="flex justify-between items-center p-2 border rounded">
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{item.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          S/ {item.price.toFixed(2)} x {item.quantity}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeFromCart(item.id)}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-8 text-center text-sm">{item.quantity}</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addToCart({ id: item.id, name: item.name, price: item.price })}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {cart.length === 0 && (
+                    <p className="text-center text-muted-foreground py-4">
+                      Carrito vacío
+                    </p>
+                  )}
                 </div>
-                
-                <Separator />
-                
-                <div className="space-y-2">
-                  <Button 
-                    onClick={processSale}
-                    className="w-full h-12 text-lg bg-gradient-to-r from-primary to-primary-light"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    Guardar Venta Histórica
-                  </Button>
-                  <Button variant="outline" onClick={clearCart} className="w-full">
-                    <X className="w-4 h-4 mr-1" />
-                    Cancelar
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
+
+                {cart.length > 0 && (
+                  <div className="mt-4 space-y-3">
+                    <Separator />
+                    <div className="flex justify-between items-center font-medium">
+                      <span>Total:</span>
+                      <span>S/ {getTotalAmount().toFixed(2)}</span>
+                    </div>
+                    <div className="space-y-2">
+                      <Button 
+                        onClick={processHistoricalSale}
+                        className="w-full"
+                        disabled={cart.length === 0 || !selectedDate}
+                      >
+                        Registrar Venta Histórica
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={clearCart}
+                        className="w-full"
+                      >
+                        Limpiar Carrito
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
