@@ -162,8 +162,11 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   };
 
   const checkParentalAuth = async (): Promise<boolean> => {
+    console.log('🔍 Checking parental auth for client:', selectedClient);
+    
     if (!selectedClient || selectedClient.id === "varios") {
       // Cliente varios siempre necesita autorización para crédito
+      console.log('✋ Cliente varios - requiere autorización');
       setCurrentClientForAuth(null);
       setShowParentalAuth(true);
       return true; // Needs auth
@@ -171,24 +174,34 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
     // Cargar datos completos del cliente
     const fullClientData = await loadFullClientData(selectedClient.id);
+    console.log('📊 Full client data:', fullClientData);
     
     if (!fullClientData) {
       // Si no se puede cargar los datos, asumir que necesita autorización
+      console.log('❌ No se pudieron cargar datos del cliente - requiere autorización');
       setCurrentClientForAuth(null);
       setShowParentalAuth(true);
       return true; // Needs auth
     }
 
     // Verificar si el cliente tiene cuenta de crédito activa
-    const hasActiveCredit = fullClientData.hasCreditAccount && fullClientData.isActive;
+    // IMPORTANTE: Solo NO pedir autorización si EXPLÍCITAMENTE tiene cuenta activa
+    // Por defecto, SIEMPRE pedir autorización para crédito
+    const hasActiveCredit = (fullClientData.hasCreditAccount === true) && (fullClientData.isActive === true);
+    console.log('💳 Has active credit?', hasActiveCredit, {
+      hasCreditAccount: fullClientData.hasCreditAccount,
+      isActive: fullClientData.isActive
+    });
     
+    // Si NO tiene cuenta activa explícita, requiere autorización parental
     if (!hasActiveCredit) {
-      // Cliente sin cuenta activa necesita autorización parental
+      console.log('⚠️ Cliente sin cuenta activa confirmada - requiere autorización parental');
       setCurrentClientForAuth(fullClientData);
       setShowParentalAuth(true);
       return true; // Needs auth
     }
 
+    console.log('✅ Cliente con cuenta activa confirmada - no requiere autorización');
     return false; // No needs auth
   };
 
@@ -315,21 +328,23 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
   // Clientes demo (buscador simple)
   const loadClients = async () => {
+    console.log('🔄 Loading clients from RTDB...');
     try {
       const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
+      console.log('📋 Raw clients data:', clientsData);
       if (clientsData) {
         // Filter out mock data and format for display
-        const realClients = Object.values(clientsData)
-          .filter((client: any) => 
+        const realClients = Object.entries(clientsData)
+          .filter(([id, client]: [string, any]) => 
             !client.names?.toLowerCase().includes('ana') && 
             !client.names?.toLowerCase().includes('juan') &&
             !client.lastNames?.toLowerCase().includes('pérez') &&
             !client.lastNames?.toLowerCase().includes('díaz') &&
             !client.grade?.includes('3er') &&
-            client.id !== 'varios'
+            id !== 'varios'
           )
-          .map((client: any) => ({
-            id: client.id,
+          .map(([id, client]: [string, any]) => ({
+            id: id, // Usar el ID de la clave de Firebase
             name: `${client.names} ${client.lastNames}`.trim() || client.name || 'Cliente'
           }));
         
