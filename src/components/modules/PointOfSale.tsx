@@ -69,20 +69,29 @@ const loadProducts = async () => {
   try {
     const productsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.products);
     if (productsData) {
-      return Object.values(productsData).map((product: any) => ({
+      return Object.entries(productsData).map(([id, product]: [string, any]) => ({
+        id,
         ...product,
-        price: Number(product.salePrice || product.price || 0),
-        image: product.image || '/placeholder.svg'
+        price: Number(product.salePrice ?? product.price ?? 0),
+        image: product.image || "/placeholder.svg",
+        isKitchen: Boolean(product.isKitchen),
       }));
     }
     return [];
   } catch (error) {
-    console.error('Error loading products:', error);
+    console.error("Error loading products:", error);
     return [];
   }
 };
 
-type CartItem = { id: string; name: string; price: number; quantity: number; isKitchen: boolean; notes?: string };
+type CartItem = {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  isKitchen: boolean;
+  notes?: string;
+};
 type Step = "productos" | "cliente" | "pago" | "confirm";
 
 interface PointOfSaleProps {
@@ -94,15 +103,17 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [saleType, setSaleType] = useState<"normal" | "scheduled" | "lunch">("normal");
-  
+
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Flujo visual (modales)
   const [step, setStep] = useState<Step>("productos");
   const [clientQuery, setClientQuery] = useState("");
   const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
-  const [payMethod, setPayMethod] = useState<"efectivo" | "transferencia" | "credito" | "yape" | "plin" | null>(null);
-  
+  const [payMethod, setPayMethod] = useState<
+    "efectivo" | "transferencia" | "credito" | "yape" | "plin" | null
+  >(null);
+
   // Estado para autorización parental
   const [showParentalAuth, setShowParentalAuth] = useState(false);
   const [currentClientForAuth, setCurrentClientForAuth] = useState<Client | null>(null);
@@ -116,7 +127,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       setSelectedClient(null);
       setPayMethod(null);
       setStep("productos");
-      
+
       // Enfocar automáticamente el campo de búsqueda
       setTimeout(() => {
         searchInputRef.current?.focus();
@@ -135,7 +146,10 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       const ex = prev.find((i) => i.id === p.id);
       return ex
         ? prev.map((i) => (i.id === p.id ? { ...i, quantity: i.quantity + 1 } : i))
-        : [...prev, { id: p.id, name: p.name, price: p.price, quantity: 1, isKitchen: p.isKitchen }];
+        : [
+            ...prev,
+            { id: p.id, name: p.name, price: Number(p.price ?? 0), quantity: 1, isKitchen: !!p.isKitchen },
+          ];
     });
   };
   const updateQuantity = (id: string, qty: number) =>
@@ -146,9 +160,10 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
   const total = subtotal;
 
-  const filteredProducts = products.filter((product: any) =>
-    product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.category?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProducts = products.filter(
+    (product: any) =>
+      product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   /* ---------------- Validación de autorización parental ---------------- */
@@ -157,59 +172,51 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       const clientData = await RTDBHelper.getData<any>(`${RTDB_PATHS.clients}/${clientId}`);
       return clientData || null;
     } catch (error) {
-      console.error('Error loading client data:', error);
+      console.error("Error loading client data:", error);
       return null;
     }
   };
 
   const checkParentalAuth = async (): Promise<boolean> => {
     if (!selectedClient || selectedClient.id === "varios") {
-      // Cliente varios siempre necesita autorización para crédito
       setCurrentClientForAuth(null);
       setShowParentalAuth(true);
-      return true; // Needs auth
+      return true; // requiere autorización
     }
 
     // Cargar datos completos del cliente
     const fullClientData = await loadFullClientData(selectedClient.id);
-    
+
     if (!fullClientData) {
-      // Si no se puede cargar los datos, asumir que necesita autorización
       setCurrentClientForAuth(null);
       setShowParentalAuth(true);
-      return true; // Needs auth
+      return true; // requiere autorización
     }
 
-    // Verificar si el cliente tiene cuenta de crédito activa
-    // IMPORTANTE: Solo NO pedir autorización si EXPLÍCITAMENTE tiene cuenta activa
-    // Por defecto, SIEMPRE pedir autorización para crédito
-    const hasActiveCredit = (fullClientData.hasCreditAccount === true) && (fullClientData.isActive === true);
-    
-    // Si NO tiene cuenta activa explícita, requiere autorización parental
+    // Solo NO pedir autorización si EXPLÍCITAMENTE tiene cuenta de crédito activa
+    const hasActiveCredit = fullClientData.accountEnabled === true && fullClientData.active === true;
+
     if (!hasActiveCredit) {
       setCurrentClientForAuth(fullClientData);
       setShowParentalAuth(true);
-      return true; // Needs auth
+      return true; // requiere autorización
     }
 
-    return false; // No needs auth
+    return false; // no requiere autorización
   };
 
   const handleParentalAuth = (authorized: boolean) => {
     setShowParentalAuth(false);
-    
+
     if (authorized) {
-      // Proceder con la venta
       setStep("confirm");
     } else {
-      // Cancelar y mostrar mensaje
       setPayMethod(null);
       setStep("productos");
-      // Resetear selecciones
       setSelectedClient(null);
       alert("Consulta al padre o apoderado y vuelve a realizar la venta.");
     }
-    
+
     setCurrentClientForAuth(null);
   };
 
@@ -230,20 +237,19 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     }
     if (step === "pago") {
       if (!payMethod) return;
-      
-      // Si es crédito, validar autorización parental para clientes sin cuenta de forma no bloqueante
+
       if (payMethod === "credito") {
         setCheckingAuth(true);
         try {
           const needsAuth = await checkParentalAuth();
           if (needsAuth) {
-            return; // La función ya maneja el flujo
+            return; // el modal manejará el flujo
           }
         } finally {
           setCheckingAuth(false);
         }
       }
-      
+
       setStep("confirm");
       return;
     }
@@ -258,8 +264,8 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
         saleType,
         paymentMethod: payMethod,
         selectedClient: selectedClient
-          ? { id: selectedClient.id, name: selectedClient.name }
-          : { id: "varios", name: "Cliente Varios" },
+          ? { id: selectedClient.id, name: selectedClient.name, fullName: selectedClient.name }
+          : { id: "varios", name: "Cliente Varios", fullName: "Cliente Varios" },
         origin: "PV",
       });
 
@@ -321,44 +327,31 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     flowManager.updateCart(cart);
   }, [cart, flowManager]);
 
-  // Clientes demo (buscador simple)
+  // Cargar clientes
   const loadClients = async () => {
     try {
       const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
       if (clientsData) {
-        // Filter out mock data and format for display
-        const realClients = Object.entries(clientsData)
-          .filter(([id, client]: [string, any]) => 
-            !client.names?.toLowerCase().includes('ana') && 
-            !client.names?.toLowerCase().includes('juan') &&
-            !client.lastNames?.toLowerCase().includes('pérez') &&
-            !client.lastNames?.toLowerCase().includes('díaz') &&
-            !client.grade?.includes('3er') &&
-            id !== 'varios'
-          )
-          .map(([id, client]: [string, any]) => ({
-            id: id, // Usar el ID de la clave de Firebase
-            name: `${client.names} ${client.lastNames}`.trim() || client.name || 'Cliente'
-          }));
-        
-        // Add "Cliente Varios" as default option
-        return [{ id: 'varios', name: 'Cliente Varios' }, ...realClients];
+        const list = Object.entries(clientsData).map(([id, c]: [string, any]) => ({
+          id,
+          name: c?.fullName || c?.name || "Cliente",
+        }));
+        // Agregamos "Cliente Varios" al inicio
+        return [{ id: "varios", name: "Cliente Varios" }, ...list];
       }
-      return [{ id: 'varios', name: 'Cliente Varios' }];
+      return [{ id: "varios", name: "Cliente Varios" }];
     } catch (error) {
-      console.error('Error loading clients:', error);
-      return [{ id: 'varios', name: 'Cliente Varios' }];
+      console.error("Error loading clients:", error);
+      return [{ id: "varios", name: "Cliente Varios" }];
     }
   };
 
-  const [clientResults, setClientResults] = useState([{ id: 'varios', name: 'Cliente Varios' }]);
+  const [clientResults, setClientResults] = useState([{ id: "varios", name: "Cliente Varios" }]);
 
   useEffect(() => {
     const loadAndFilterClients = async () => {
       const clients = await loadClients();
-      const filtered = clients.filter((c) =>
-        c.name.toLowerCase().includes(clientQuery.toLowerCase())
-      );
+      const filtered = clients.filter((c) => c.name.toLowerCase().includes(clientQuery.toLowerCase()));
       setClientResults(filtered);
     };
     loadAndFilterClients();
@@ -432,11 +425,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
               >
                 <CardContent className="p-0">
                   <div className="relative">
-                    <img
-                      src={p.image}
-                      alt={p.name}
-                      className="w-full h-40 object-cover rounded-t-lg"
-                    />
+                    <img src={p.image} alt={p.name} className="w-full h-40 object-cover rounded-t-lg" />
                     {p.isKitchen && (
                       <Badge className="absolute top-2 right-2 bg-pos-kitchen text-foreground">
                         <Utensils className="w-3 h-3 mr-1" />
@@ -451,9 +440,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                     </h3>
                     <p className="text-xs text-muted-foreground mb-2">{p.category}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-primary">
-                        S/ {(p.price || 0).toFixed(2)}
-                      </span>
+                      <span className="text-lg font-bold text-primary">S/ {(p.price || 0).toFixed(2)}</span>
                       <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
                   </div>
@@ -484,9 +471,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
               <div className="text-center py-8">
                 <ShoppingCart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">Carrito vacío</p>
-                <p className="text-sm text-muted-foreground">
-                  Seleccione productos para agregar
-                </p>
+                <p className="text-sm text-muted-foreground">Seleccione productos para agregar</p>
               </div>
             ) : (
               cart.map((item) => (
@@ -514,27 +499,15 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
                           <Minus className="w-3 h-3" />
                         </Button>
-                        <span className="w-8 text-center font-medium">
-                          {item.quantity}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        >
+                        <span className="w-8 text-center font-medium">{item.quantity}</span>
+                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
                           <Plus className="w-3 h-3" />
                         </Button>
                       </div>
-                      <span className="font-bold text-primary">
-                        S/ {(item.price * item.quantity).toFixed(2)}
-                      </span>
+                      <span className="font-bold text-primary">S/ {(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -587,8 +560,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
                   {hasKitchen && (
                     <p className="text-xs text-muted-foreground">
-                      * Contiene productos de <b>cocina</b>. La comanda se imprimirá
-                      automáticamente al confirmar.
+                      * Contiene productos de <b>cocina</b>. La comanda se imprimirá automáticamente al confirmar.
                     </p>
                   )}
                 </div>
@@ -611,9 +583,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
             {clientResults.map((c) => (
               <button
                 key={c.id}
-                className={`w-full text-left px-3 py-2 hover:bg-muted ${
-                  selectedClient?.id === c.id ? "bg-muted" : ""
-                }`}
+                className={`w-full text-left px-3 py-2 hover:bg-muted ${selectedClient?.id === c.id ? "bg-muted" : ""}`}
                 onClick={() => setSelectedClient(c)}
               >
                 {c.name}
@@ -621,12 +591,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
             ))}
           </div>
           <div className="flex justify-between">
-            <Button
-              variant="outline"
-              onClick={() =>
-                setSelectedClient({ id: "varios", name: "Cliente Varios" })
-              }
-            >
+            <Button variant="outline" onClick={() => setSelectedClient({ id: "varios", name: "Cliente Varios" })}>
               Cliente Varios
             </Button>
             <Button onClick={() => goNext()}>Continuar (Enter)</Button>
@@ -637,11 +602,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       <Modal open={step === "pago"} onClose={() => setStep("cliente")} title="Método de Pago">
         <div className="grid grid-cols-2 gap-2">
           {(["efectivo", "transferencia", "credito", "yape", "plin"] as const).map((m) => (
-            <Button
-              key={m}
-              variant={payMethod === m ? "default" : "outline"}
-              onClick={() => setPayMethod(m)}
-            >
+            <Button key={m} variant={payMethod === m ? "default" : "outline"} onClick={() => setPayMethod(m)}>
               {m.toUpperCase()}
             </Button>
           ))}
@@ -662,8 +623,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
             <b>Pago:</b> {payMethod?.toUpperCase()}
           </p>
           <p>
-            <b>Items:</b> {cart.reduce((s, i) => s + i.quantity, 0)} — <b>Total:</b>{" "}
-            S/ {total.toFixed(2)}
+            <b>Items:</b> {cart.reduce((s, i) => s + i.quantity, 0)} — <b>Total:</b> S/ {total.toFixed(2)}
           </p>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" onClick={() => setStep("pago")}>
@@ -687,26 +647,24 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
             <AlertDialogDescription>
               {currentClientForAuth ? (
                 <>
-                  El cliente <strong>{currentClientForAuth.names} {currentClientForAuth.lastNames}</strong> no tiene una cuenta de crédito activa.
-                  <br /><br />
+                  El cliente <strong>{currentClientForAuth.fullName}</strong> no tiene una cuenta de crédito activa.
+                  <br />
+                  <br />
                   ¿Tiene autorización del padre o apoderado para realizar esta compra a crédito?
                 </>
               ) : (
                 <>
                   Para realizar ventas a crédito a "Cliente Varios" se requiere autorización del padre o apoderado.
-                  <br /><br />
+                  <br />
+                  <br />
                   ¿Tiene autorización del padre o apoderado para realizar esta compra a crédito?
                 </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => handleParentalAuth(false)}>
-              No, cancelar venta
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={() => handleParentalAuth(true)}>
-              Sí, tiene autorización
-            </AlertDialogAction>
+            <AlertDialogCancel onClick={() => handleParentalAuth(false)}>No, cancelar venta</AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleParentalAuth(true)}>Sí, tiene autorización</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
