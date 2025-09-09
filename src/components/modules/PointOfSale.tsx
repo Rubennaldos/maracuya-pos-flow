@@ -48,7 +48,8 @@ function Modal({
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center">
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-[min(560px,95vw)] rounded-xl bg-background border border-border shadow-xl p-4 animate-in fade-in-0 zoom-in-95 duration-200">
+      {/* ancho ampliado */}
+      <div className="relative z-10 w-[min(720px,95vw)] rounded-xl bg-background border border-border shadow-xl p-4 animate-in fade-in-0 zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
           <Button size="sm" variant="ghost" onClick={onClose}>
@@ -184,13 +185,12 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       return true; // requiere autorización
     }
 
-    // Cargar datos completos del cliente
     const fullClientData = await loadFullClientData(selectedClient.id);
 
     if (!fullClientData) {
       setCurrentClientForAuth(null);
       setShowParentalAuth(true);
-      return true; // requiere autorización
+      return true;
     }
 
     // Solo NO pedir autorización si EXPLÍCITAMENTE tiene cuenta de crédito activa
@@ -199,10 +199,10 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     if (!hasActiveCredit) {
       setCurrentClientForAuth(fullClientData);
       setShowParentalAuth(true);
-      return true; // requiere autorización
+      return true;
     }
 
-    return false; // no requiere autorización
+    return false;
   };
 
   const handleParentalAuth = (authorized: boolean) => {
@@ -327,7 +327,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     flowManager.updateCart(cart);
   }, [cart, flowManager]);
 
-  // Cargar clientes
+  // Cargar clientes (solo nombre y apellido)
   const loadClients = async () => {
     try {
       const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
@@ -573,18 +573,22 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       {/* --------- MODALES --------- */}
       <Modal open={step === "cliente"} onClose={() => setStep("productos")} title="Seleccionar Cliente">
         <div className="space-y-3">
+          {/* buscador más grande */}
           <Input
             autoFocus
             placeholder="Buscar cliente…"
             value={clientQuery}
             onChange={(e) => setClientQuery(e.target.value)}
+            className="h-12 text-lg"
           />
-          <div className="max-h-64 overflow-y-auto border rounded-md">
+          {/* lista más alta */}
+          <div className="max-h-80 overflow-y-auto border rounded-md">
             {clientResults.map((c) => (
               <button
                 key={c.id}
                 className={`w-full text-left px-3 py-2 hover:bg-muted ${selectedClient?.id === c.id ? "bg-muted" : ""}`}
                 onClick={() => setSelectedClient(c)}
+                title={c.name}
               >
                 {c.name}
               </button>
@@ -647,14 +651,16 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
             <AlertDialogDescription>
               {currentClientForAuth ? (
                 <>
-                  El cliente <strong>{currentClientForAuth.fullName}</strong> no tiene una cuenta de crédito activa.
+                  El cliente <strong>{currentClientForAuth.fullName}</strong> no tiene una cuenta de
+                  crédito activa.
                   <br />
                   <br />
                   ¿Tiene autorización del padre o apoderado para realizar esta compra a crédito?
                 </>
               ) : (
                 <>
-                  Para realizar ventas a crédito a "Cliente Varios" se requiere autorización del padre o apoderado.
+                  Para realizar ventas a crédito a "Cliente Varios" se requiere autorización del
+                  padre o apoderado.
                   <br />
                   <br />
                   ¿Tiene autorización del padre o apoderado para realizar esta compra a crédito?
