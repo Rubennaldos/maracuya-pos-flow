@@ -44,7 +44,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
   // Filter states
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
-  const [selectedUser, setSelectedUser] = useState<string>("");
+  const [selectedUser, setSelectedUser] = useState<string>("all");
   const [correlativeFilter, setCorrelativeFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   
@@ -95,7 +95,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
     );
     
     // User filter
-    const matchesUser = !selectedUser || sale.user === selectedUser;
+    const matchesUser = !selectedUser || selectedUser === "all" || sale.user === selectedUser;
     
     // Correlative filter
     const matchesCorrelative = !correlativeFilter || 
@@ -108,7 +108,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
     setSearchTerm("");
     setDateFrom(undefined);
     setDateTo(undefined);
-    setSelectedUser("");
+    setSelectedUser("all");
     setCorrelativeFilter("");
   };
 
@@ -225,7 +225,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
               <Filter className="w-4 h-4" />
               Filtros
             </Button>
-            {(dateFrom || dateTo || selectedUser || correlativeFilter) && (
+            {(dateFrom || dateTo || (selectedUser && selectedUser !== "all") || correlativeFilter) && (
               <Button 
                 variant="ghost" 
                 onClick={clearFilters}
@@ -305,7 +305,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
                       <SelectValue placeholder="Todos los usuarios" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos los usuarios</SelectItem>
+                      <SelectItem value="all">Todos los usuarios</SelectItem>
                       {availableUsers.map(user => (
                         <SelectItem key={user} value={user}>{user}</SelectItem>
                       ))}
