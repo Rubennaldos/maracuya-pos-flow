@@ -257,7 +257,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
                         {dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Seleccionar"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-50" align="start">
                       <Calendar
                         mode="single"
                         selected={dateFrom}
@@ -285,7 +285,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
                         {dateTo ? format(dateTo, "dd/MM/yyyy") : "Seleccionar"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-50" align="start">
                       <Calendar
                         mode="single"
                         selected={dateTo}
@@ -301,10 +301,10 @@ export const SalesList = ({ onBack }: SalesListProps) => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Usuario</label>
                   <Select value={selectedUser} onValueChange={setSelectedUser}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Todos los usuarios" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-50">
                       <SelectItem value="all">Todos los usuarios</SelectItem>
                       {availableUsers.map(user => (
                         <SelectItem key={user} value={user}>{user}</SelectItem>
