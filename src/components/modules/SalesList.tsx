@@ -6,16 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SalesEditor } from "./SalesEditor";
 import { PrintManager } from "@/lib/print";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
 import { 
-  ArrowLeft, Search, Edit, Trash2, Eye, Calendar as CalendarIcon, User, DollarSign,
-  AlertTriangle, Clock, Printer, Filter, X
+  ArrowLeft, Search, Edit, Trash2, Eye, Calendar, User, DollarSign,
+  AlertTriangle, Clock, Printer
 } from "lucide-react";
 import {
   AlertDialog,
@@ -40,16 +35,6 @@ export const SalesList = ({ onBack }: SalesListProps) => {
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [editingSale, setEditingSale] = useState<any>(null);
   const [isPrinting, setIsPrinting] = useState(false);
-  
-  // Filter states
-  const [dateFrom, setDateFrom] = useState<Date | undefined>();
-  const [dateTo, setDateTo] = useState<Date | undefined>();
-  const [selectedUser, setSelectedUser] = useState<string>("all");
-  const [correlativeFilter, setCorrelativeFilter] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  
-  // Get unique users for filter
-  const [availableUsers, setAvailableUsers] = useState<string[]>([]);
 
   // Load sales from RTDB
   useEffect(() => {
@@ -66,51 +51,20 @@ export const SalesList = ({ onBack }: SalesListProps) => {
           date: new Date(sale.date || sale.createdAt).toLocaleDateString(),
           time: new Date(sale.date || sale.createdAt).toLocaleTimeString(),
           client: sale.client?.fullName || sale.client?.name || sale.client || 'Cliente Varios',
-          user: sale.createdBy || sale.cashier || 'Sistema',
-          rawDate: new Date(sale.date || sale.createdAt) // Para filtros de fecha
+          user: sale.createdBy || sale.cashier || 'Sistema'
         })).sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
         setSales(salesArray);
-        
-        // Extract unique users for filter
-        const users = [...new Set(salesArray.map(sale => sale.user))].filter(Boolean);
-        setAvailableUsers(users);
       }
     } catch (error) {
       console.error('Error loading sales:', error);
     }
   };
 
-  const filteredSales = sales.filter(sale => {
-    // Text search filter
-    const matchesSearch = !searchTerm || (
-      sale.correlative.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sale.paymentMethod.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    
-    // Date range filter
-    const matchesDateRange = (!dateFrom && !dateTo) || (
-      (!dateFrom || sale.rawDate >= dateFrom) &&
-      (!dateTo || sale.rawDate <= dateTo)
-    );
-    
-    // User filter
-    const matchesUser = !selectedUser || selectedUser === "all" || sale.user === selectedUser;
-    
-    // Correlative filter
-    const matchesCorrelative = !correlativeFilter || 
-      sale.correlative.toLowerCase().includes(correlativeFilter.toLowerCase());
-    
-    return matchesSearch && matchesDateRange && matchesUser && matchesCorrelative;
-  });
-
-  const clearFilters = () => {
-    setSearchTerm("");
-    setDateFrom(undefined);
-    setDateTo(undefined);
-    setSelectedUser("all");
-    setCorrelativeFilter("");
-  };
+  const filteredSales = sales.filter(sale =>
+    sale.correlative.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    sale.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    sale.paymentMethod.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const deleteSale = async (saleId: string) => {
     try {
@@ -204,127 +158,17 @@ export const SalesList = ({ onBack }: SalesListProps) => {
       </header>
 
       <div className="p-6">
-        {/* Search and Filters */}
-        <div className="mb-6 space-y-4">
-          {/* Search bar */}
-          <div className="flex gap-4 items-center">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="Buscar por comprobante, cliente o método de pago..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button 
-              variant="outline" 
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2"
-            >
-              <Filter className="w-4 h-4" />
-              Filtros
-            </Button>
-            {(dateFrom || dateTo || (selectedUser && selectedUser !== "all") || correlativeFilter) && (
-              <Button 
-                variant="ghost" 
-                onClick={clearFilters}
-                className="flex items-center gap-2 text-muted-foreground"
-              >
-                <X className="w-4 h-4" />
-                Limpiar
-              </Button>
-            )}
+        {/* Search */}
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              placeholder="Buscar por comprobante, cliente o método de pago..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
-
-          {/* Advanced Filters */}
-          {showFilters && (
-            <Card className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Date From */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Fecha desde</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !dateFrom && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Seleccionar"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 z-50" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={dateFrom}
-                        onSelect={setDateFrom}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Date To */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Fecha hasta</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !dateTo && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateTo ? format(dateTo, "dd/MM/yyyy") : "Seleccionar"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 z-50" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={dateTo}
-                        onSelect={setDateTo}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* User Filter */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Usuario</label>
-                  <Select value={selectedUser} onValueChange={setSelectedUser}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Todos los usuarios" />
-                    </SelectTrigger>
-                    <SelectContent className="z-50">
-                      <SelectItem value="all">Todos los usuarios</SelectItem>
-                      {availableUsers.map(user => (
-                        <SelectItem key={user} value={user}>{user}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Correlative Filter */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">N° Comprobante</label>
-                  <Input
-                    placeholder="Número de comprobante"
-                    value={correlativeFilter}
-                    onChange={(e) => setCorrelativeFilter(e.target.value)}
-                  />
-                </div>
-              </div>
-            </Card>
-          )}
         </div>
 
         {/* Sales Table */}
