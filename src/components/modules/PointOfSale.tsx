@@ -110,6 +110,13 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   // Flujo visual (modales)
   const [step, setStep] = useState<Step>("productos");
   const [clientQuery, setClientQuery] = useState("");
+  // debajo de: const [clientQuery, setClientQuery] = useState("");
+type ClientRow = { id: string; name: string };
+
+const [clientResults, setClientResults] = useState<ClientRow[]>([
+  { id: "varios", name: "Cliente Varios" },
+]);
+
   const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
   const [payMethod, setPayMethod] = useState<
     "efectivo" | "transferencia" | "credito" | "yape" | "plin" | null
@@ -327,26 +334,54 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     flowManager.updateCart(cart);
   }, [cart, flowManager]);
 
-  // Cargar clientes (solo nombre y apellido)
-  const loadClients = async () => {
-    try {
-      const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
-      if (clientsData) {
-        const list = Object.entries(clientsData).map(([id, c]: [string, any]) => ({
-          id,
-          name: c?.fullName || c?.name || "Cliente",
-        }));
-        // Agregamos "Cliente Varios" al inicio
-        return [{ id: "varios", name: "Cliente Varios" }, ...list];
-      }
-      return [{ id: "varios", name: "Cliente Varios" }];
-    } catch (error) {
-      console.error("Error loading clients:", error);
+ // Cargar clientes (solo nombre y apellido, robusto con varios esquemas)
+const loadClients = async () => {
+  try {
+    const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
+    if (!clientsData) {
       return [{ id: "varios", name: "Cliente Varios" }];
     }
-  };
 
-  const [clientResults, setClientResults] = useState([{ id: "varios", name: "Cliente Varios" }]);
+    const list = Object.entries(clientsData).map(([id, c]: [string, any]) => {
+      // c puede ser string u objeto; armamos el nombre
+      const name =
+        (typeof c === "string" && c) ||            // por si está guardado como string
+        c?.fullName ||                             // fullName directo
+        [c?.names, c?.lastNames].filter(Boolean).join(" ") || // "Nombres Apellidos"
+        c?.name ||                                 // fallback
+        c?.code ||                                 // último fallback visible
+        "Cliente";
+
+      return { id, name: String(name).trim() || "Cliente" };
+    });
+
+    // Agregamos "Cliente Varios", evitamos duplicados y ordenamos alfabéticamente
+    const withVarios = [{ id: "varios", name: "Cliente Varios" }, ...list]
+      .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
+      .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+
+    return withVarios;
+  } catch (error) {
+    console.error("Error loading clients:", error);
+    return [{ id: "varios", name: "Cliente Varios" }];
+  }
+};
+
+useEffect(() => {
+  let alive = true;
+
+  (async () => {
+    const all = await loadClients(); // usa tu función loadClients que llama a RTDB
+    const q = clientQuery.trim().toLowerCase();
+    const filtered = q ? all.filter(c => c.name.toLowerCase().includes(q)) : all;
+    if (alive) setClientResults(filtered);
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [clientQuery]);
+
 
   useEffect(() => {
     const loadAndFilterClients = async () => {
@@ -579,7 +614,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
             placeholder="Buscar cliente…"
             value={clientQuery}
             onChange={(e) => setClientQuery(e.target.value)}
-            className="h-12 text-lg"
+            className="h-14 text-lg md:text-lg"
           />
           {/* lista más alta */}
           <div className="max-h-80 overflow-y-auto border rounded-md">
