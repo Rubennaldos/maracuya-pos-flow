@@ -16,7 +16,10 @@ const Index = () => {
   const { isAuthenticated } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType | null>(null);
 
+  console.log('Index component loaded, isAuthenticated:', isAuthenticated);
+
   if (!isAuthenticated) {
+    console.log('Not authenticated, showing RTDBLogin');
     return <RTDBLogin />;
   }
 
