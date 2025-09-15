@@ -5,10 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Search, Users, DollarSign,
-  MessageCircle, AlertTriangle, CheckCircle,
-  Clock, CreditCard
+  ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle, 
+  CheckCircle, Clock, CreditCard, FileText, Receipt, Download, 
+  Calendar as CalendarIcon, Eye, X
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
 import {
@@ -24,6 +28,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -122,15 +132,25 @@ interface AccountsReceivableProps {
 
 export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [debtors, setDebtors] = useState<any[]>([]);
+  const [paidInvoices, setPaidInvoices] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchPaidTerm, setSearchPaidTerm] = useState("");
   const [selectedDebtor, setSelectedDebtor] = useState<any>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<string>("efectivo");
+  const [paymentDate, setPaymentDate] = useState<Date>(new Date());
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
+  const [showSalesDetailDialog, setShowSalesDetailDialog] = useState(false);
+  const [showCXCDialog, setShowCXCDialog] = useState(false);
   const [selectedDebtorForWhatsApp, setSelectedDebtorForWhatsApp] = useState<any>(null);
+  const [selectedDebtorForDetail, setSelectedDebtorForDetail] = useState<any>(null);
+  const [salesDetailData, setSalesDetailData] = useState<any[]>([]);
+  const [dateFrom, setDateFrom] = useState<Date>();
+  const [dateTo, setDateTo] = useState<Date>();
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("pending");
 
   // Cargar deudores al montar
   useEffect(() => {
@@ -181,20 +201,127 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     window.open(url, "_blank");
   };
 
-  const processPayment = () => {
-    if (!selectedDebtor || paymentAmount <= 0) return;
+  // Cargar detalles de ventas para un cliente específico
+  const loadSalesDetail = async (clientId: string) => {
+    try {
+      const salesData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.sales);
+      const historicalData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.historical_sales);
+      
+      const allSales = { ...salesData, ...historicalData };
+      const clientSales: any[] = [];
 
-    // Aquí iría la lógica de registrar el pago en RTDB
-    console.log("Processing payment:", {
-      debtor: selectedDebtor.id,
-      amount: paymentAmount,
-      method: paymentMethod,
-      invoices: selectedInvoices,
+      Object.entries(allSales || {}).forEach(([saleId, sale]: [string, any]) => {
+        if (sale?.clientId === clientId || sale?.client?.id === clientId) {
+          const saleItems = sale.items || [];
+          saleItems.forEach((item: any) => {
+            clientSales.push({
+              saleId: saleId,
+              correlative: sale.correlative || saleId,
+              date: sale.date || sale.createdAt,
+              seller: sale.user || sale.cashier || "Sistema",
+              clientName: sale.client?.name || sale.clientName || "Cliente",
+              productName: item.name || "Producto",
+              quantity: item.quantity || 1,
+              price: item.price || 0,
+              total: (item.quantity || 1) * (item.price || 0),
+              paymentMethod: sale.paymentMethod || "efectivo"
+            });
+          });
+        }
+      });
+
+      return clientSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch (error) {
+      console.error("Error loading sales detail:", error);
+      return [];
+    }
+  };
+
+  // Exportar a Excel
+  const exportToExcel = (data: any[], filename: string) => {
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Detalle de Ventas");
+    XLSX.writeFile(wb, `${filename}.xlsx`);
+  };
+
+  // Exportar a PDF
+  const exportToPDF = (data: any[], clientName: string) => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(16);
+    doc.text("MARACUYÁ VILLA GRATIA", 105, 20, { align: "center" });
+    doc.setFontSize(12);
+    doc.text(`Detalle de Ventas - ${clientName}`, 105, 30, { align: "center" });
+    doc.text(`Fecha: ${format(new Date(), "dd/MM/yyyy", { locale: es })}`, 105, 40, { align: "center" });
+
+    // Prepare table data
+    const tableData = data.map(item => [
+      item.correlative,
+      format(new Date(item.date), "dd/MM/yyyy"),
+      item.seller,
+      item.productName,
+      item.quantity.toString(),
+      `S/ ${item.price.toFixed(2)}`,
+      `S/ ${item.total.toFixed(2)}`
+    ]);
+
+    // Add table
+    (doc as any).autoTable({
+      head: [["Correlativo", "Fecha", "Vendedor", "Producto", "Cantidad", "Precio", "Total"]],
+      body: tableData,
+      startY: 50,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [52, 168, 83] }
     });
 
-    setShowPaymentDialog(false);
-    setPaymentAmount(0);
-    setSelectedInvoices([]);
+    doc.save(`detalle_ventas_${clientName.replace(/\s+/g, "_")}.pdf`);
+  };
+
+  const processPayment = async () => {
+    if (!selectedDebtor || paymentAmount <= 0) return;
+
+    try {
+      // Registrar el pago en RTDB
+      const paymentData = {
+        clientId: selectedDebtor.id,
+        clientName: selectedDebtor.name,
+        amount: paymentAmount,
+        method: paymentMethod,
+        date: paymentDate.toISOString(),
+        invoices: selectedInvoices,
+        status: "paid",
+        paidAt: new Date().toISOString(),
+        paidBy: "sistema" // Aquí iría el usuario actual
+      };
+
+      await RTDBHelper.pushData("payments", paymentData);
+
+      // Actualizar las facturas como pagadas
+      const updates: Record<string, any> = {};
+      selectedInvoices.forEach(invoiceId => {
+        updates[`${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${invoiceId}/status`] = "paid";
+        updates[`${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${invoiceId}/paidAt`] = new Date().toISOString();
+      });
+
+      if (Object.keys(updates).length > 0) {
+        await RTDBHelper.updateData(updates);
+      }
+
+      // Agregar a facturas pagadas
+      setPaidInvoices(prev => [...prev, paymentData]);
+
+      // Recargar deudores
+      const updatedDebtors = await loadDebtors();
+      setDebtors(updatedDebtors);
+
+      setShowPaymentDialog(false);
+      setPaymentAmount(0);
+      setSelectedInvoices([]);
+    } catch (error) {
+      console.error("Error processing payment:", error);
+    }
   };
 
   const toggleUrgentCollection = (debtorId: string) => {
@@ -221,161 +348,240 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       </header>
 
       <div className="p-6">
-        {/* Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total por Cobrar</CardTitle>
-              <DollarSign className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">S/ {totalDebt.toFixed(2)}</div>
-            </CardContent>
-          </Card>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="pending">Cuentas Pendientes</TabsTrigger>
+            <TabsTrigger value="paid">Boletas Pagadas</TabsTrigger>
+          </TabsList>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Clientes Deudores</CardTitle>
-              <Users className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{debtors.length}</div>
-            </CardContent>
-          </Card>
+          <TabsContent value="pending" className="space-y-6">{/* Contenido de cuentas pendientes */}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Cobranza Urgente</CardTitle>
-              <AlertTriangle className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">{urgentCount}</div>
-            </CardContent>
-          </Card>
-        </div>
+            {/* Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total por Cobrar</CardTitle>
+                  <DollarSign className="w-4 h-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary">S/ {totalDebt.toFixed(2)}</div>
+                </CardContent>
+              </Card>
 
-        {/* Search */}
-        <div className="mb-6">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              placeholder="Buscar deudores..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Clientes Deudores</CardTitle>
+                  <Users className="w-4 h-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{debtors.length}</div>
+                </CardContent>
+              </Card>
 
-        {/* Debtors list */}
-        <div className="space-y-4">
-          {filteredDebtors.map((debtor) => (
-            <Card key={debtor.id} className="hover:shadow-medium transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <h3 className="font-semibold text-lg">{debtor.name}</h3>
-                      <p className="text-sm text-muted-foreground">ID: {debtor.id}</p>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Cobranza Urgente</CardTitle>
+                  <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-destructive">{urgentCount}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Search */}
+            <div className="mb-6">
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Buscar deudores..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Debtors list */}
+            <div className="space-y-4">
+              {filteredDebtors.map((debtor) => (
+                <Card key={debtor.id} className="hover:shadow-medium transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <h3 className="font-semibold text-lg">{debtor.name}</h3>
+                          <p className="text-sm text-muted-foreground">ID: {debtor.id}</p>
+                        </div>
+                        {debtor.urgentCollection && (
+                          <Badge variant="destructive">
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Urgente
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-primary">S/ {debtor.totalDebt.toFixed(2)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {debtor.invoices.length} factura(s)
+                        </p>
+                      </div>
                     </div>
-                    {debtor.urgentCollection && (
-                      <Badge variant="destructive">
-                        <AlertTriangle className="w-3 h-3 mr-1" />
-                        Urgente
-                      </Badge>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedDebtor(debtor);
+                          setShowPaymentDialog(true);
+                        }}
+                      >
+                        <CreditCard className="w-4 h-4 mr-1" />
+                        Registrar Pago
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedDebtorForWhatsApp(debtor);
+                          setShowWhatsAppDialog(true);
+                        }}
+                      >
+                        <MessageCircle className="w-4 h-4 mr-1" />
+                        WhatsApp
+                      </Button>
+
+                      <Button
+                        variant={debtor.urgentCollection ? "destructive" : "outline"}
+                        size="sm"
+                        onClick={() => toggleUrgentCollection(debtor.id)}
+                      >
+                        {debtor.urgentCollection ? (
+                          <>
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Desactivar Urgente
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="w-4 h-4 mr-1" />
+                            Marcar Urgente
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          setSelectedDebtorForDetail(debtor);
+                          const salesData = await loadSalesDetail(debtor.id);
+                          setSalesDetailData(salesData);
+                          setShowSalesDetailDialog(true);
+                        }}
+                      >
+                        <FileText className="w-4 h-4 mr-1" />
+                        Detalle de Ventas
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedDebtor(debtor);
+                          setShowCXCDialog(true);
+                        }}
+                      >
+                        <Receipt className="w-4 h-4 mr-1" />
+                        CXC
+                      </Button>
+                    </div>
+
+                    {debtor.lastReminder && (
+                      <div className="mt-3 text-xs text-muted-foreground flex items-center">
+                        <Clock className="w-3 h-3 mr-1" />
+                        Último recordatorio: {debtor.lastReminder}
+                      </div>
                     )}
-                  </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
 
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-primary">S/ {debtor.totalDebt.toFixed(2)}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {debtor.invoices.length} factura(s)
-                    </p>
-                  </div>
-                </div>
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+                <p className="text-muted-foreground">Cargando deudores...</p>
+              </div>
+            ) : filteredDebtors.length === 0 ? (
+              <div className="text-center py-12">
+                <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  No se encontraron deudores
+                </h3>
+                <p className="text-muted-foreground">
+                  {debtors.length === 0
+                    ? "No hay ventas a crédito registradas"
+                    : "Intenta con otros términos de búsqueda"}
+                </p>
+              </div>
+            ) : null}
+          </TabsContent>
 
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {debtor.invoices.map((inv: any) => (
-                    <Badge key={inv.id} variant="outline" className="text-xs">
-                      {inv.id} - S/ {inv.amount.toFixed(2)}
-                      {inv.type === "VH" && <span className="ml-1 text-warning">(VH)</span>}
-                    </Badge>
-                  ))}
-                </div>
+          <TabsContent value="paid" className="space-y-6">
+            {/* Search for paid invoices */}
+            <div className="mb-6">
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Buscar por nombre o código..."
+                  value={searchPaidTerm}
+                  onChange={(e) => setSearchPaidTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedDebtor(debtor);
-                      setShowPaymentDialog(true);
-                    }}
-                  >
-                    <CreditCard className="w-4 h-4 mr-1" />
-                    Registrar Pago
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedDebtorForWhatsApp(debtor);
-                      setShowWhatsAppDialog(true);
-                    }}
-                  >
-                    <MessageCircle className="w-4 h-4 mr-1" />
-                    WhatsApp
-                  </Button>
-
-                  <Button
-                    variant={debtor.urgentCollection ? "destructive" : "outline"}
-                    size="sm"
-                    onClick={() => toggleUrgentCollection(debtor.id)}
-                  >
-                    {debtor.urgentCollection ? (
-                      <>
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Desactivar Urgente
-                      </>
-                    ) : (
-                      <>
-                        <AlertTriangle className="w-4 h-4 mr-1" />
-                        Marcar Urgente
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {debtor.lastReminder && (
-                  <div className="mt-3 text-xs text-muted-foreground flex items-center">
-                    <Clock className="w-3 h-3 mr-1" />
-                    Último recordatorio: {debtor.lastReminder}
-                  </div>
-                )}
+            {/* Paid invoices table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Boletas Pagadas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Fecha Pago</TableHead>
+                      <TableHead>Monto</TableHead>
+                      <TableHead>Método</TableHead>
+                      <TableHead>Facturas</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paidInvoices
+                      .filter(payment => 
+                        payment.clientName.toLowerCase().includes(searchPaidTerm.toLowerCase()) ||
+                        payment.clientId.toLowerCase().includes(searchPaidTerm.toLowerCase())
+                      )
+                      .map((payment, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{payment.clientName}</TableCell>
+                          <TableCell>{format(new Date(payment.date), "dd/MM/yyyy")}</TableCell>
+                          <TableCell>S/ {payment.amount.toFixed(2)}</TableCell>
+                          <TableCell className="capitalize">{payment.method}</TableCell>
+                          <TableCell>{payment.invoices.join(", ")}</TableCell>
+                        </TableRow>
+                      ))
+                    }
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Cargando deudores...</p>
-          </div>
-        ) : filteredDebtors.length === 0 ? (
-          <div className="text-center py-12">
-            <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              No se encontraron deudores
-            </h3>
-            <p className="text-muted-foreground">
-              {debtors.length === 0
-                ? "No hay ventas a crédito registradas"
-                : "Intenta con otros términos de búsqueda"}
-            </p>
-          </div>
-        ) : null}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Payment Dialog */}
@@ -437,11 +643,279 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 </Select>
               </div>
 
+              <div>
+                <label className="text-sm font-medium">Fecha de Pago</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !paymentDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {paymentDate ? format(paymentDate, "PPP", { locale: es }) : <span>Seleccionar fecha</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={paymentDate}
+                      onSelect={(date) => date && setPaymentDate(date)}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
               <div className="flex space-x-2 pt-4">
                 <Button onClick={processPayment} className="flex-1">
                   Registrar Pago
                 </Button>
                 <Button variant="outline" onClick={() => setShowPaymentDialog(false)}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Sales Detail Dialog */}
+      <Dialog open={showSalesDetailDialog} onOpenChange={setShowSalesDetailDialog}>
+        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Detalle de Ventas - {selectedDebtorForDetail?.name}</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportToExcel(salesDetailData, `detalle_ventas_${selectedDebtorForDetail?.name}`)}
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  Excel
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => exportToPDF(salesDetailData, selectedDebtorForDetail?.name || "")}
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  PDF
+                </Button>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Date filters */}
+            <div className="flex gap-4">
+              <div>
+                <label className="text-sm font-medium">Desde</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-[200px] justify-start text-left font-normal",
+                        !dateFrom && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateFrom ? format(dateFrom, "PPP", { locale: es }) : <span>Fecha inicio</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={dateFrom}
+                      onSelect={setDateFrom}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Hasta</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-[200px] justify-start text-left font-normal",
+                        !dateTo && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateTo ? format(dateTo, "PPP", { locale: es }) : <span>Fecha fin</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={dateTo}
+                      onSelect={setDateTo}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            {/* Sales table */}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Correlativo</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Vendedor</TableHead>
+                  <TableHead>Producto</TableHead>
+                  <TableHead>Cantidad</TableHead>
+                  <TableHead>Precio</TableHead>
+                  <TableHead>Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {salesDetailData
+                  .filter(item => {
+                    const itemDate = new Date(item.date);
+                    if (dateFrom && itemDate < dateFrom) return false;
+                    if (dateTo && itemDate > dateTo) return false;
+                    return true;
+                  })
+                  .map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{item.correlative}</TableCell>
+                      <TableCell>{format(new Date(item.date), "dd/MM/yyyy")}</TableCell>
+                      <TableCell>{item.seller}</TableCell>
+                      <TableCell>{item.productName}</TableCell>
+                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>S/ {item.price.toFixed(2)}</TableCell>
+                      <TableCell>S/ {item.total.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))
+                }
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CXC Dialog */}
+      <Dialog open={showCXCDialog} onOpenChange={setShowCXCDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Cuentas por Cobrar - {selectedDebtor?.name}</DialogTitle>
+          </DialogHeader>
+
+          {selectedDebtor && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Selecciona las boletas que deseas marcar como pagadas:
+              </p>
+              
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {selectedDebtor.invoices
+                  .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                  .map((invoice: any) => (
+                    <div key={invoice.id} className="flex items-center justify-between p-3 border rounded">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`cxc-${invoice.id}`}
+                          checked={selectedInvoices.includes(invoice.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedInvoices(prev => [...prev, invoice.id]);
+                              setPaymentAmount(prev => prev + invoice.amount);
+                            } else {
+                              setSelectedInvoices(prev => prev.filter(id => id !== invoice.id));
+                              setPaymentAmount(prev => prev - invoice.amount);
+                            }
+                          }}
+                        />
+                        <div>
+                          <p className="font-medium">{invoice.id}</p>
+                          <p className="text-sm text-muted-foreground">{invoice.date}</p>
+                        </div>
+                      </div>
+                      <p className="font-semibold">S/ {invoice.amount.toFixed(2)}</p>
+                    </div>
+                  ))
+                }
+              </div>
+
+              <div className="bg-muted p-4 rounded">
+                <p className="text-lg font-semibold">
+                  Total seleccionado: S/ {paymentAmount.toFixed(2)}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Método de Pago</label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="efectivo">Efectivo</SelectItem>
+                      <SelectItem value="transferencia">Transferencia</SelectItem>
+                      <SelectItem value="yape">Yape</SelectItem>
+                      <SelectItem value="plin">Plin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Fecha de Pago</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !paymentDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {paymentDate ? format(paymentDate, "dd/MM", { locale: es }) : <span>Fecha</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={paymentDate}
+                        onSelect={(date) => date && setPaymentDate(date)}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              <div className="flex space-x-2 pt-4">
+                <Button 
+                  onClick={() => {
+                    processPayment();
+                    setShowCXCDialog(false);
+                  }} 
+                  className="flex-1"
+                  disabled={selectedInvoices.length === 0}
+                >
+                  Procesar Pago
+                </Button>
+                <Button variant="outline" onClick={() => {
+                  setShowCXCDialog(false);
+                  setSelectedInvoices([]);
+                  setPaymentAmount(0);
+                }}>
                   Cancelar
                 </Button>
               </div>
