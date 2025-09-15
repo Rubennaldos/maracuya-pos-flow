@@ -41,6 +41,9 @@ export const RTDB_PATHS = {
   config: "config",
   correlatives: "correlatives",
   logs: "logs",
+  lunch_menu: "lunch_menu",
+  lunch_orders: "lunch_orders",
+  lunch_settings: "lunch_settings",
 } as const;
 
 export type RTDBPath = keyof typeof RTDB_PATHS;
