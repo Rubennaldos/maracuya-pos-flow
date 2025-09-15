@@ -292,6 +292,12 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     }
     if (step === "pago") {
       if (!payMethod) return;
+      // Siempre ir a confirmación primero, sin verificar autorización parental aquí
+      setStep("confirm");
+      return;
+    }
+    if (step === "confirm") {
+      // Aquí es donde verificamos autorización parental si es crédito
       if (payMethod === "credito") {
         setCheckingAuth(true);
         try {
@@ -301,10 +307,8 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
           setCheckingAuth(false);
         }
       }
-      setStep("confirm");
-      return;
-    }
-    if (step === "confirm") {
+      
+      // Si no es crédito o ya se autorizó, procesar la venta
       flowManager.updateCart(cart);
       await processSale({
         cart,
