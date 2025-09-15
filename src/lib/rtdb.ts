@@ -36,6 +36,8 @@ export const RTDB_PATHS = {
   lunches: "lunches",
   promotions: "promotions",
   unregistered_sales: "unregistered_sales",
+  historical_sales: "historical_sales",
+  deleted_sales: "deleted_sales",
   config: "config",
   correlatives: "correlatives",
   logs: "logs",

@@ -14,7 +14,8 @@ import {
   Gift,
   AlertTriangle,
   LogOut,
-  Calculator
+  Calculator,
+  Trash2
 } from "lucide-react";
 
 export type ModuleType = 
@@ -26,7 +27,8 @@ export type ModuleType =
   | 'accounts' 
   | 'historical' 
   | 'promos' 
-  | 'unregistered';
+  | 'unregistered'
+  | 'deleted';
 
 interface DashboardProps {
   onModuleSelect: (module: ModuleType) => void;
@@ -106,6 +108,14 @@ export const Dashboard = ({ onModuleSelect }: DashboardProps) => {
       description: 'Recuperar ventas con errores',
       icon: AlertTriangle,
       color: 'from-destructive to-secondary',
+      roles: ['admin']
+    },
+    {
+      id: 'deleted' as ModuleType,
+      title: 'Historial de Eliminados',
+      description: 'Papelera de ventas eliminadas',
+      icon: Trash2,
+      color: 'from-muted to-muted-foreground',
       roles: ['admin']
     }
   ];

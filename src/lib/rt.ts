@@ -185,17 +185,32 @@ export class RTDBHelper {
   }
 
   /**
-   * Elimina una venta y su referencia en CxC.
-   * - Borra /sales/{saleId}
+   * Mueve una venta a papelera en lugar de eliminarla permanentemente.
+   * - Mueve /sales/{saleId} a /deleted_sales/{saleId}
    * - Borra cualquier entrada en /accounts_receivable/{clientId}/entries/{saleId|autoId} que apunte a ese saleId
    * - Limpia /accounts_receivable/{saleId} (legado)
    */
-  static async deleteSaleCascade(saleId: string): Promise<void> {
+  static async deleteSaleCascade(saleId: string, deletedBy: string = "system"): Promise<void> {
     const salePath = `${RTDB_PATHS.sales}/${saleId}`;
     const sale = await this.getData<any>(salePath);
 
+    if (!sale) {
+      console.error("Sale not found:", saleId);
+      return;
+    }
+
     const updates: Record<string, any> = {};
-    // borrar venta
+    
+    // mover venta a papelera
+    const deletedSaleData = {
+      ...sale,
+      type: "normal",
+      deletedAt: new Date().toISOString(),
+      deletedBy: deletedBy,
+    };
+    updates[`${RTDB_PATHS.deleted_sales}/${saleId}`] = deletedSaleData;
+    
+    // borrar venta original
     updates[salePath] = null;
     // limpiar espejo plano legado
     updates[`${RTDB_PATHS.accounts_receivable}/${saleId}`] = null;
@@ -239,10 +254,51 @@ export class RTDBHelper {
 
     try {
       await this.logAction(
-        sale?.createdBy || "system",
-        "sale_deleted",
+        deletedBy,
+        "sale_moved_to_trash",
         { saleId, clientId: clientId ?? null },
         "sale",
+        saleId
+      );
+    } catch {
+      /* no bloquear por log */
+    }
+  }
+
+  /**
+   * Mueve una venta histórica a papelera.
+   */
+  static async deleteHistoricalSale(saleId: string, deletedBy: string = "system"): Promise<void> {
+    const salePath = `${RTDB_PATHS.historical_sales}/${saleId}`;
+    const sale = await this.getData<any>(salePath);
+
+    if (!sale) {
+      console.error("Historical sale not found:", saleId);
+      return;
+    }
+
+    const updates: Record<string, any> = {};
+    
+    // mover venta histórica a papelera
+    const deletedSaleData = {
+      ...sale,
+      type: "historical",
+      deletedAt: new Date().toISOString(),
+      deletedBy: deletedBy,
+    };
+    updates[`${RTDB_PATHS.deleted_sales}/${saleId}`] = deletedSaleData;
+    
+    // borrar venta histórica original
+    updates[salePath] = null;
+
+    await this.updateData(updates);
+
+    try {
+      await this.logAction(
+        deletedBy,
+        "historical_sale_moved_to_trash",
+        { saleId },
+        "historical_sale",
         saleId
       );
     } catch {

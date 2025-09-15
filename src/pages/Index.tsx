@@ -11,6 +11,7 @@ import { AccountsReceivable } from "@/components/modules/AccountsReceivable";
 import { HistoricalSales } from "@/components/modules/HistoricalSales";
 import { Promotions } from "@/components/modules/Promotions";
 import { UnregisteredSales } from "@/components/modules/UnregisteredSales";
+import { DeletedSalesHistory } from "@/components/modules/DeletedSalesHistory";
 
 const Index = () => {
   const { isAuthenticated } = useSession();
@@ -57,6 +58,10 @@ const Index = () => {
 
   if (currentModule === 'unregistered') {
     return <UnregisteredSales onBack={() => setCurrentModule(null)} />;
+  }
+
+  if (currentModule === 'deleted') {
+    return <DeletedSalesHistory onBack={() => setCurrentModule(null)} />;
   }
 
   // Other modules still in development

@@ -159,10 +159,29 @@ export const SalesList = ({ onBack }: SalesListProps) => {
 
   const deleteSale = async (saleId: string) => {
     try {
+      // Get sale data before moving to deleted_sales
+      const saleData = await RTDBHelper.getData(`${RTDB_PATHS.sales}/${saleId}`);
+      if (!saleData) {
+        console.error("Sale not found");
+        return;
+      }
+
+      // Move to deleted_sales with metadata
+      const deletedSaleData = {
+        ...saleData,
+        type: "normal",
+        deletedAt: new Date().toISOString(),
+        deletedBy: "sistema", // You could get current user here
+      };
+
+      await RTDBHelper.setData(`${RTDB_PATHS.deleted_sales}/${saleId}`, deletedSaleData);
+      
+      // Remove from original location
       await RTDBHelper.removeData(`${RTDB_PATHS.sales}/${saleId}`);
+      
       setSales((prev) => prev.filter((s) => s.id !== saleId));
     } catch (error) {
-      console.error("Error deleting sale:", error);
+      console.error("Error moving sale to deleted:", error);
     }
   };
 
