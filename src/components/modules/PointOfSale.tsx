@@ -48,14 +48,11 @@ function Modal({
 }) {
   if (!open) return null;
   return (
-    // ↓↓↓ ANTES: z-[1000]
     <div className="fixed inset-0 z-40 flex items-center justify-center">
-      {/* overlay */}
       <div
         className="absolute inset-0 bg-background/80 backdrop-blur-sm"
         onClick={onClose}
       />
-      {/* contenido del modal */}
       <div className="relative z-10 w-[min(720px,95vw)] rounded-xl bg-background border border-border shadow-xl p-4 animate-in fade-in-0 zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
@@ -132,6 +129,9 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const [currentClientForAuth, setCurrentClientForAuth] = useState<Client | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(false);
 
+  // ✅ Flag anti-rebote cuando se autoriza y se procesa
+  const processingAfterAuth = useRef(false);
+
   // Hook que guarda en RTDB e imprime cocina si aplica
   const { flowManager, isProcessing, saveDraft, processSale } = useSaleFlow({
     onComplete: () => {
@@ -140,6 +140,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       setPayMethod(null);
       setStep("productos");
       setTimeout(() => searchInputRef.current?.focus(), 100);
+      processingAfterAuth.current = false; // por si viene del flujo de autorización
     },
   });
 
@@ -236,7 +237,6 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       return true;
     }
 
-    // ✅ regla: crédito activo solo si accountEnabled && active
     const hasActiveCredit =
       (full.accountEnabled === true || (full.creditLimit ?? 0) > 0) &&
       (full.active === true);
@@ -252,17 +252,28 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const handleParentalAuth = async (authorized: boolean) => {
     setShowParentalAuth(false);
     if (authorized) {
-      // Si se autoriza, procesar la venta directamente sin pedir confirmación adicional
-      flowManager.updateCart(cart);
-      await processSale({
-        cart,
-        total,
-        saleType,
-        paymentMethod: payMethod,
-        selectedClient: selectedClient
-          ? { id: selectedClient.id, name: selectedClient.name, fullName: selectedClient.name }
-          : { id: "varios", name: "Cliente Varios", fullName: "Cliente Varios" },
-      });
+      // 🔒 evita que se dispare goNext mientras procesamos
+      processingAfterAuth.current = true;
+      try {
+        flowManager.updateCart(cart);
+        await processSale({
+          cart,
+          total,
+          saleType,
+          paymentMethod: payMethod,
+          selectedClient: selectedClient
+            ? { id: selectedClient.id, name: selectedClient.name, fullName: selectedClient.name }
+            : { id: "varios", name: "Cliente Varios", fullName: "Cliente Varios" },
+          origin: "PV",
+        });
+        // Por si el onComplete tarda, dejamos el paso en productos
+        setStep("productos");
+        setCart([]);
+        setPayMethod(null);
+        setSelectedClient(null);
+      } finally {
+        processingAfterAuth.current = false;
+      }
     } else {
       setPayMethod(null);
       setStep("productos");
@@ -274,9 +285,9 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
   /* ---------------- Flujo con Enter ---------------- */
   const goNext = async () => {
-    // ⛔ Evita avanzar mientras el diálogo de autorización esté abierto
+    // ⛔ Evita avanzar si estamos procesando justo tras autorización
+    if (processingAfterAuth.current) return;
     if (showParentalAuth) return;
-
     if (cart.length === 0 || isProcessing) return;
 
     if (step === "productos") {
@@ -292,33 +303,38 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     }
     if (step === "pago") {
       if (!payMethod) return;
-      // Siempre ir a confirmación primero, sin verificar autorización parental aquí
       setStep("confirm");
       return;
     }
     if (step === "confirm") {
-      console.log("🎯 Confirm step - payMethod:", payMethod);
-      // Aquí es donde verificamos autorización parental si es crédito
       if (payMethod === "credito") {
-        console.log("💳 Credit payment detected, checking parental auth...");
         setCheckingAuth(true);
         try {
           const needsAuth = await checkParentalAuth();
-          console.log("🔍 checkParentalAuth result:", needsAuth);
-          if (needsAuth) {
-            console.log("🚪 Authorization needed, modal will handle the flow");
-            return; // el modal de autorización manejará el flujo desde aquí
-          }
+          if (needsAuth) return; // el modal manejará el resto
+          // ✅ No requiere autorización → procesar
+          flowManager.updateCart(cart);
+          await processSale({
+            cart,
+            total,
+            saleType,
+            paymentMethod: payMethod,
+            selectedClient: selectedClient
+              ? { id: selectedClient.id, name: selectedClient.name, fullName: selectedClient.name }
+              : { id: "varios", name: "Cliente Varios", fullName: "Cliente Varios" },
+            origin: "PV",
+          });
+          setCart([]);
+          setPayMethod(null);
+          setSelectedClient(null);
+          setStep("productos");
+          return;
         } finally {
           setCheckingAuth(false);
         }
-        console.log("✅ No authorization needed for this credit sale");
-        // Si llegamos aquí, significa que no necesitaba autorización o ya se procesó
-        return;
       }
-      
-      console.log("💰 Non-credit payment, processing sale directly...");
-      // Solo procesar venta si NO es crédito (porque crédito se maneja arriba)
+
+      // No crédito → procesar directo
       flowManager.updateCart(cart);
       await processSale({
         cart,
@@ -330,7 +346,6 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
           : { id: "varios", name: "Cliente Varios", fullName: "Cliente Varios" },
         origin: "PV",
       });
-      console.log("✅ Non-credit sale processed, clearing state...");
       setCart([]);
       setPayMethod(null);
       setSelectedClient(null);
@@ -352,7 +367,6 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
   useEffect(() => {
     const unbind = bindHotkeys({
-      // Si el diálogo de autorización está abierto, no avances con atajos
       onEnter:      showParentalAuth ? undefined : () => goNextRef.current(),
       onCtrlEnter:  showParentalAuth ? undefined : () => goNextRef.current(),
       onEsc:        showParentalAuth ? undefined : () => clearCartRef.current(),
