@@ -302,13 +302,15 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
         setCheckingAuth(true);
         try {
           const needsAuth = await checkParentalAuth();
-          if (needsAuth) return; // el modal manejará el flujo
+          if (needsAuth) return; // el modal de autorización manejará el flujo desde aquí
         } finally {
           setCheckingAuth(false);
         }
+        // Si llegamos aquí, significa que no necesitaba autorización o ya se procesó
+        return;
       }
       
-      // Si no es crédito o ya se autorizó, procesar la venta
+      // Solo procesar venta si NO es crédito (porque crédito se maneja arriba)
       flowManager.updateCart(cart);
       await processSale({
         cart,
