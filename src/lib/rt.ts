@@ -98,11 +98,9 @@ export class RTDBHelper {
   // Siguiente correlativo con prefijo por tipo
   static async getNextCorrelative(type: "sale" | "lunch" | "historical"): Promise<string> {
     const correlatePath = `${RTDB_PATHS.correlatives}/${type}`;
-
     const nextNumber = await this.runTransaction<number>(correlatePath, (currentValue) => {
       return (currentValue || 0) + 1;
     });
-
     const prefix = type === "sale" ? "B001" : type === "lunch" ? "A001" : "VH001";
     return `${prefix}-${String(nextNumber).padStart(5, "0")}`;
   }
@@ -112,7 +110,7 @@ export class RTDBHelper {
     const config = await this.getData(RTDB_PATHS.config);
     if (!config) {
       const defaultConfig = {
-        printingMode: "kiosk", // 'kiosk' | 'raw'
+        printingMode: "kiosk",
         printerName: "",
         autoPrintKitchen: true,
         ticketHeader:
@@ -159,7 +157,6 @@ export class RTDBHelper {
           createdAt: new Date().toISOString(),
         },
       };
-
       await this.setData(RTDB_PATHS.users, demoUsers);
       console.log("Demo users initialized with correct PIN hashes");
     }
@@ -182,36 +179,61 @@ export class RTDBHelper {
       timestamp: new Date().toISOString(),
       userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
     };
-
     const dayKey = new Date().toISOString().split("T")[0];
     const logPath = `${RTDB_PATHS.logs}/${dayKey}`;
     await this.pushData(logPath, logEntry);
   }
 
   /**
-   * Elimina una venta y, si es a crédito, borra también su entrada en Cuentas por Cobrar.
-   * Rutas afectadas (atómico con update multi-path):
-   *  - /sales/{saleId}
-   *  - /accounts_receivable/{clientId}/entries/{saleId}
-   *  - (limpieza defensiva) /accounts_receivable/{saleId}
+   * Elimina una venta y su referencia en CxC.
+   * - Borra /sales/{saleId}
+   * - Borra cualquier entrada en /accounts_receivable/{clientId}/entries/{saleId|autoId} que apunte a ese saleId
+   * - Limpia /accounts_receivable/{saleId} (legado)
    */
   static async deleteSaleCascade(saleId: string): Promise<void> {
     const salePath = `${RTDB_PATHS.sales}/${saleId}`;
     const sale = await this.getData<any>(salePath);
 
-    // Si no existe la venta, intentar limpiar igual posibles residuos
     const updates: Record<string, any> = {};
+    // borrar venta
     updates[salePath] = null;
-
-    const clientId = sale?.client?.id || sale?.clientId;
-    const isCredit = sale?.paymentMethod === "credito";
-
-    if (clientId && isCredit) {
-      updates[`${RTDB_PATHS.accounts_receivable}/${clientId}/entries/${saleId}`] = null;
-    }
-
-    // Limpieza defensiva por si existiera el espejo plano antiguo
+    // limpiar espejo plano legado
     updates[`${RTDB_PATHS.accounts_receivable}/${saleId}`] = null;
+
+    // intentar con clientId directo
+    let clientId: string | undefined =
+      sale?.client?.id || sale?.clientId || undefined;
+
+    const removeEntriesForClient = async (cid: string) => {
+      const entriesPath = `${RTDB_PATHS.accounts_receivable}/${cid}/entries`;
+      const entries = await this.getData<Record<string, any>>(entriesPath);
+      if (!entries) return;
+
+      for (const [entryKey, entryVal] of Object.entries(entries)) {
+        if (entryKey === saleId || entryVal?.saleId === saleId) {
+          updates[`${entriesPath}/${entryKey}`] = null;
+        }
+      }
+    };
+
+    if (clientId) {
+      await removeEntriesForClient(clientId);
+    } else {
+      // fallback: escanear todas las cuentas por cobrar
+      const arRoot = await this.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
+      if (arRoot) {
+        for (const [cid, node] of Object.entries(arRoot)) {
+          if (node?.entries) {
+            for (const [entryKey, entryVal] of Object.entries<any>(node.entries)) {
+              if (entryKey === saleId || entryVal?.saleId === saleId) {
+                updates[`${RTDB_PATHS.accounts_receivable}/${cid}/entries/${entryKey}`] = null;
+                clientId = cid;
+              }
+            }
+          }
+        }
+      }
+    }
 
     await this.updateData(updates);
 
@@ -219,12 +241,12 @@ export class RTDBHelper {
       await this.logAction(
         sale?.createdBy || "system",
         "sale_deleted",
-        { saleId, isCredit, clientId },
+        { saleId, clientId: clientId ?? null },
         "sale",
         saleId
       );
     } catch {
-      // no bloquear por error de log
+      /* no bloquear por log */
     }
   }
 }

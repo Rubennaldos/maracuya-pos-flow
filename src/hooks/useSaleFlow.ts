@@ -77,8 +77,10 @@ export const useSaleFlow = (options: SaleFlowOptions = {}) => {
             items: saleData.cart, // Items visibles en AR
             createdAt: nowIso,
           };
-          const arPath = `${RTDB_PATHS.accounts_receivable}/${saleData.selectedClient.id}/entries/${saleId}`;
-          await RTDBHelper.setData(arPath, arEntry);
+          const arEntryPath =
+  `${RTDB_PATHS.accounts_receivable}/${saleData.selectedClient.id}/entries/${saleId}`;
+await RTDBHelper.setData(arEntryPath, arEntry); // <-- clave = saleId
+
         }
 
         // 5) Comanda de cocina automática (según config)

@@ -1,3 +1,4 @@
+// src/components/modules/PointOfSale.tsx
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,13 +48,19 @@ function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center">
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
+    // ↓↓↓ ANTES: z-[1000]
+    <div className="fixed inset-0 z-40 flex items-center justify-center">
+      {/* overlay */}
+      <div
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* contenido del modal */}
       <div className="relative z-10 w-[min(720px,95vw)] rounded-xl bg-background border border-border shadow-xl p-4 animate-in fade-in-0 zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
           <Button size="sm" variant="ghost" onClick={onClose} type="button">
-            <X className="w-4 h-4" />
+            ✕
           </Button>
         </div>
         {children}
@@ -257,6 +264,9 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
   /* ---------------- Flujo con Enter ---------------- */
   const goNext = async () => {
+    // ⛔ Evita avanzar mientras el diálogo de autorización esté abierto
+    if (showParentalAuth) return;
+
     if (cart.length === 0 || isProcessing) return;
 
     if (step === "productos") {
@@ -317,23 +327,29 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
 
   useEffect(() => {
     const unbind = bindHotkeys({
-      onEnter: () => goNextRef.current(),
-      onCtrlEnter: () => goNextRef.current(),
-      onEsc: () => clearCartRef.current(),
-      onF2: () => { if (cart.length > 0) { flowManager.updateCart(cart); saveDraftRef.current(); } },
-      onCtrlS: () => { if (cart.length > 0) { flowManager.updateCart(cart); saveDraftRef.current(); } },
-      onF3: () => setSaleTypeRef.current("scheduled"),
-      onCtrlP: () => setSaleTypeRef.current("scheduled"),
-      onF4: () => setSaleTypeRef.current("lunch"),
-      onCtrlL: () => setSaleTypeRef.current("lunch"),
+      // Si el diálogo de autorización está abierto, no avances con atajos
+      onEnter:      showParentalAuth ? undefined : () => goNextRef.current(),
+      onCtrlEnter:  showParentalAuth ? undefined : () => goNextRef.current(),
+      onEsc:        showParentalAuth ? undefined : () => clearCartRef.current(),
+      onF2: () => {
+        if (showParentalAuth) return;
+        if (cart.length > 0) { flowManager.updateCart(cart); saveDraftRef.current(); }
+      },
+      onCtrlS: () => {
+        if (showParentalAuth) return;
+        if (cart.length > 0) { flowManager.updateCart(cart); saveDraftRef.current(); }
+      },
+      onF3:    () => { if (!showParentalAuth) setSaleTypeRef.current("scheduled"); },
+      onCtrlP: () => { if (!showParentalAuth) setSaleTypeRef.current("scheduled"); },
+      onF4:    () => { if (!showParentalAuth) setSaleTypeRef.current("lunch"); },
+      onCtrlL: () => { if (!showParentalAuth) setSaleTypeRef.current("lunch"); },
     });
     return unbind;
-  }, [cart.length]);
+  }, [cart.length, showParentalAuth]);
 
   useEffect(() => { flowManager.updateCart(cart); }, [cart, flowManager]);
 
   const hasKitchen = cart.some((i) => i.isKitchen);
-
   const nowStr = new Date().toLocaleString();
 
   return (
