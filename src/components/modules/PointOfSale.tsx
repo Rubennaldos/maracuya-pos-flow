@@ -158,6 +158,10 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
         : [...prev, { id: p.id, name: p.name, price: Number(p.price ?? 0), quantity: 1, isKitchen: !!p.isKitchen }];
     });
   };
+
+  const updatePrice = (id: string, newPrice: number) => {
+    setCart((prev) => prev.map((i) => (i.id === id ? { ...i, price: newPrice } : i)));
+  };
   const updateQuantity = (id: string, qty: number) =>
     setCart((prev) => (qty <= 0 ? prev.filter((i) => i.id !== id) : prev.map((i) => (i.id === id ? { ...i, quantity: qty } : i))));
   const removeFromCart = (id: string) => setCart((prev) => prev.filter((i) => i.id !== id));
@@ -534,7 +538,18 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                           <h4 className="font-medium text-foreground text-sm sm:text-base truncate">{item.name}</h4>
                           {item.isKitchen && <Badge variant="secondary" className="text-xs flex-shrink-0">Cocina</Badge>}
                         </div>
-                        <p className="text-xs sm:text-sm text-muted-foreground">S/ {item.price.toFixed(2)} c/u</p>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs sm:text-sm text-muted-foreground">S/</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={item.price.toFixed(2)}
+                            onChange={(e) => updatePrice(item.id, parseFloat(e.target.value) || 0)}
+                            className="h-6 w-16 text-xs text-center"
+                          />
+                          <span className="text-xs sm:text-sm text-muted-foreground">c/u</span>
+                        </div>
                         <p className="text-xs sm:text-sm font-semibold text-primary">Total: S/ {(item.price * item.quantity).toFixed(2)}</p>
                       </div>
                       <div className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-1 flex-shrink-0">

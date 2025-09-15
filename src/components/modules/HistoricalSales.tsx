@@ -190,6 +190,10 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
 
   const clearCart = () => setCart([]);
 
+  const updatePrice = (id: string, newPrice: number) => {
+    setCart((prev) => prev.map((i) => (i.id === id ? { ...i, price: newPrice } : i)));
+  };
+
   /* -------- Guardar venta histórica (siempre crédito) -------- */
   const processHistoricalSale = async () => {
     if (isSaving) return; // evita doble guardado
@@ -378,9 +382,18 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                     <div key={item.id} className="flex justify-between items-center p-2 border rounded">
                       <div className="flex-1">
                         <p className="font-medium text-sm">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          S/ {item.price.toFixed(2)} x {item.quantity}
-                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-muted-foreground">S/</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={item.price.toFixed(2)}
+                            onChange={(e) => updatePrice(item.id, parseFloat(e.target.value) || 0)}
+                            className="h-5 w-14 text-xs text-center"
+                          />
+                          <span className="text-xs text-muted-foreground">x {item.quantity}</span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => removeFromCart(item.id)} type="button">
