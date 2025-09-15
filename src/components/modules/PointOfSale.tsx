@@ -249,10 +249,20 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     return false;
   };
 
-  const handleParentalAuth = (authorized: boolean) => {
+  const handleParentalAuth = async (authorized: boolean) => {
     setShowParentalAuth(false);
     if (authorized) {
-      setStep("confirm");
+      // Si se autoriza, procesar la venta directamente sin pedir confirmación adicional
+      flowManager.updateCart(cart);
+      await processSale({
+        cart,
+        total,
+        saleType,
+        paymentMethod: payMethod,
+        selectedClient: selectedClient
+          ? { id: selectedClient.id, name: selectedClient.name, fullName: selectedClient.name }
+          : { id: "varios", name: "Cliente Varios", fullName: "Cliente Varios" },
+      });
     } else {
       setPayMethod(null);
       setStep("productos");
