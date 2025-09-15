@@ -27,6 +27,7 @@ import {
   Save,
   Trash2,
   AlertTriangle,
+  User,
 } from "lucide-react";
 import { bindHotkeys } from "@/lib/hotkeys";
 import { useSaleFlow } from "@/hooks/useSaleFlow";
@@ -48,11 +49,10 @@ function Modal({
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center">
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
-      {/* ancho ampliado */}
       <div className="relative z-10 w-[min(720px,95vw)] rounded-xl bg-background border border-border shadow-xl p-4 animate-in fade-in-0 zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-          <Button size="sm" variant="ghost" onClick={onClose}>
+          <Button size="sm" variant="ghost" onClick={onClose} type="button">
             <X className="w-4 h-4" />
           </Button>
         </div>
@@ -110,13 +110,11 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   // Flujo visual (modales)
   const [step, setStep] = useState<Step>("productos");
   const [clientQuery, setClientQuery] = useState("");
-  // debajo de: const [clientQuery, setClientQuery] = useState("");
-type ClientRow = { id: string; name: string };
 
-const [clientResults, setClientResults] = useState<ClientRow[]>([
-  { id: "varios", name: "Cliente Varios" },
-]);
-
+  type ClientRow = { id: string; name: string };
+  const [clientResults, setClientResults] = useState<ClientRow[]>([
+    { id: "varios", name: "Cliente Varios" },
+  ]);
   const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
   const [payMethod, setPayMethod] = useState<
     "efectivo" | "transferencia" | "credito" | "yape" | "plin" | null
@@ -130,16 +128,11 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
   // Hook que guarda en RTDB e imprime cocina si aplica
   const { flowManager, isProcessing, saveDraft, processSale } = useSaleFlow({
     onComplete: () => {
-      // Resetear todo después de completar la venta
       setCart([]);
       setSelectedClient(null);
       setPayMethod(null);
       setStep("productos");
-
-      // Enfocar automáticamente el campo de búsqueda
-      setTimeout(() => {
-        searchInputRef.current?.focus();
-      }, 100);
+      setTimeout(() => searchInputRef.current?.focus(), 100);
     },
   });
 
@@ -154,10 +147,7 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
       const ex = prev.find((i) => i.id === p.id);
       return ex
         ? prev.map((i) => (i.id === p.id ? { ...i, quantity: i.quantity + 1 } : i))
-        : [
-            ...prev,
-            { id: p.id, name: p.name, price: Number(p.price ?? 0), quantity: 1, isKitchen: !!p.isKitchen },
-          ];
+        : [...prev, { id: p.id, name: p.name, price: Number(p.price ?? 0), quantity: 1, isKitchen: !!p.isKitchen }];
     });
   };
   const updateQuantity = (id: string, qty: number) =>
@@ -174,10 +164,51 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
       product.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  /* ---------------- Validación de autorización parental ---------------- */
+  /* ---------------- Clientes ---------------- */
+  const loadClients = async (): Promise<ClientRow[]> => {
+    try {
+      const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
+      if (!clientsData) return [{ id: "varios", name: "Cliente Varios" }];
+
+      const list = Object.entries(clientsData).map(([id, c]: [string, any]) => {
+        const name =
+          (typeof c === "string" && c) ||
+          c?.fullName ||
+          [c?.names, c?.lastNames].filter(Boolean).join(" ") ||
+          c?.name ||
+          c?.code ||
+          "Cliente";
+        return { id, name: String(name).trim() || "Cliente" };
+      });
+
+      const withVarios = [{ id: "varios", name: "Cliente Varios" }, ...list]
+        .filter((v, i, arr) => arr.findIndex((x) => x.id === v.id) === i)
+        .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
+
+      return withVarios;
+    } catch (error) {
+      console.error("Error loading clients:", error);
+      return [{ id: "varios", name: "Cliente Varios" }];
+    }
+  };
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const all = await loadClients();
+      const q = clientQuery.trim().toLowerCase();
+      const filtered = q ? all.filter((c) => c.name.toLowerCase().includes(q)) : all;
+      if (alive) setClientResults(filtered);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [clientQuery]);
+
+  /* ---------------- Autorización de crédito ---------------- */
   const loadFullClientData = async (clientId: string): Promise<Client | null> => {
     try {
-      const clientData = await RTDBHelper.getData<any>(`${RTDB_PATHS.clients}/${clientId}`);
+      const clientData = await RTDBHelper.getData<Client>(`${RTDB_PATHS.clients}/${clientId}`);
       return clientData || null;
     } catch (error) {
       console.error("Error loading client data:", error);
@@ -191,30 +222,28 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
       setShowParentalAuth(true);
       return true; // requiere autorización
     }
-
-    const fullClientData = await loadFullClientData(selectedClient.id);
-
-    if (!fullClientData) {
+    const full = await loadFullClientData(selectedClient.id);
+    if (!full) {
       setCurrentClientForAuth(null);
       setShowParentalAuth(true);
       return true;
     }
 
-    // Solo NO pedir autorización si EXPLÍCITAMENTE tiene cuenta de crédito activa
-    const hasActiveCredit = fullClientData.hasCreditAccount === true && fullClientData.isActive === true;
+    // ✅ regla: crédito activo solo si accountEnabled && active
+    const hasActiveCredit =
+      (full.accountEnabled === true || (full.creditLimit ?? 0) > 0) &&
+      (full.active === true);
 
     if (!hasActiveCredit) {
-      setCurrentClientForAuth(fullClientData);
+      setCurrentClientForAuth(full);
       setShowParentalAuth(true);
       return true;
     }
-
     return false;
   };
 
   const handleParentalAuth = (authorized: boolean) => {
     setShowParentalAuth(false);
-
     if (authorized) {
       setStep("confirm");
     } else {
@@ -223,7 +252,6 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
       setSelectedClient(null);
       alert("Consulta al padre o apoderado y vuelve a realizar la venta.");
     }
-
     setCurrentClientForAuth(null);
   };
 
@@ -244,27 +272,20 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
     }
     if (step === "pago") {
       if (!payMethod) return;
-
       if (payMethod === "credito") {
         setCheckingAuth(true);
         try {
           const needsAuth = await checkParentalAuth();
-          if (needsAuth) {
-            return; // el modal manejará el flujo
-          }
+          if (needsAuth) return; // el modal manejará el flujo
         } finally {
           setCheckingAuth(false);
         }
       }
-
       setStep("confirm");
       return;
     }
     if (step === "confirm") {
-      // Sincroniza por si el hook lo usa internamente
       flowManager.updateCart(cart);
-
-      // Ejecuta guardado real en RTDB + impresión de cocina
       await processSale({
         cart,
         total,
@@ -275,8 +296,6 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
           : { id: "varios", name: "Cliente Varios", fullName: "Cliente Varios" },
         origin: "PV",
       });
-
-      // Limpia UI
       setCart([]);
       setPayMethod(null);
       setSelectedClient(null);
@@ -291,36 +310,18 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
   const saveDraftRef = useRef(saveDraft);
   const setSaleTypeRef = useRef(setSaleType);
 
-  useEffect(() => {
-    goNextRef.current = goNext;
-  });
-  useEffect(() => {
-    clearCartRef.current = clearCart;
-  });
-  useEffect(() => {
-    saveDraftRef.current = saveDraft;
-  });
-  useEffect(() => {
-    setSaleTypeRef.current = setSaleType;
-  });
+  useEffect(() => { goNextRef.current = goNext; });
+  useEffect(() => { clearCartRef.current = clearCart; });
+  useEffect(() => { saveDraftRef.current = saveDraft; });
+  useEffect(() => { setSaleTypeRef.current = setSaleType; });
 
   useEffect(() => {
     const unbind = bindHotkeys({
       onEnter: () => goNextRef.current(),
       onCtrlEnter: () => goNextRef.current(),
       onEsc: () => clearCartRef.current(),
-      onF2: () => {
-        if (cart.length > 0) {
-          flowManager.updateCart(cart);
-          saveDraftRef.current();
-        }
-      },
-      onCtrlS: () => {
-        if (cart.length > 0) {
-          flowManager.updateCart(cart);
-          saveDraftRef.current();
-        }
-      },
+      onF2: () => { if (cart.length > 0) { flowManager.updateCart(cart); saveDraftRef.current(); } },
+      onCtrlS: () => { if (cart.length > 0) { flowManager.updateCart(cart); saveDraftRef.current(); } },
       onF3: () => setSaleTypeRef.current("scheduled"),
       onCtrlP: () => setSaleTypeRef.current("scheduled"),
       onF4: () => setSaleTypeRef.current("lunch"),
@@ -329,70 +330,11 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
     return unbind;
   }, [cart.length]);
 
-  // Mantén al hook enterFlow informado del carrito
-  useEffect(() => {
-    flowManager.updateCart(cart);
-  }, [cart, flowManager]);
-
- // Cargar clientes (solo nombre y apellido, robusto con varios esquemas)
-const loadClients = async () => {
-  try {
-    const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
-    if (!clientsData) {
-      return [{ id: "varios", name: "Cliente Varios" }];
-    }
-
-    const list = Object.entries(clientsData).map(([id, c]: [string, any]) => {
-      // c puede ser string u objeto; armamos el nombre
-      const name =
-        (typeof c === "string" && c) ||            // por si está guardado como string
-        c?.fullName ||                             // fullName directo
-        [c?.names, c?.lastNames].filter(Boolean).join(" ") || // "Nombres Apellidos"
-        c?.name ||                                 // fallback
-        c?.code ||                                 // último fallback visible
-        "Cliente";
-
-      return { id, name: String(name).trim() || "Cliente" };
-    });
-
-    // Agregamos "Cliente Varios", evitamos duplicados y ordenamos alfabéticamente
-    const withVarios = [{ id: "varios", name: "Cliente Varios" }, ...list]
-      .filter((v, i, arr) => arr.findIndex(x => x.id === v.id) === i)
-      .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
-
-    return withVarios;
-  } catch (error) {
-    console.error("Error loading clients:", error);
-    return [{ id: "varios", name: "Cliente Varios" }];
-  }
-};
-
-useEffect(() => {
-  let alive = true;
-
-  (async () => {
-    const all = await loadClients(); // usa tu función loadClients que llama a RTDB
-    const q = clientQuery.trim().toLowerCase();
-    const filtered = q ? all.filter(c => c.name.toLowerCase().includes(q)) : all;
-    if (alive) setClientResults(filtered);
-  })();
-
-  return () => {
-    alive = false;
-  };
-}, [clientQuery]);
-
-
-  useEffect(() => {
-    const loadAndFilterClients = async () => {
-      const clients = await loadClients();
-      const filtered = clients.filter((c) => c.name.toLowerCase().includes(clientQuery.toLowerCase()));
-      setClientResults(filtered);
-    };
-    loadAndFilterClients();
-  }, [clientQuery]);
+  useEffect(() => { flowManager.updateCart(cart); }, [cart, flowManager]);
 
   const hasKitchen = cart.some((i) => i.isKitchen);
+
+  const nowStr = new Date().toLocaleString();
 
   return (
     <div className="min-h-screen bg-background">
@@ -400,7 +342,7 @@ useEffect(() => {
       <header className="bg-card border-b border-border p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Button variant="outline" onClick={onBack}>
+            <Button variant="outline" onClick={onBack} type="button">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Volver
             </Button>
@@ -408,28 +350,18 @@ useEffect(() => {
           </div>
 
           <div className="flex items-center space-x-2">
-            <Button
-              variant={saleType === "normal" ? "default" : "outline"}
-              onClick={() => setSaleType("normal")}
-              size="sm"
-            >
-              Normal
+            {/* Cliente seleccionado a la vista */}
+            <div className="hidden md:flex items-center px-3 py-1 rounded border text-sm text-muted-foreground">
+              <User className="w-4 h-4 mr-1" />
+              {selectedClient ? `Cliente: ${selectedClient.name}` : "Cliente: —"}
+            </div>
+
+            <Button variant={saleType === "normal" ? "default" : "outline"} onClick={() => setSaleType("normal")} size="sm" type="button">Normal</Button>
+            <Button variant={saleType === "scheduled" ? "default" : "outline"} onClick={() => setSaleType("scheduled")} size="sm" type="button">
+              <Clock className="w-4 h-4 mr-1" /> Programada (F3)
             </Button>
-            <Button
-              variant={saleType === "scheduled" ? "default" : "outline"}
-              onClick={() => setSaleType("scheduled")}
-              size="sm"
-            >
-              <Clock className="w-4 h-4 mr-1" />
-              Programada (F3)
-            </Button>
-            <Button
-              variant={saleType === "lunch" ? "default" : "outline"}
-              onClick={() => setSaleType("lunch")}
-              size="sm"
-            >
-              <GraduationCap className="w-4 h-4 mr-1" />
-              Almuerzos (F4)
+            <Button variant={saleType === "lunch" ? "default" : "outline"} onClick={() => setSaleType("lunch")} size="sm" type="button">
+              <GraduationCap className="w-4 h-4 mr-1" /> Almuerzos (F4)
             </Button>
           </div>
         </div>
@@ -452,7 +384,7 @@ useEffect(() => {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filteredProducts.map((p) => (
+            {filteredProducts.map((p: any) => (
               <Card
                 key={p.id}
                 className="cursor-pointer hover:shadow-medium transition-all duration-200 group border-2 hover:border-primary"
@@ -463,8 +395,7 @@ useEffect(() => {
                     <img src={p.image} alt={p.name} className="w-full h-40 object-cover rounded-t-lg" />
                     {p.isKitchen && (
                       <Badge className="absolute top-2 right-2 bg-pos-kitchen text-foreground">
-                        <Utensils className="w-3 h-3 mr-1" />
-                        Cocina
+                        <Utensils className="w-3 h-3 mr-1" /> Cocina
                       </Badge>
                     )}
                   </div>
@@ -490,11 +421,10 @@ useEffect(() => {
           <div className="p-4 border-b border-border">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-pos-checkout-foreground flex items-center">
-                <ShoppingCart className="w-5 h-5 mr-2" />
-                Carrito ({cart.length})
+                <ShoppingCart className="w-5 h-5 mr-2" /> Carrito ({cart.length})
               </h2>
               {cart.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => clearCart()}>
+                <Button variant="ghost" size="sm" onClick={() => clearCart()} type="button">
                   <Trash2 className="w-4 h-4" />
                 </Button>
               )}
@@ -517,8 +447,7 @@ useEffect(() => {
                         <h4 className="font-medium text-foreground">{item.name}</h4>
                         {item.isKitchen && (
                           <Badge variant="secondary" className="mt-1">
-                            <Utensils className="w-3 h-3 mr-1" />
-                            Cocina
+                            <Utensils className="w-3 h-3 mr-1" /> Cocina
                           </Badge>
                         )}
                       </div>
@@ -527,6 +456,7 @@ useEffect(() => {
                         size="sm"
                         onClick={() => removeFromCart(item.id)}
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        type="button"
                       >
                         <X className="w-4 h-4" />
                       </Button>
@@ -534,11 +464,11 @@ useEffect(() => {
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity - 1)}>
+                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity - 1)} type="button">
                           <Minus className="w-3 h-3" />
                         </Button>
                         <span className="w-8 text-center font-medium">{item.quantity}</span>
-                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity + 1)}>
+                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity + 1)} type="button">
                           <Plus className="w-3 h-3" />
                         </Button>
                       </div>
@@ -569,6 +499,7 @@ useEffect(() => {
                     className="w-full h-12 text-lg bg-gradient-to-r from-primary to-primary-light"
                     onClick={() => goNext()}
                     disabled={isProcessing || cart.length === 0}
+                    type="button"
                   >
                     {isProcessing ? "Procesando..." : "Procesar Venta (Enter)"}
                   </Button>
@@ -583,11 +514,12 @@ useEffect(() => {
                         }
                       }}
                       disabled={cart.length === 0}
+                      type="button"
                     >
                       <Save className="w-4 h-4 mr-1" />
                       Borrador (F2)
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => clearCart()}>
+                    <Button variant="outline" size="sm" onClick={() => clearCart()} type="button">
                       <X className="w-4 h-4 mr-1" />
                       Cancelar (Esc)
                     </Button>
@@ -608,7 +540,6 @@ useEffect(() => {
       {/* --------- MODALES --------- */}
       <Modal open={step === "cliente"} onClose={() => setStep("productos")} title="Seleccionar Cliente">
         <div className="space-y-3">
-          {/* buscador más grande */}
           <Input
             autoFocus
             placeholder="Buscar cliente…"
@@ -616,7 +547,6 @@ useEffect(() => {
             onChange={(e) => setClientQuery(e.target.value)}
             className="h-14 text-lg md:text-lg"
           />
-          {/* lista más alta */}
           <div className="max-h-80 overflow-y-auto border rounded-md">
             {clientResults.map((c) => (
               <button
@@ -624,16 +554,17 @@ useEffect(() => {
                 className={`w-full text-left px-3 py-2 hover:bg-muted ${selectedClient?.id === c.id ? "bg-muted" : ""}`}
                 onClick={() => setSelectedClient(c)}
                 title={c.name}
+                type="button"
               >
                 {c.name}
               </button>
             ))}
           </div>
           <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setSelectedClient({ id: "varios", name: "Cliente Varios" })}>
+            <Button variant="outline" onClick={() => setSelectedClient({ id: "varios", name: "Cliente Varios" })} type="button">
               Cliente Varios
             </Button>
-            <Button onClick={() => goNext()}>Continuar (Enter)</Button>
+            <Button onClick={() => goNext()} type="button">Continuar (Enter)</Button>
           </div>
         </div>
       </Modal>
@@ -641,13 +572,13 @@ useEffect(() => {
       <Modal open={step === "pago"} onClose={() => setStep("cliente")} title="Método de Pago">
         <div className="grid grid-cols-2 gap-2">
           {(["efectivo", "transferencia", "credito", "yape", "plin"] as const).map((m) => (
-            <Button key={m} variant={payMethod === m ? "default" : "outline"} onClick={() => setPayMethod(m)}>
+            <Button key={m} variant={payMethod === m ? "default" : "outline"} onClick={() => setPayMethod(m)} type="button">
               {m.toUpperCase()}
             </Button>
           ))}
         </div>
         <div className="flex justify-end mt-4">
-          <Button disabled={!payMethod || checkingAuth} onClick={() => goNext()}>
+          <Button disabled={!payMethod || checkingAuth} onClick={() => goNext()} type="button">
             {checkingAuth ? "Verificando..." : "Continuar (Enter)"}
           </Button>
         </div>
@@ -655,20 +586,13 @@ useEffect(() => {
 
       <Modal open={step === "confirm"} onClose={() => setStep("pago")} title="Confirmar Venta">
         <div className="space-y-2">
-          <p>
-            <b>Cliente:</b> {selectedClient?.name ?? "Cliente Varios"}
-          </p>
-          <p>
-            <b>Pago:</b> {payMethod?.toUpperCase()}
-          </p>
-          <p>
-            <b>Items:</b> {cart.reduce((s, i) => s + i.quantity, 0)} — <b>Total:</b> S/ {total.toFixed(2)}
-          </p>
+          <p><b>Cliente:</b> {selectedClient?.name ?? "Cliente Varios"}</p>
+          <p><b>Fecha y hora:</b> {nowStr}</p>
+          <p><b>Pago:</b> {payMethod?.toUpperCase()}</p>
+          <p><b>Items:</b> {cart.reduce((s, i) => s + i.quantity, 0)} — <b>Total:</b> S/ {total.toFixed(2)}</p>
           <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" onClick={() => setStep("pago")}>
-              Volver
-            </Button>
-            <Button onClick={() => goNext()} disabled={isProcessing}>
+            <Button variant="outline" onClick={() => setStep("pago")} type="button">Volver</Button>
+            <Button onClick={() => goNext()} disabled={isProcessing} type="button">
               {isProcessing ? "Guardando..." : "Confirmar (Enter)"}
             </Button>
           </div>
@@ -688,16 +612,14 @@ useEffect(() => {
                 <>
                   El cliente <strong>{currentClientForAuth.fullName}</strong> no tiene una cuenta de
                   crédito activa.
-                  <br />
-                  <br />
+                  <br /><br />
                   ¿Tiene autorización del padre o apoderado para realizar esta compra a crédito?
                 </>
               ) : (
                 <>
                   Para realizar ventas a crédito a "Cliente Varios" se requiere autorización del
                   padre o apoderado.
-                  <br />
-                  <br />
+                  <br /><br />
                   ¿Tiene autorización del padre o apoderado para realizar esta compra a crédito?
                 </>
               )}

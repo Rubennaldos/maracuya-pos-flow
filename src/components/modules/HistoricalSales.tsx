@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -81,7 +81,7 @@ function Modal({
       <div className="relative z-10 w-[min(720px,95vw)] rounded-xl bg-background border border-border shadow-xl p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-          <Button size="sm" variant="ghost" onClick={onClose}>✕</Button>
+          <Button size="sm" variant="ghost" onClick={onClose} type="button">✕</Button>
         </div>
         {children}
       </div>
@@ -105,6 +105,11 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
   const [selectedClient, setSelectedClient] = useState<ClientRow | null>(null);
   const [clientModalOpen, setClientModalOpen] = useState(false);
 
+  // Confirmación y bloqueo anti-doble guardado
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const confirmBtnRef = useRef<HTMLButtonElement | null>(null);
+
   // Carga inicial
   useEffect(() => {
     loadProducts().then(setProducts);
@@ -125,35 +130,34 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     if (clientModalOpen && filteredClients.length > 0 && !selectedClient) {
       setSelectedClient(filteredClients[0]);
     }
-    // Si cambias el filtro y el seleccionado ya no existe, selecciona el primero
     if (clientModalOpen && filteredClients.length > 0 && selectedClient) {
       const stillThere = filteredClients.some(c => c.id === selectedClient.id);
       if (!stillThere) setSelectedClient(filteredClients[0]);
     }
   }, [clientModalOpen, filteredClients, selectedClient]);
 
-  /* -------- ENTER: abrir modal y confirmar -------- */
+  /* -------- ENTER: abrir modal y luego confirmación (sin guardar directo) -------- */
   useEffect(() => {
-    const onKey = async (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter") return;
-      if (cart.length === 0) return; // nada que hacer
+      if (cart.length === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
 
-      // Si el modal no está abierto => abrir para elegir cliente
       if (!clientModalOpen) {
         setClientModalOpen(true);
         return;
       }
-
-      // Si ya está abierto y hay cliente seleccionado => guardar venta
+      // Si el modal está abierto, pasamos a confirmar (no guardamos aún)
       if (clientModalOpen && selectedClient) {
-        await processHistoricalSale(true); // true: llamado desde el modal
+        setConfirmOpen(true);
+        setTimeout(() => confirmBtnRef.current?.focus(), 0);
       }
     };
 
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart.length, clientModalOpen, selectedClient, selectedDate]);
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey as any, { capture: true } as any);
+  }, [cart.length, clientModalOpen, selectedClient]);
 
   /* -------- Productos -------- */
   const filteredProducts = products.filter((p) =>
@@ -167,11 +171,6 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
         ? prev.map((i) => (i.id === p.id ? { ...i, quantity: i.quantity + 1 } : i))
         : [...prev, { id: p.id, name: p.name, price: p.price, quantity: 1 }];
     });
-  };
-
-  const handleAddFromCard = (product: Product) => {
-    const price = Number(product.salePrice ?? product.price ?? 0);
-    addToCart({ id: product.id, name: product.name, price });
   };
 
   const removeFromCart = (productId: string) => {
@@ -192,7 +191,8 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
   const clearCart = () => setCart([]);
 
   /* -------- Guardar venta histórica (siempre crédito) -------- */
-  const processHistoricalSale = async (fromModal = false) => {
+  const processHistoricalSale = async () => {
+    if (isSaving) return; // evita doble guardado
     if (cart.length === 0) {
       alert("Agregue productos al carrito");
       return;
@@ -202,20 +202,20 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
       return;
     }
     if (!selectedClient) {
-      // si no viene del modal, ábrelo
-      if (!fromModal) setClientModalOpen(true);
+      setClientModalOpen(true);
       alert("Debe seleccionar un cliente registrado para ventas históricas (crédito).");
       return;
     }
 
+    setIsSaving(true);
     try {
       const correlative = await RTDBHelper.getNextCorrelative("historical");
       const nowIso = new Date().toISOString();
+      const saleDateStr = format(selectedDate, "yyyy-MM-dd");
 
       const saleData = {
         correlative,
-        // RESPETA la fecha indicada
-        date: format(selectedDate, "yyyy-MM-dd"),
+        date: saleDateStr,          // RESPETA la fecha elegida
         items: cart,
         total: getTotalAmount(),
         paymentMethod: "credito",
@@ -226,21 +226,29 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
         user: "Sistema",
       };
 
+      // 1) Guardar la venta
       const saleId = await RTDBHelper.pushData(RTDB_PATHS.sales, saleData);
 
-      // Cuenta por cobrar
-      const arRecord = {
-        saleId,
-        clientId: selectedClient.id,
+      // 2) Registrar SOLO UNA entrada en Cuentas por Cobrar:
+      //    accounts_receivable/{clientId}/entries/{saleId}
+      const arEntryPath = `${RTDB_PATHS.accounts_receivable}/${selectedClient.id}/entries/${saleId}`;
+      await RTDBHelper.setData(arEntryPath, {
+        status: "pending",
+        amount: saleData.total,
+        date: saleData.date,
+        type: "VH", // Venta Histórica
+        items: saleData.items,
+        correlative: saleData.correlative,
         clientName: selectedClient.name,
-        total: getTotalAmount(),
-        balance: getTotalAmount(),
-        status: "open",
+        saleId,
         createdAt: nowIso,
-      };
-      await RTDBHelper.pushData(RTDB_PATHS.accounts_receivable, arRecord);
+      });
 
-      if (fromModal) setClientModalOpen(false);
+      // ❗️IMPORTANTE: Se eliminó el "espejo plano" que causaba duplicado:
+      //    NO escribir en `${accounts_receivable}/${saleId}`
+
+      setClientModalOpen(false);
+      setConfirmOpen(false);
       alert(`Venta histórica registrada (crédito) — Comprobante: ${correlative}`);
 
       clearCart();
@@ -248,13 +256,15 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     } catch (error) {
       console.error("Error processing historical sale:", error);
       alert("Error al procesar la venta histórica");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-6">
-        <Button variant="outline" onClick={onBack} className="mb-6 flex items-center gap-2">
+        <Button variant="outline" onClick={onBack} className="mb-6 flex items-center gap-2" type="button">
           <ArrowLeft className="h-4 w-4" />
           Volver al Dashboard
         </Button>
@@ -275,6 +285,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                     "w-[240px] justify-start text-left font-normal",
                     !selectedDate && "text-muted-foreground"
                   )}
+                  type="button"
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {selectedDate ? format(selectedDate, "PPP", { locale: es }) : <span>Seleccionar fecha</span>}
@@ -291,9 +302,9 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
               </PopoverContent>
             </Popover>
 
-            <Button variant="outline" onClick={() => setClientModalOpen(true)} className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setClientModalOpen(true)} className="flex items-center gap-2" type="button">
               <User className="h-4 w-4" />
-              {selectedClient ? selectedClient.name : "Seleccionar cliente"}
+              {selectedClient ? `Cliente: ${selectedClient.name}` : "Seleccionar cliente"}
             </Button>
           </div>
         </div>
@@ -372,7 +383,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => removeFromCart(item.id)}>
+                        <Button variant="outline" size="sm" onClick={() => removeFromCart(item.id)} type="button">
                           <Minus className="h-3 w-3" />
                         </Button>
                         <span className="w-8 text-center text-sm">{item.quantity}</span>
@@ -380,6 +391,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                           variant="outline"
                           size="sm"
                           onClick={() => addToCart({ id: item.id, name: item.name, price: item.price })}
+                          type="button"
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
@@ -404,14 +416,15 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                         onClick={() => setClientModalOpen(true)}
                         className="w-full"
                         disabled={cart.length === 0 || !selectedDate}
+                        type="button"
                       >
                         Seleccionar cliente y registrar (Enter)
                       </Button>
-                      <Button variant="outline" onClick={clearCart} className="w-full">
+                      <Button variant="outline" onClick={clearCart} className="w-full" type="button">
                         Limpiar Carrito
                       </Button>
                       <p className="text-xs text-muted-foreground text-center">
-                        Tip: presiona <b>Enter</b> para abrir selección de cliente y <b>Enter</b> otra vez para guardar.
+                        Tip: presiona <b>Enter</b> para abrir selección de cliente y <b>Enter</b> otra vez para confirmar.
                       </p>
                     </div>
                   </div>
@@ -422,7 +435,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
         </div>
       </div>
 
-      {/* Modal de clientes: Enter confirma y guarda */}
+      {/* Modal de clientes */}
       <Modal
         open={clientModalOpen}
         onClose={() => setClientModalOpen(false)}
@@ -440,11 +453,10 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             {filteredClients.map((c) => (
               <button
                 key={c.id}
-                className={`w-full text-left px-3 py-2 hover:bg-muted ${
-                  selectedClient?.id === c.id ? "bg-muted" : ""
-                }`}
+                className={`w-full text-left px-3 py-2 hover:bg-muted ${selectedClient?.id === c.id ? "bg-muted" : ""}`}
                 onClick={() => setSelectedClient(c)}
                 title={c.name}
+                type="button"
               >
                 {c.name}
               </button>
@@ -454,16 +466,42 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             )}
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setClientModalOpen(false)}>
+            <Button variant="outline" onClick={() => setClientModalOpen(false)} type="button">
               Cancelar
             </Button>
-            <Button onClick={() => processHistoricalSale(true)} disabled={!selectedClient}>
-              Guardar venta (Enter)
+            <Button onClick={() => { setConfirmOpen(true); }} disabled={!selectedClient} type="button">
+              Continuar (Enter)
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
             * Solo se permiten ventas a <b>crédito</b> y con cliente <b>registrado</b>. Se usará la fecha mostrada arriba.
           </p>
+        </div>
+      </Modal>
+
+      {/* Confirmación */}
+      <Modal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="Confirmar venta histórica"
+      >
+        <div className="space-y-3">
+          <p><b>Cliente:</b> {selectedClient?.name ?? "—"}</p>
+          <p><b>Fecha:</b> {selectedDate ? format(selectedDate, "PPP", { locale: es }) : "—"}</p>
+          <p><b>Items:</b> {cart.reduce((s, i) => s + i.quantity, 0)} — <b>Total:</b> S/ {getTotalAmount().toFixed(2)}</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} type="button">
+              Volver
+            </Button>
+            <Button
+              ref={confirmBtnRef as any}
+              onClick={processHistoricalSale}
+              disabled={isSaving}
+              type="button"
+            >
+              {isSaving ? "Guardando..." : "Confirmar (Enter)"}
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>

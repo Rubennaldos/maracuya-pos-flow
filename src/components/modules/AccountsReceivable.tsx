@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  ArrowLeft, Search, Users, DollarSign, Calendar,
-  MessageCircle, FileText, AlertTriangle, CheckCircle,
+import {
+  ArrowLeft, Search, Users, DollarSign,
+  MessageCircle, AlertTriangle, CheckCircle,
   Clock, CreditCard
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
@@ -16,7 +16,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -26,47 +25,93 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Load debtors from RTDB
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 
+/* =========================
+   Carga robusta de deudores
+   ========================= */
 const loadDebtors = async () => {
   try {
     const arData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
-    if (arData) {
-      // Procesar datos para agrupar por cliente
-      const debtorMap = new Map();
-      
-      Object.entries(arData).forEach(([clientId, clientData]) => {
-        if (clientData.entries) {
-          const pendingEntries = Object.values(clientData.entries).filter((entry: any) => entry.status === 'pending');
-          
-          if (pendingEntries.length > 0) {
-            const totalDebt = pendingEntries.reduce((sum: number, entry: any) => sum + entry.amount, 0);
-            
-            debtorMap.set(clientId, {
-              id: clientId,
-              name: (pendingEntries[0] as any)?.clientName || clientId,
-              totalDebt,
-              invoices: pendingEntries.map((entry: any) => ({
-                id: entry.correlative || entry.saleId,
-                amount: entry.amount,
-                date: new Date(entry.date).toLocaleDateString(),
-                type: entry.type,
-                products: entry.items?.map((item: any) => item.name) || []
-              })),
-              urgentCollection: false,
-              phone: "999999999" // Placeholder - necesitarías obtener esto de los datos del cliente
+    if (!arData) return [];
+
+    // Estructura interna en memoria
+    type Debtor = {
+      id: string;
+      name: string;
+      totalDebt: number;
+      invoices: { id: string; amount: number; date: string; type?: string; products: string[] }[];
+      urgentCollection: boolean;
+      phone?: string;
+      lastReminder?: string;
+    };
+
+    const debtorMap = new Map<string, Debtor>();
+
+    const ensureDebtor = (clientId: string, clientName?: string): Debtor => {
+      if (!debtorMap.has(clientId)) {
+        debtorMap.set(clientId, {
+          id: clientId,
+          name: clientName || clientId,
+          totalDebt: 0,
+          invoices: [],
+          urgentCollection: false,
+          phone: "999999999",
+        });
+      }
+      return debtorMap.get(clientId)!;
+    };
+
+    // A) Formato NUEVO (agrupado por cliente)
+    Object.entries(arData).forEach(([clientId, clientData]) => {
+      const cData = clientData as any;
+      if (cData && typeof cData === "object" && cData.entries) {
+        const entries: Record<string, any> = cData.entries;
+        Object.values(entries).forEach((entry: any) => {
+          if (entry?.status === "pending") {
+            const d = ensureDebtor(clientId, entry.clientName);
+            const amount = Number(entry.amount || 0);
+            d.totalDebt += amount;
+            d.invoices.push({
+              id: entry.correlative || entry.saleId || "SIN-ID",
+              amount,
+              date: entry.date ? new Date(entry.date).toLocaleDateString() : "",
+              type: entry.type,
+              products: Array.isArray(entry.items) ? entry.items.map((it: any) => it?.name).filter(Boolean) : [],
             });
           }
-        }
-      });
-      
-      return Array.from(debtorMap.values());
-    }
-    return [];
+        });
+      }
+    });
+
+    // B) Formato PLANO/LEGADO (entradas sueltas en el root)
+    Object.entries(arData).forEach(([key, value]) => {
+      const flat = value as any;
+      const looksEntry =
+        flat && typeof flat === "object" && flat.status && (flat.amount !== undefined) && !flat.entries;
+
+      if (looksEntry && flat.status === "pending") {
+        const clientId = flat.clientId || "varios";
+        const d = ensureDebtor(clientId, flat.clientName);
+        const amount = Number(flat.amount || 0);
+        d.totalDebt += amount;
+        d.invoices.push({
+          id: flat.correlative || flat.saleId || key,
+          amount,
+          date: flat.date ? new Date(flat.date).toLocaleDateString() : "",
+          type: flat.type,
+          products: Array.isArray(flat.items) ? flat.items.map((it: any) => it?.name).filter(Boolean) : [],
+        });
+      }
+    });
+
+    // Devuelve array ordenado por nombre
+    return Array.from(debtorMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "es", { sensitivity: "base" })
+    );
   } catch (error) {
-    console.error('Error loading debtors:', error);
+    console.error("Error loading debtors:", error);
     return [];
   }
 };
@@ -80,77 +125,71 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDebtor, setSelectedDebtor] = useState<any>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [paymentMethod, setPaymentMethod] = useState<string>('efectivo');
+  const [paymentMethod, setPaymentMethod] = useState<string>("efectivo");
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [selectedDebtorForWhatsApp, setSelectedDebtorForWhatsApp] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Cargar deudores al montar el componente
+  // Cargar deudores al montar
   useEffect(() => {
     const fetchDebtors = async () => {
       setLoading(true);
-      try {
-        const debtorsData = await loadDebtors();
-        setDebtors(debtorsData);
-      } catch (error) {
-        console.error('Error fetching debtors:', error);
-      } finally {
-        setLoading(false);
-      }
+      const data = await loadDebtors();
+      setDebtors(data);
+      setLoading(false);
     };
-
     fetchDebtors();
   }, []);
 
-  const filteredDebtors = debtors.filter(debtor =>
+  const filteredDebtors = debtors.filter((debtor) =>
     debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     debtor.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalDebt = debtors.reduce((sum, debtor) => sum + debtor.totalDebt, 0);
-  const urgentCount = debtors.filter(debtor => debtor.urgentCollection).length;
+  const totalDebt = debtors.reduce((sum, d) => sum + (d.totalDebt || 0), 0);
+  const urgentCount = debtors.filter((d) => d.urgentCollection).length;
 
-  const generateWhatsAppMessage = (debtor: any, type: 'simple' | 'detailed' | 'full') => {
-    let message = `Hola ${debtor.name.split(' ')[0]}, `;
-    
-    if (type === 'simple') {
+  const generateWhatsAppMessage = (debtor: any, type: "simple" | "detailed" | "full") => {
+    let message = `Hola ${debtor.name.split(" ")[0]}, `;
+
+    if (type === "simple") {
       message += `tienes una deuda pendiente de S/ ${debtor.totalDebt.toFixed(2)} en Maracuyá Villa Gratia. Por favor, acércate para realizar el pago.`;
-    } else if (type === 'detailed') {
+    } else if (type === "detailed") {
       message += `tienes las siguientes deudas pendientes en Maracuyá Villa Gratia:\n\n`;
-      debtor.invoices.forEach(invoice => {
-        message += `• ${invoice.id} - S/ ${invoice.amount.toFixed(2)} (${invoice.date})\n`;
+      debtor.invoices.forEach((inv: any) => {
+        message += `• ${inv.id} - S/ ${inv.amount.toFixed(2)} (${inv.date})\n`;
       });
       message += `\nTotal: S/ ${debtor.totalDebt.toFixed(2)}`;
     } else {
       message += `tienes las siguientes deudas pendientes en Maracuyá Villa Gratia:\n\n`;
-      debtor.invoices.forEach(invoice => {
-        message += `📄 ${invoice.id} - ${invoice.date}\n`;
-        message += `💰 S/ ${invoice.amount.toFixed(2)}\n`;
-        message += `🛒 ${invoice.products.join(', ')}\n\n`;
+      debtor.invoices.forEach((inv: any) => {
+        message += `📄 ${inv.id} - ${inv.date}\n`;
+        message += `💰 S/ ${inv.amount.toFixed(2)}\n`;
+        message += `🛒 ${inv.products.join(", ")}\n\n`;
       });
       message += `💳 Total adeudado: S/ ${debtor.totalDebt.toFixed(2)}`;
     }
-    
+
     return encodeURIComponent(message);
   };
 
-  const sendWhatsApp = (debtor: any, type: 'simple' | 'detailed' | 'full') => {
+  const sendWhatsApp = (debtor: any, type: "simple" | "detailed" | "full") => {
     const message = generateWhatsAppMessage(debtor, type);
     const url = `https://wa.me/51${debtor.phone}?text=${message}`;
-    window.open(url, '_blank');
+    window.open(url, "_blank");
   };
 
   const processPayment = () => {
     if (!selectedDebtor || paymentAmount <= 0) return;
 
-    // Process payment logic here
-    console.log('Processing payment:', {
+    // Aquí iría la lógica de registrar el pago en RTDB
+    console.log("Processing payment:", {
       debtor: selectedDebtor.id,
       amount: paymentAmount,
       method: paymentMethod,
-      invoices: selectedInvoices
+      invoices: selectedInvoices,
     });
 
     setShowPaymentDialog(false);
@@ -159,11 +198,11 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   };
 
   const toggleUrgentCollection = (debtorId: string) => {
-    setDebtors(prev => prev.map(debtor => 
-      debtor.id === debtorId 
-        ? { ...debtor, urgentCollection: !debtor.urgentCollection }
-        : debtor
-    ));
+    setDebtors((prev) =>
+      prev.map((d) =>
+        d.id === debtorId ? { ...d, urgentCollection: !d.urgentCollection } : d
+      )
+    );
   };
 
   return (
@@ -182,7 +221,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       </header>
 
       <div className="p-6">
-        {/* Summary Cards */}
+        {/* Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -190,9 +229,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               <DollarSign className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                S/ {totalDebt.toFixed(2)}
-              </div>
+              <div className="text-2xl font-bold text-primary">S/ {totalDebt.toFixed(2)}</div>
             </CardContent>
           </Card>
 
@@ -202,9 +239,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               <Users className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {debtors.length}
-              </div>
+              <div className="text-2xl font-bold">{debtors.length}</div>
             </CardContent>
           </Card>
 
@@ -214,9 +249,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               <AlertTriangle className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-destructive">
-                {urgentCount}
-              </div>
+              <div className="text-2xl font-bold text-destructive">{urgentCount}</div>
             </CardContent>
           </Card>
         </div>
@@ -234,7 +267,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           </div>
         </div>
 
-        {/* Debtors List */}
+        {/* Debtors list */}
         <div className="space-y-4">
           {filteredDebtors.map((debtor) => (
             <Card key={debtor.id} className="hover:shadow-medium transition-shadow">
@@ -252,11 +285,9 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                       </Badge>
                     )}
                   </div>
-                  
+
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-primary">
-                      S/ {debtor.totalDebt.toFixed(2)}
-                    </p>
+                    <p className="text-2xl font-bold text-primary">S/ {debtor.totalDebt.toFixed(2)}</p>
                     <p className="text-sm text-muted-foreground">
                       {debtor.invoices.length} factura(s)
                     </p>
@@ -264,10 +295,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {debtor.invoices.map((invoice) => (
-                    <Badge key={invoice.id} variant="outline" className="text-xs">
-                      {invoice.id} - S/ {invoice.amount.toFixed(2)}
-                      {invoice.type === 'VH' && <span className="ml-1 text-warning">(VH)</span>}
+                  {debtor.invoices.map((inv: any) => (
+                    <Badge key={inv.id} variant="outline" className="text-xs">
+                      {inv.id} - S/ {inv.amount.toFixed(2)}
+                      {inv.type === "VH" && <span className="ml-1 text-warning">(VH)</span>}
                     </Badge>
                   ))}
                 </div>
@@ -329,15 +360,19 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
         {loading ? (
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
             <p className="text-muted-foreground">Cargando deudores...</p>
           </div>
         ) : filteredDebtors.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No se encontraron deudores</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              No se encontraron deudores
+            </h3>
             <p className="text-muted-foreground">
-              {debtors.length === 0 ? "No hay ventas a crédito registradas" : "Intenta con otros términos de búsqueda"}
+              {debtors.length === 0
+                ? "No hay ventas a crédito registradas"
+                : "Intenta con otros términos de búsqueda"}
             </p>
           </div>
         ) : null}
@@ -349,22 +384,22 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           <DialogHeader>
             <DialogTitle>Registrar Pago - {selectedDebtor?.name}</DialogTitle>
           </DialogHeader>
-          
+
           {selectedDebtor && (
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Facturas pendientes:</p>
                 <div className="space-y-2">
-                  {selectedDebtor.invoices.map((invoice) => (
+                  {selectedDebtor.invoices.map((invoice: any) => (
                     <div key={invoice.id} className="flex items-center space-x-2">
                       <Checkbox
                         id={invoice.id}
                         checked={selectedInvoices.includes(invoice.id)}
                         onCheckedChange={(checked) => {
                           if (checked) {
-                            setSelectedInvoices(prev => [...prev, invoice.id]);
+                            setSelectedInvoices((prev) => [...prev, invoice.id]);
                           } else {
-                            setSelectedInvoices(prev => prev.filter(id => id !== invoice.id));
+                            setSelectedInvoices((prev) => prev.filter((id) => id !== invoice.id));
                           }
                         }}
                       />
@@ -415,7 +450,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* WhatsApp Helper Dialog */}
+      {/* WhatsApp Helper */}
       {selectedDebtorForWhatsApp && (
         <WhatsAppHelper
           debtor={selectedDebtorForWhatsApp}

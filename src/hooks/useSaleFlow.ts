@@ -33,15 +33,17 @@ export const useSaleFlow = (options: SaleFlowOptions = {}) => {
     async (saleData: any) => {
       if (!user) return;
 
+      if (isProcessing) return; // candado extra
       setIsProcessing(true);
       try {
         // 1) Correlativo atómico
         const correlative = await RTDBHelper.getNextCorrelative("sale");
 
         // 2) Construye objeto de venta (SIN id; lo pone pushData)
+        const nowIso = new Date().toISOString();
         const saleBase = {
           correlative,
-          date: new Date().toISOString(),
+          date: nowIso,
           cashier: user.id,
           client: saleData.selectedClient ?? null,
           items: saleData.cart,
@@ -53,7 +55,7 @@ export const useSaleFlow = (options: SaleFlowOptions = {}) => {
           status: "completed",
           paid: saleData.paymentMethod !== "credito" ? saleData.total : 0,
           createdBy: user.id,
-          createdAt: new Date().toISOString(),
+          createdAt: nowIso,
           origin: saleData.origin ?? "PV", // PV | VH
         };
 
@@ -72,10 +74,11 @@ export const useSaleFlow = (options: SaleFlowOptions = {}) => {
             status: "pending",
             type: "sale",
             origin: saleBase.origin,
-            items: saleData.cart, // Incluir items para mostrar productos en AR
+            items: saleData.cart, // Items visibles en AR
+            createdAt: nowIso,
           };
-          const arPath = `${RTDB_PATHS.accounts_receivable}/${saleData.selectedClient.id}/entries`;
-          await RTDBHelper.pushData(arPath, arEntry);
+          const arPath = `${RTDB_PATHS.accounts_receivable}/${saleData.selectedClient.id}/entries/${saleId}`;
+          await RTDBHelper.setData(arPath, arEntry);
         }
 
         // 5) Comanda de cocina automática (según config)
@@ -123,7 +126,7 @@ export const useSaleFlow = (options: SaleFlowOptions = {}) => {
         setIsProcessing(false);
       }
     },
-    [user, flowManager]
+    [user, flowManager, isProcessing]
   );
 
   const saveDraft = useCallback(async () => {

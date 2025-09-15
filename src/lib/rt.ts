@@ -1,3 +1,4 @@
+// src/lib/rt.ts
 import {
   ref,
   get,
@@ -185,6 +186,46 @@ export class RTDBHelper {
     const dayKey = new Date().toISOString().split("T")[0];
     const logPath = `${RTDB_PATHS.logs}/${dayKey}`;
     await this.pushData(logPath, logEntry);
+  }
+
+  /**
+   * Elimina una venta y, si es a crédito, borra también su entrada en Cuentas por Cobrar.
+   * Rutas afectadas (atómico con update multi-path):
+   *  - /sales/{saleId}
+   *  - /accounts_receivable/{clientId}/entries/{saleId}
+   *  - (limpieza defensiva) /accounts_receivable/{saleId}
+   */
+  static async deleteSaleCascade(saleId: string): Promise<void> {
+    const salePath = `${RTDB_PATHS.sales}/${saleId}`;
+    const sale = await this.getData<any>(salePath);
+
+    // Si no existe la venta, intentar limpiar igual posibles residuos
+    const updates: Record<string, any> = {};
+    updates[salePath] = null;
+
+    const clientId = sale?.client?.id || sale?.clientId;
+    const isCredit = sale?.paymentMethod === "credito";
+
+    if (clientId && isCredit) {
+      updates[`${RTDB_PATHS.accounts_receivable}/${clientId}/entries/${saleId}`] = null;
+    }
+
+    // Limpieza defensiva por si existiera el espejo plano antiguo
+    updates[`${RTDB_PATHS.accounts_receivable}/${saleId}`] = null;
+
+    await this.updateData(updates);
+
+    try {
+      await this.logAction(
+        sale?.createdBy || "system",
+        "sale_deleted",
+        { saleId, isCredit, clientId },
+        "sale",
+        saleId
+      );
+    } catch {
+      // no bloquear por error de log
+    }
   }
 }
 
