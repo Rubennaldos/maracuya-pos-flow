@@ -380,51 +380,82 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-card border-b border-border p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button variant="outline" onClick={onBack} type="button">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Volver
+      <header className="bg-card border-b border-border p-2 sm:p-4">
+        <div className="flex flex-col space-y-3 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <Button variant="outline" onClick={onBack} type="button" className="flex-shrink-0">
+              <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Volver</span>
+              <span className="sm:hidden">Atrás</span>
             </Button>
-            <h1 className="text-2xl font-bold text-foreground">Punto de Venta</h1>
+            <h1 className="text-lg sm:text-2xl font-bold text-foreground">Punto de Venta</h1>
           </div>
 
-          <div className="flex items-center space-x-2">
-            {/* Cliente seleccionado a la vista */}
-            <div className="hidden md:flex items-center px-3 py-1 rounded border text-sm text-muted-foreground">
+          <div className="flex flex-col space-y-2 lg:flex-row lg:items-center lg:space-y-0 lg:space-x-2">
+            {/* Cliente seleccionado */}
+            <div className="flex items-center px-2 py-1 rounded border text-xs sm:text-sm text-muted-foreground lg:hidden">
+              <User className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+              {selectedClient ? `Cliente: ${selectedClient.name}` : "Cliente: —"}
+            </div>
+            <div className="hidden lg:flex items-center px-3 py-1 rounded border text-sm text-muted-foreground">
               <User className="w-4 h-4 mr-1" />
               {selectedClient ? `Cliente: ${selectedClient.name}` : "Cliente: —"}
             </div>
 
-            <Button variant={saleType === "normal" ? "default" : "outline"} onClick={() => setSaleType("normal")} size="sm" type="button">Normal</Button>
-            <Button variant={saleType === "scheduled" ? "default" : "outline"} onClick={() => setSaleType("scheduled")} size="sm" type="button">
-              <Clock className="w-4 h-4 mr-1" /> Programada (F3)
-            </Button>
-            <Button variant={saleType === "lunch" ? "default" : "outline"} onClick={() => setSaleType("lunch")} size="sm" type="button">
-              <GraduationCap className="w-4 h-4 mr-1" /> Almuerzos (F4)
-            </Button>
+            <div className="flex flex-wrap gap-1 sm:gap-2">
+              <Button 
+                variant={saleType === "normal" ? "default" : "outline"} 
+                onClick={() => setSaleType("normal")} 
+                size="sm" 
+                type="button"
+                className="text-xs sm:text-sm flex-1 sm:flex-none"
+              >
+                Normal
+              </Button>
+              <Button 
+                variant={saleType === "scheduled" ? "default" : "outline"} 
+                onClick={() => setSaleType("scheduled")} 
+                size="sm" 
+                type="button"
+                className="text-xs sm:text-sm flex-1 sm:flex-none"
+              >
+                <Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> 
+                <span className="hidden sm:inline">Programada (F3)</span>
+                <span className="sm:hidden">Programada</span>
+              </Button>
+              <Button 
+                variant={saleType === "lunch" ? "default" : "outline"} 
+                onClick={() => setSaleType("lunch")} 
+                size="sm" 
+                type="button"
+                className="text-xs sm:text-sm flex-1 sm:flex-none"
+              >
+                <GraduationCap className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> 
+                <span className="hidden sm:inline">Almuerzos (F4)</span>
+                <span className="sm:hidden">Almuerzos</span>
+              </Button>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="flex h-[calc(100vh-80px)]">
+      <div className="flex flex-col lg:flex-row h-[calc(100vh-80px)]">
         {/* Productos */}
-        <div className="flex-1 p-4 overflow-y-auto">
-          <div className="mb-6">
+        <div className="flex-1 p-2 sm:p-4 overflow-y-auto">
+          <div className="mb-4 sm:mb-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
                 ref={searchInputRef}
-                placeholder="Buscar productos... (Ctrl+F)"
+                placeholder="Buscar productos..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 text-lg h-12"
+                className="pl-10 text-base sm:text-lg h-10 sm:h-12"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
             {filteredProducts.map((p: any) => (
               <Card
                 key={p.id}
@@ -433,22 +464,22 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
               >
                 <CardContent className="p-0">
                   <div className="relative">
-                    <img src={p.image} alt={p.name} className="w-full h-40 object-cover rounded-t-lg" />
+                    <img src={p.image} alt={p.name} className="w-full h-24 sm:h-32 md:h-40 object-cover rounded-t-lg" />
                     {p.isKitchen && (
-                      <Badge className="absolute top-2 right-2 bg-pos-kitchen text-foreground">
-                        <Utensils className="w-3 h-3 mr-1" /> Cocina
+                      <Badge className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-pos-kitchen text-foreground text-xs">
+                        <Utensils className="w-2 h-2 sm:w-3 sm:h-3 mr-1" /> Cocina
                       </Badge>
                     )}
                   </div>
 
-                  <div className="p-3">
-                    <h3 className="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
+                  <div className="p-2 sm:p-3">
+                    <h3 className="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors text-sm sm:text-base line-clamp-2">
                       {p.name}
                     </h3>
-                    <p className="text-xs text-muted-foreground mb-2">{p.category}</p>
+                    <p className="text-xs text-muted-foreground mb-1 sm:mb-2 hidden sm:block">{p.category}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-primary">S/ {(p.price || 0).toFixed(2)}</span>
-                      <Plus className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                      <span className="text-sm sm:text-lg font-bold text-primary">S/ {(p.price || 0).toFixed(2)}</span>
+                      <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
                   </div>
                 </CardContent>
@@ -458,62 +489,72 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
         </div>
 
         {/* Carrito */}
-        <div className="w-96 bg-pos-checkout border-l border-border flex flex-col">
-          <div className="p-4 border-b border-border">
+        <div className="w-full lg:w-96 bg-pos-checkout border-t lg:border-t-0 lg:border-l border-border flex flex-col max-h-96 lg:max-h-none">
+          <div className="p-2 sm:p-4 border-b border-border">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-pos-checkout-foreground flex items-center">
-                <ShoppingCart className="w-5 h-5 mr-2" /> Carrito ({cart.length})
+              <h2 className="text-lg sm:text-xl font-bold text-pos-checkout-foreground flex items-center">
+                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 mr-2" /> Carrito ({cart.length})
               </h2>
               {cart.length > 0 && (
                 <Button variant="ghost" size="sm" onClick={() => clearCart()} type="button">
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                 </Button>
               )}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-2 sm:space-y-3">
             {cart.length === 0 ? (
-              <div className="text-center py-8">
-                <ShoppingCart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Carrito vacío</p>
-                <p className="text-sm text-muted-foreground">Seleccione productos para agregar</p>
+              <div className="text-center py-4 sm:py-8">
+                <ShoppingCart className="w-12 h-12 sm:w-16 sm:h-16 text-muted-foreground mx-auto mb-2 sm:mb-4" />
+                <p className="text-muted-foreground text-sm sm:text-base">Tu carrito está vacío</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">Agrega productos para comenzar</p>
               </div>
             ) : (
               cart.map((item) => (
-                <Card key={item.id} className="border border-border/50">
-                  <CardContent className="p-3">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <h4 className="font-medium text-foreground">{item.name}</h4>
-                        {item.isKitchen && (
-                          <Badge variant="secondary" className="mt-1">
-                            <Utensils className="w-3 h-3 mr-1" /> Cocina
-                          </Badge>
-                        )}
+                <Card key={item.id} className="bg-background border border-border">
+                  <CardContent className="p-2 sm:p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-1 sm:space-x-2 mb-1">
+                          <h4 className="font-medium text-foreground text-sm sm:text-base truncate">{item.name}</h4>
+                          {item.isKitchen && <Badge variant="secondary" className="text-xs flex-shrink-0">Cocina</Badge>}
+                        </div>
+                        <p className="text-xs sm:text-sm text-muted-foreground">S/ {item.price.toFixed(2)} c/u</p>
+                        <p className="text-xs sm:text-sm font-semibold text-primary">Total: S/ {(item.price * item.quantity).toFixed(2)}</p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeFromCart(item.id)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        type="button"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity - 1)} type="button">
-                          <Minus className="w-3 h-3" />
-                        </Button>
-                        <span className="w-8 text-center font-medium">{item.quantity}</span>
-                        <Button variant="outline" size="sm" onClick={() => updateQuantity(item.id, item.quantity + 1)} type="button">
-                          <Plus className="w-3 h-3" />
+                      <div className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-1 flex-shrink-0">
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            type="button"
+                            className="h-6 w-6 p-0 sm:h-8 sm:w-8"
+                          >
+                            <Minus className="w-2 h-2 sm:w-3 sm:h-3" />
+                          </Button>
+                          <span className="w-6 sm:w-8 text-center font-medium text-sm">{item.quantity}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            type="button"
+                            className="h-6 w-6 p-0 sm:h-8 sm:w-8"
+                          >
+                            <Plus className="w-2 h-2 sm:w-3 sm:h-3" />
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFromCart(item.id)}
+                          type="button"
+                          className="h-6 w-6 p-0 sm:h-8 sm:w-8"
+                        >
+                          <X className="w-2 h-2 sm:w-3 sm:h-3" />
                         </Button>
                       </div>
-                      <span className="font-bold text-primary">S/ {(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                   </CardContent>
                 </Card>
