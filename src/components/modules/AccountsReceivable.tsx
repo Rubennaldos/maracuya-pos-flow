@@ -285,81 +285,102 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
   // Exportar a PDF
   const exportToPDF = (data: any[], clientName: string) => {
-    const doc = new jsPDF();
-    
-    // Header company info
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bold");
-    doc.text("MARACUYÁ VILLA GRATIA", 105, 20, { align: "center" });
-    
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Detalle de Ventas - ${clientName}`, 105, 35, { align: "center" });
-    
-    doc.setFontSize(10);
-    doc.text(`Fecha de emisión: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}`, 105, 45, { align: "center" });
-    
-    // Date range if filters are applied
-    if (dateFrom || dateTo) {
-      const fromDate = dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Inicio";
-      const toDate = dateTo ? format(dateTo, "dd/MM/yyyy") : "Actual";
-      doc.text(`Período: ${fromDate} - ${toDate}`, 105, 55, { align: "center" });
-    }
-
-    // Prepare table data
-    const tableData = data.map(item => [
-      item.correlative,
-      format(new Date(item.date), "dd/MM/yyyy"),
-      item.seller,
-      item.productName,
-      item.quantity.toString(),
-      `S/ ${item.price.toFixed(2)}`,
-      `S/ ${item.total.toFixed(2)}`
-    ]);
-
-    // Calculate totals
-    const totalAmount = data.reduce((sum, item) => sum + item.total, 0);
-    const totalItems = data.reduce((sum, item) => sum + item.quantity, 0);
-
-    // Add table
-    (doc as any).autoTable({
-      head: [["Correlativo", "Fecha", "Vendedor", "Producto", "Cantidad", "Precio", "Total"]],
-      body: tableData,
-      startY: dateFrom || dateTo ? 65 : 55,
-      styles: { 
-        fontSize: 9,
-        cellPadding: 3,
-        halign: 'center'
-      },
-      headStyles: { 
-        fillColor: [34, 197, 94],
-        textColor: 255,
-        fontStyle: 'bold'
-      },
-      columnStyles: {
-        0: { halign: 'center' },
-        1: { halign: 'center' },
-        2: { halign: 'left' },
-        3: { halign: 'left' },
-        4: { halign: 'center' },
-        5: { halign: 'right' },
-        6: { halign: 'right' }
-      },
-      foot: [["", "", "", "TOTALES:", totalItems.toString(), "", `S/ ${totalAmount.toFixed(2)}`]],
-      footStyles: {
-        fillColor: [243, 244, 246],
-        textColor: 0,
-        fontStyle: 'bold'
+    try {
+      console.log('Starting PDF export for:', clientName, 'with', data.length, 'records');
+      
+      const doc = new jsPDF();
+      
+      // Header company info
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text("MARACUYÁ VILLA GRATIA", 105, 20, { align: "center" });
+      
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Detalle de Ventas - ${clientName}`, 105, 35, { align: "center" });
+      
+      doc.setFontSize(10);
+      doc.text(`Fecha de emisión: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}`, 105, 45, { align: "center" });
+      
+      // Date range if filters are applied
+      let startY = 55;
+      if (dateFrom || dateTo) {
+        const fromDate = dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Inicio";
+        const toDate = dateTo ? format(dateTo, "dd/MM/yyyy") : "Actual";
+        doc.text(`Período: ${fromDate} - ${toDate}`, 105, 55, { align: "center" });
+        startY = 65;
       }
-    });
 
-    // Footer
-    const finalY = (doc as any).lastAutoTable.finalY + 20;
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "italic");
-    doc.text("Este documento fue generado automáticamente por el sistema de Maracuyá Villa Gratia", 105, finalY, { align: "center" });
+      // Prepare table data
+      const tableData = data.map(item => [
+        item.correlative || '',
+        format(new Date(item.date), "dd/MM/yyyy"),
+        item.seller || '',
+        item.productName || '',
+        item.quantity.toString(),
+        `S/ ${item.price.toFixed(2)}`,
+        `S/ ${item.total.toFixed(2)}`
+      ]);
 
-    doc.save(`detalle_ventas_${clientName.replace(/\s+/g, "_")}.pdf`);
+      console.log('Table data prepared:', tableData.length, 'rows');
+
+      // Calculate totals
+      const totalAmount = data.reduce((sum, item) => sum + (item.total || 0), 0);
+      const totalItems = data.reduce((sum, item) => sum + (item.quantity || 0), 0);
+
+      // Add table using autoTable
+      const autoTable = (doc as any).autoTable;
+      if (typeof autoTable === 'function') {
+        autoTable({
+          head: [["Correlativo", "Fecha", "Vendedor", "Producto", "Cantidad", "Precio", "Total"]],
+          body: tableData,
+          startY: startY,
+          styles: { 
+            fontSize: 9,
+            cellPadding: 3,
+            halign: 'center'
+          },
+          headStyles: { 
+            fillColor: [34, 197, 94],
+            textColor: 255,
+            fontStyle: 'bold'
+          },
+          columnStyles: {
+            0: { halign: 'center' },
+            1: { halign: 'center' },
+            2: { halign: 'left' },
+            3: { halign: 'left' },
+            4: { halign: 'center' },
+            5: { halign: 'right' },
+            6: { halign: 'right' }
+          },
+          foot: [["", "", "", "TOTALES:", totalItems.toString(), "", `S/ ${totalAmount.toFixed(2)}`]],
+          footStyles: {
+            fillColor: [243, 244, 246],
+            textColor: 0,
+            fontStyle: 'bold'
+          }
+        });
+
+        // Footer
+        const finalY = (doc as any).lastAutoTable?.finalY + 20 || 200;
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "italic");
+        doc.text("Este documento fue generado automáticamente por el sistema de Maracuyá Villa Gratia", 105, finalY, { align: "center" });
+        
+        console.log('PDF generated successfully, saving...');
+        doc.save(`detalle_ventas_${clientName.replace(/\s+/g, "_")}.pdf`);
+        console.log('PDF saved successfully');
+      } else {
+        console.error('autoTable function not available');
+        // Fallback: simple PDF without table
+        doc.text("Error: No se pudo generar la tabla. Funcionalidad limitada.", 20, startY + 20);
+        doc.save(`detalle_ventas_${clientName.replace(/\s+/g, "_")}_simple.pdf`);
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Error al generar el PDF. Verifique la consola para más detalles.');
+    }
   };
 
   const processPayment = async () => {
@@ -780,7 +801,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => exportToExcel(filteredSalesDetail, `detalle_ventas_${selectedDebtorForDetail?.name}`)}
+                  onClick={() => {
+                    console.log('Excel button clicked, data length:', filteredSalesDetail.length);
+                    exportToExcel(filteredSalesDetail, `detalle_ventas_${selectedDebtorForDetail?.name}`);
+                  }}
                   disabled={filteredSalesDetail.length === 0}
                 >
                   <Download className="w-4 h-4 mr-1" />
@@ -789,7 +813,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => exportToPDF(filteredSalesDetail, selectedDebtorForDetail?.name || "")}
+                  onClick={() => {
+                    console.log('PDF button clicked, data length:', filteredSalesDetail.length);
+                    exportToPDF(filteredSalesDetail, selectedDebtorForDetail?.name || "Cliente");
+                  }}
                   disabled={filteredSalesDetail.length === 0}
                 >
                   <Download className="w-4 h-4 mr-1" />
