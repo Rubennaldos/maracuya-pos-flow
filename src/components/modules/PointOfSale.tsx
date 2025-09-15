@@ -201,7 +201,7 @@ const [clientResults, setClientResults] = useState<ClientRow[]>([
     }
 
     // Solo NO pedir autorización si EXPLÍCITAMENTE tiene cuenta de crédito activa
-    const hasActiveCredit = fullClientData.accountEnabled === true && fullClientData.active === true;
+    const hasActiveCredit = fullClientData.hasCreditAccount === true && fullClientData.isActive === true;
 
     if (!hasActiveCredit) {
       setCurrentClientForAuth(fullClientData);
