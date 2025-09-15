@@ -159,29 +159,10 @@ export const SalesList = ({ onBack }: SalesListProps) => {
 
   const deleteSale = async (saleId: string) => {
     try {
-      // Get sale data before moving to deleted_sales
-      const saleData = await RTDBHelper.getData(`${RTDB_PATHS.sales}/${saleId}`);
-      if (!saleData) {
-        console.error("Sale not found");
-        return;
-      }
-
-      // Move to deleted_sales with metadata
-      const deletedSaleData = {
-        ...saleData,
-        type: "normal",
-        deletedAt: new Date().toISOString(),
-        deletedBy: "sistema", // You could get current user here
-      };
-
-      await RTDBHelper.setData(`${RTDB_PATHS.deleted_sales}/${saleId}`, deletedSaleData);
-      
-      // Remove from original location
-      await RTDBHelper.removeData(`${RTDB_PATHS.sales}/${saleId}`);
-      
+await RTDBHelper.deleteSaleCascade(saleId, "system");
       setSales((prev) => prev.filter((s) => s.id !== saleId));
     } catch (error) {
-      console.error("Error moving sale to deleted:", error);
+      console.error("Error deleting sale:", error);
     }
   };
 
@@ -410,17 +391,23 @@ export const SalesList = ({ onBack }: SalesListProps) => {
           {filteredSales.map((sale) => (
             <Card key={sale.id} className="hover:shadow-medium transition-shadow overflow-visible">
               <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <h3 className="font-semibold text-lg">{sale.correlative}</h3>
-                      <p className="text-sm text-muted-foreground flex items-center">
-                        <CalendarIcon className="w-4 h-4 mr-1" />
-                        {sale.date} - {sale.time}
-                      </p>
+                {/* ENCABEZADO NUEVO: CLIENTE grande, COMPROBANTE pequeño + fecha */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-semibold text-foreground leading-tight">
+                      {sale.client}
+                    </h3>
+                    <p className="text-xs text-muted-foreground flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-muted/60">{sale.correlative}</span>
+                      <span className="inline-flex items-center">
+                        <CalendarIcon className="w-3.5 h-3.5 mr-1" />
+                        {sale.date} · {sale.time}
+                      </span>
+                    </p>
+                    <div className="flex gap-2">
+                      {getTypeBadge(sale.type)}
+                      {getStatusBadge(sale.status)}
                     </div>
-                    {getTypeBadge(sale.type)}
-                    {getStatusBadge(sale.status)}
                   </div>
 
                   <div className="flex items-center space-x-2">
@@ -432,7 +419,12 @@ export const SalesList = ({ onBack }: SalesListProps) => {
                       <Edit className="w-4 h-4 mr-1" />
                       Editar
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleReprintTicket(sale)} disabled={isPrinting}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleReprintTicket(sale)}
+                      disabled={isPrinting}
+                    >
                       <Printer className="w-4 h-4 mr-1" />
                       {isPrinting ? "Imprimiendo..." : "Reimprimir"}
                     </Button>
@@ -454,7 +446,8 @@ export const SalesList = ({ onBack }: SalesListProps) => {
                             ¿Eliminar venta?
                           </AlertDialogTitle>
                           <AlertDialogDescription>
-                            Esta acción no se puede deshacer. La venta {sale.correlative} será eliminada permanentemente.
+                            Esta acción no se puede deshacer. La venta {sale.correlative} será
+                            eliminada permanentemente.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

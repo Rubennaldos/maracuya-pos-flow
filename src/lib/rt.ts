@@ -40,9 +40,8 @@ export class RTDBHelper {
     try {
       const newRef = push(ref(rtdb, path));
       const key = newRef.key!;
-      const payload = (data && typeof data === "object" && !("id" in data))
-        ? { ...data, id: key }
-        : data;
+      const payload =
+        data && typeof data === "object" && !("id" in data) ? { ...data, id: key } : data;
       await set(newRef, payload as any);
       return key;
     } catch (error) {
@@ -51,7 +50,7 @@ export class RTDBHelper {
     }
   }
 
-  // Update múltiples rutas
+  // Update múltiples rutas (fan-out)
   static async updateData(updates: Record<string, any>): Promise<void> {
     try {
       await update(ref(rtdb), updates);
@@ -61,7 +60,7 @@ export class RTDBHelper {
     }
   }
 
-  // Remove
+  // Remove (single path)
   static async removeData(path: string): Promise<void> {
     try {
       await remove(ref(rtdb, path));
@@ -110,7 +109,7 @@ export class RTDBHelper {
     const config = await this.getData(RTDB_PATHS.config);
     if (!config) {
       const defaultConfig = {
-        printingMode: "kiosk",
+        printingMode: "kiosk", // 'kiosk' | 'raw'
         printerName: "",
         autoPrintKitchen: true,
         ticketHeader:
@@ -162,7 +161,7 @@ export class RTDBHelper {
     }
   }
 
-  // Log de auditoría
+  // Log de auditoría (best effort)
   static async logAction(
     userId: string,
     action: string,
@@ -170,25 +169,29 @@ export class RTDBHelper {
     entityType?: string,
     entityId?: string
   ): Promise<void> {
-    const logEntry = {
-      userId,
-      action,
-      details,
-      entityType,
-      entityId,
-      timestamp: new Date().toISOString(),
-      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
-    };
-    const dayKey = new Date().toISOString().split("T")[0];
-    const logPath = `${RTDB_PATHS.logs}/${dayKey}`;
-    await this.pushData(logPath, logEntry);
+    try {
+      const logEntry = {
+        userId,
+        action,
+        details,
+        entityType,
+        entityId,
+        timestamp: new Date().toISOString(),
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      };
+      const dayKey = new Date().toISOString().split("T")[0];
+      const logPath = `${RTDB_PATHS.logs}/${dayKey}`;
+      await this.pushData(logPath, logEntry);
+    } catch {
+      // no bloquear nada por el log
+    }
   }
 
   /**
-   * Mueve una venta a papelera en lugar de eliminarla permanentemente.
-   * - Mueve /sales/{saleId} a /deleted_sales/{saleId}
-   * - Borra cualquier entrada en /accounts_receivable/{clientId}/entries/{saleId|autoId} que apunte a ese saleId
-   * - Limpia /accounts_receivable/{saleId} (legado)
+   * 🔥 Eliminación en cascada (a la papelera) de una venta:
+   *  - Mueve /sales/{saleId} -> /deleted_sales/{saleId} con metadatos
+   *  - Borra entradas en /accounts_receivable/{clientId}/entries/{saleId|autoId} que apunten a esa venta
+   *  - Borra espejo plano legado /accounts_receivable/{saleId}
    */
   static async deleteSaleCascade(saleId: string, deletedBy: string = "system"): Promise<void> {
     const salePath = `${RTDB_PATHS.sales}/${saleId}`;
@@ -200,24 +203,23 @@ export class RTDBHelper {
     }
 
     const updates: Record<string, any> = {};
-    
-    // mover venta a papelera
+
+    // 1) Mover a papelera con metadatos
     const deletedSaleData = {
       ...sale,
-      type: "normal",
       deletedAt: new Date().toISOString(),
-      deletedBy: deletedBy,
+      deletedBy,
     };
     updates[`${RTDB_PATHS.deleted_sales}/${saleId}`] = deletedSaleData;
-    
-    // borrar venta original
+
+    // 2) Borrar venta original
     updates[salePath] = null;
-    // limpiar espejo plano legado
+
+    // 3) Borrar espejo plano legado (si existiera)
     updates[`${RTDB_PATHS.accounts_receivable}/${saleId}`] = null;
 
-    // intentar con clientId directo
-    let clientId: string | undefined =
-      sale?.client?.id || sale?.clientId || undefined;
+    // 4) Borrar entradas por cliente en /accounts_receivable/{clientId}/entries/*
+    let clientId: string | undefined = sale?.client?.id || sale?.clientId || undefined;
 
     const removeEntriesForClient = async (cid: string) => {
       const entriesPath = `${RTDB_PATHS.accounts_receivable}/${cid}/entries`;
@@ -225,7 +227,8 @@ export class RTDBHelper {
       if (!entries) return;
 
       for (const [entryKey, entryVal] of Object.entries(entries)) {
-        if (entryKey === saleId || entryVal?.saleId === saleId) {
+        // borrar si la key es el saleId o si el payload referencia saleId
+        if (entryKey === saleId || (entryVal as any)?.saleId === saleId) {
           updates[`${entriesPath}/${entryKey}`] = null;
         }
       }
@@ -234,39 +237,38 @@ export class RTDBHelper {
     if (clientId) {
       await removeEntriesForClient(clientId);
     } else {
-      // fallback: escanear todas las cuentas por cobrar
+      // Fallback: escanear todo AR para encontrar referencias (seguro y simple)
       const arRoot = await this.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
       if (arRoot) {
         for (const [cid, node] of Object.entries(arRoot)) {
-          if (node?.entries) {
-            for (const [entryKey, entryVal] of Object.entries<any>(node.entries)) {
-              if (entryKey === saleId || entryVal?.saleId === saleId) {
-                updates[`${RTDB_PATHS.accounts_receivable}/${cid}/entries/${entryKey}`] = null;
-                clientId = cid;
-              }
+          const entries = (node as any)?.entries;
+          if (!entries) continue;
+          for (const [entryKey, entryVal] of Object.entries<any>(entries)) {
+            if (entryKey === saleId || entryVal?.saleId === saleId) {
+              updates[`${RTDB_PATHS.accounts_receivable}/${cid}/entries/${entryKey}`] = null;
+              clientId = cid;
             }
           }
         }
       }
     }
 
+    // Fan-out single update
     await this.updateData(updates);
 
-    try {
-      await this.logAction(
-        deletedBy,
-        "sale_moved_to_trash",
-        { saleId, clientId: clientId ?? null },
-        "sale",
-        saleId
-      );
-    } catch {
-      /* no bloquear por log */
-    }
+    // Log best-effort
+    await this.logAction(
+      deletedBy,
+      "sale_moved_to_trash",
+      { saleId, clientId: clientId ?? null },
+      "sale",
+      saleId
+    );
   }
 
   /**
-   * Mueve una venta histórica a papelera.
+   * 🗂 Si usas aún /historical_sales, también puedes moverlas a papelera.
+   * (Ojo: tus ventas históricas actuales se guardan en /sales con type:"historical")
    */
   static async deleteHistoricalSale(saleId: string, deletedBy: string = "system"): Promise<void> {
     const salePath = `${RTDB_PATHS.historical_sales}/${saleId}`;
@@ -278,32 +280,28 @@ export class RTDBHelper {
     }
 
     const updates: Record<string, any> = {};
-    
+
     // mover venta histórica a papelera
     const deletedSaleData = {
       ...sale,
       type: "historical",
       deletedAt: new Date().toISOString(),
-      deletedBy: deletedBy,
+      deletedBy,
     };
     updates[`${RTDB_PATHS.deleted_sales}/${saleId}`] = deletedSaleData;
-    
+
     // borrar venta histórica original
     updates[salePath] = null;
 
     await this.updateData(updates);
 
-    try {
-      await this.logAction(
-        deletedBy,
-        "historical_sale_moved_to_trash",
-        { saleId },
-        "historical_sale",
-        saleId
-      );
-    } catch {
-      /* no bloquear por log */
-    }
+    await this.logAction(
+      deletedBy,
+      "historical_sale_moved_to_trash",
+      { saleId },
+      "historical_sale",
+      saleId
+    );
   }
 }
 
