@@ -147,6 +147,8 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [selectedDebtorForWhatsApp, setSelectedDebtorForWhatsApp] = useState<any>(null);
   const [selectedDebtorForDetail, setSelectedDebtorForDetail] = useState<any>(null);
   const [salesDetailData, setSalesDetailData] = useState<any[]>([]);
+  const [filteredSalesDetail, setFilteredSalesDetail] = useState<any[]>([]);
+  const [salesSearchTerm, setSalesSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState<Date>();
   const [dateTo, setDateTo] = useState<Date>();
   const [loading, setLoading] = useState(true);
@@ -162,6 +164,32 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     };
     fetchDebtors();
   }, []);
+
+  // Filtrar datos de ventas cuando cambie el término de búsqueda o las fechas
+  useEffect(() => {
+    let filtered = salesDetailData;
+
+    // Filtrar por término de búsqueda
+    if (salesSearchTerm) {
+      filtered = filtered.filter(item =>
+        item.correlative.toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
+        item.productName.toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
+        item.seller.toLowerCase().includes(salesSearchTerm.toLowerCase())
+      );
+    }
+
+    // Filtrar por rango de fechas
+    if (dateFrom || dateTo) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.date);
+        if (dateFrom && itemDate < dateFrom) return false;
+        if (dateTo && itemDate > dateTo) return false;
+        return true;
+      });
+    }
+
+    setFilteredSalesDetail(filtered);
+  }, [salesDetailData, salesSearchTerm, dateFrom, dateTo]);
 
   const filteredDebtors = debtors.filter((debtor) =>
     debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -239,7 +267,17 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
   // Exportar a Excel
   const exportToExcel = (data: any[], filename: string) => {
-    const ws = XLSX.utils.json_to_sheet(data);
+    const exportData = data.map(item => ({
+      'Correlativo': item.correlative,
+      'Fecha': format(new Date(item.date), "dd/MM/yyyy"),
+      'Vendedor': item.seller,
+      'Producto': item.productName,
+      'Cantidad': item.quantity,
+      'Precio': `S/ ${item.price.toFixed(2)}`,
+      'Total': `S/ ${item.total.toFixed(2)}`
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Detalle de Ventas");
     XLSX.writeFile(wb, `${filename}.xlsx`);
@@ -249,12 +287,24 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const exportToPDF = (data: any[], clientName: string) => {
     const doc = new jsPDF();
     
-    // Header
-    doc.setFontSize(16);
+    // Header company info
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
     doc.text("MARACUYÁ VILLA GRATIA", 105, 20, { align: "center" });
-    doc.setFontSize(12);
-    doc.text(`Detalle de Ventas - ${clientName}`, 105, 30, { align: "center" });
-    doc.text(`Fecha: ${format(new Date(), "dd/MM/yyyy", { locale: es })}`, 105, 40, { align: "center" });
+    
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Detalle de Ventas - ${clientName}`, 105, 35, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.text(`Fecha de emisión: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}`, 105, 45, { align: "center" });
+    
+    // Date range if filters are applied
+    if (dateFrom || dateTo) {
+      const fromDate = dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Inicio";
+      const toDate = dateTo ? format(dateTo, "dd/MM/yyyy") : "Actual";
+      doc.text(`Período: ${fromDate} - ${toDate}`, 105, 55, { align: "center" });
+    }
 
     // Prepare table data
     const tableData = data.map(item => [
@@ -267,14 +317,47 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       `S/ ${item.total.toFixed(2)}`
     ]);
 
+    // Calculate totals
+    const totalAmount = data.reduce((sum, item) => sum + item.total, 0);
+    const totalItems = data.reduce((sum, item) => sum + item.quantity, 0);
+
     // Add table
     (doc as any).autoTable({
       head: [["Correlativo", "Fecha", "Vendedor", "Producto", "Cantidad", "Precio", "Total"]],
       body: tableData,
-      startY: 50,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [52, 168, 83] }
+      startY: dateFrom || dateTo ? 65 : 55,
+      styles: { 
+        fontSize: 9,
+        cellPadding: 3,
+        halign: 'center'
+      },
+      headStyles: { 
+        fillColor: [34, 197, 94],
+        textColor: 255,
+        fontStyle: 'bold'
+      },
+      columnStyles: {
+        0: { halign: 'center' },
+        1: { halign: 'center' },
+        2: { halign: 'left' },
+        3: { halign: 'left' },
+        4: { halign: 'center' },
+        5: { halign: 'right' },
+        6: { halign: 'right' }
+      },
+      foot: [["", "", "", "TOTALES:", totalItems.toString(), "", `S/ ${totalAmount.toFixed(2)}`]],
+      footStyles: {
+        fillColor: [243, 244, 246],
+        textColor: 0,
+        fontStyle: 'bold'
+      }
     });
+
+    // Footer
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.text("Este documento fue generado automáticamente por el sistema de Maracuyá Villa Gratia", 105, finalY, { align: "center" });
 
     doc.save(`detalle_ventas_${clientName.replace(/\s+/g, "_")}.pdf`);
   };
@@ -479,6 +562,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                           setSelectedDebtorForDetail(debtor);
                           const salesData = await loadSalesDetail(debtor.id);
                           setSalesDetailData(salesData);
+                          setFilteredSalesDetail(salesData);
+                          setSalesSearchTerm("");
+                          setDateFrom(undefined);
+                          setDateTo(undefined);
                           setShowSalesDetailDialog(true);
                         }}
                       >
@@ -693,7 +780,8 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => exportToExcel(salesDetailData, `detalle_ventas_${selectedDebtorForDetail?.name}`)}
+                  onClick={() => exportToExcel(filteredSalesDetail, `detalle_ventas_${selectedDebtorForDetail?.name}`)}
+                  disabled={filteredSalesDetail.length === 0}
                 >
                   <Download className="w-4 h-4 mr-1" />
                   Excel
@@ -701,7 +789,8 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => exportToPDF(salesDetailData, selectedDebtorForDetail?.name || "")}
+                  onClick={() => exportToPDF(filteredSalesDetail, selectedDebtorForDetail?.name || "")}
+                  disabled={filteredSalesDetail.length === 0}
                 >
                   <Download className="w-4 h-4 mr-1" />
                   PDF
@@ -711,6 +800,17 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Search bar */}
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Buscar por correlativo, producto o vendedor..."
+                value={salesSearchTerm}
+                onChange={(e) => setSalesSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
             {/* Date filters */}
             <div className="flex gap-4">
               <div>
@@ -769,40 +869,78 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
             </div>
 
             {/* Sales table */}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Correlativo</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Vendedor</TableHead>
-                  <TableHead>Producto</TableHead>
-                  <TableHead>Cantidad</TableHead>
-                  <TableHead>Precio</TableHead>
-                  <TableHead>Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {salesDetailData
-                  .filter(item => {
-                    const itemDate = new Date(item.date);
-                    if (dateFrom && itemDate < dateFrom) return false;
-                    if (dateTo && itemDate > dateTo) return false;
-                    return true;
-                  })
-                  .map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{item.correlative}</TableCell>
-                      <TableCell>{format(new Date(item.date), "dd/MM/yyyy")}</TableCell>
-                      <TableCell>{item.seller}</TableCell>
-                      <TableCell>{item.productName}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>S/ {item.price.toFixed(2)}</TableCell>
-                      <TableCell>S/ {item.total.toFixed(2)}</TableCell>
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Correlativo</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Vendedor</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Cantidad</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead>Total</TableHead>
                     </TableRow>
-                  ))
-                }
-              </TableBody>
-            </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredSalesDetail.length > 0 ? (
+                      filteredSalesDetail.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{item.correlative}</TableCell>
+                          <TableCell>{format(new Date(item.date), "dd/MM/yyyy")}</TableCell>
+                          <TableCell>{item.seller}</TableCell>
+                          <TableCell>{item.productName}</TableCell>
+                          <TableCell className="text-center">{item.quantity}</TableCell>
+                          <TableCell className="text-right">S/ {item.price.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-medium">S/ {item.total.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8">
+                          <div className="flex flex-col items-center space-y-2">
+                            <Search className="w-8 h-8 text-muted-foreground" />
+                            <p className="text-muted-foreground">
+                              {salesDetailData.length === 0 
+                                ? "No se encontraron ventas para este cliente" 
+                                : "No se encontraron resultados con los filtros aplicados"
+                              }
+                            </p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Summary */}
+            {filteredSalesDetail.length > 0 && (
+              <Card>
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total de Registros</p>
+                      <p className="text-lg font-bold">{filteredSalesDetail.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Cantidad Total</p>
+                      <p className="text-lg font-bold">
+                        {filteredSalesDetail.reduce((sum, item) => sum + item.quantity, 0)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Monto Total</p>
+                      <p className="text-lg font-bold text-primary">
+                        S/ {filteredSalesDetail.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </DialogContent>
       </Dialog>
