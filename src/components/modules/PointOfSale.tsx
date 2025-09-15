@@ -124,6 +124,10 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
     "efectivo" | "transferencia" | "credito" | "yape" | "plin" | null
   >(null);
 
+  // Navegación por teclado en el modal de clientes
+  const [clientIndex, setClientIndex] = useState(0);
+  const clientButtonsRef = useRef<HTMLButtonElement[]>([]);
+
   // Estado para autorización parental
   const [showParentalAuth, setShowParentalAuth] = useState(false);
   const [currentClientForAuth, setCurrentClientForAuth] = useState<Client | null>(null);
@@ -216,6 +220,41 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       alive = false;
     };
   }, [clientQuery]);
+
+  // Sincroniza índice y selección (cuando cambia la lista o se abre el modal)
+  useEffect(() => {
+    if (step !== "cliente") return;
+    if (clientResults.length === 0) {
+      setClientIndex(0);
+      setSelectedClient(null);
+      return;
+    }
+    // Si hay un seleccionado, sitúa el índice en ese elemento.
+    const idx = selectedClient
+      ? clientResults.findIndex((c) => c.id === selectedClient.id)
+      : -1;
+
+    const nextIndex = idx >= 0 ? idx : 0;
+    setClientIndex(nextIndex);
+    if (!selectedClient) {
+      setSelectedClient(clientResults[nextIndex]);
+    }
+    // scroll a la vista
+    const btn = clientButtonsRef.current[nextIndex];
+    if (btn) btn.scrollIntoView({ block: "nearest" });
+  }, [clientResults, step]); // eslint-disable-line
+
+  // Si cambia el índice, asegura el scroll y la selección visible
+  useEffect(() => {
+    if (step !== "cliente") return;
+    if (clientResults.length === 0) return;
+    const safeIndex = Math.max(0, Math.min(clientResults.length - 1, clientIndex));
+    const curr = clientResults[safeIndex];
+    if (!curr) return;
+    setSelectedClient(curr);
+    const btn = clientButtonsRef.current[safeIndex];
+    if (btn) btn.scrollIntoView({ block: "nearest" });
+  }, [clientIndex, step]); // eslint-disable-line
 
   /* ---------------- Autorización de crédito ---------------- */
   const loadFullClientData = async (clientId: string): Promise<Client | null> => {
@@ -651,19 +690,49 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       {/* --------- MODALES --------- */}
       <Modal open={step === "cliente"} onClose={() => setStep("productos")} title="Seleccionar Cliente">
         <div className="space-y-3">
+          {selectedClient && (
+            <div className="text-sm text-muted-foreground -mb-1">
+              Seleccionado: <span className="font-medium text-foreground">{selectedClient.name}</span>
+            </div>
+          )}
           <Input
             autoFocus
             placeholder="Buscar cliente…"
             value={clientQuery}
             onChange={(e) => setClientQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (clientResults.length === 0) return;
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setClientIndex((i) => Math.min(i + 1, clientResults.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setClientIndex((i) => Math.max(i - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                const sel = clientResults[clientIndex];
+                if (sel) setSelectedClient(sel);
+                // avanza al próximo paso
+                goNext();
+              }
+            }}
             className="h-14 text-lg md:text-lg"
           />
           <div className="max-h-80 overflow-y-auto border rounded-md">
-            {clientResults.map((c) => (
+            {clientResults.map((c, i) => (
               <button
                 key={c.id}
-                className={`w-full text-left px-3 py-2 hover:bg-muted ${selectedClient?.id === c.id ? "bg-muted" : ""}`}
-                onClick={() => setSelectedClient(c)}
+                ref={(el) => {
+                  clientButtonsRef.current[i] = el as HTMLButtonElement;
+                }}
+                className={[
+                  "w-full text-left px-3 py-2",
+                  i === clientIndex ? "bg-muted" : "hover:bg-muted",
+                ].join(" ")}
+                onClick={() => {
+                  setClientIndex(i);
+                  setSelectedClient(c);
+                }}
                 title={c.name}
                 type="button"
               >
@@ -672,10 +741,27 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
             ))}
           </div>
           <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setSelectedClient({ id: "varios", name: "Cliente Varios" })} type="button">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSelectedClient({ id: "varios", name: "Cliente Varios" });
+                setClientIndex(0);
+              }}
+              type="button"
+            >
               Cliente Varios
             </Button>
-            <Button onClick={() => goNext()} type="button">Continuar (Enter)</Button>
+            <Button
+              onClick={() => {
+                if (!selectedClient && clientResults[clientIndex]) {
+                  setSelectedClient(clientResults[clientIndex]);
+                }
+                goNext();
+              }}
+              type="button"
+            >
+              Continuar (Enter)
+            </Button>
           </div>
         </div>
       </Modal>

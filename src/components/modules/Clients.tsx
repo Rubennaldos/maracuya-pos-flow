@@ -1,3 +1,4 @@
+// src/components/modules/Clients.tsx
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +38,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
 
 interface Client {
   id: string;
@@ -112,6 +112,28 @@ export const Clients = ({ onBack }: ClientsProps) => {
     personalPhone: ''
   });
 
+  // 🔒 Coherencia automática: al activar "Es personal", ocultamos y limpiamos campos académicos y desactivamos cuenta de crédito.
+  useEffect(() => {
+    setNewClient(prev => {
+      if (!prev) return prev;
+      if (prev.isStaff) {
+        return {
+          ...prev,
+          level: '',
+          grade: '',
+          classroom: '',
+          hasAccount: false,
+        };
+      } else {
+        // si vuelve a estudiante y no hay nivel, dejamos 'primaria' por defecto
+        return {
+          ...prev,
+          level: prev.level === '' ? 'primaria' : (prev.level as 'primaria' | 'secundaria'),
+        };
+      }
+    });
+  }, [newClient.isStaff]);
+
   const filteredClients = clients.filter(client =>
     client.names.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.lastNames.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -124,23 +146,49 @@ export const Clients = ({ onBack }: ClientsProps) => {
     return `C${timestamp}`;
   };
 
+  const normalizeForSave = (data: Partial<Client>): Client => {
+    const base: Client = {
+      id: (editingClient?.id ?? generateClientId()),
+      names: data.names || '',
+      lastNames: data.lastNames || '',
+      payer1Name: data.payer1Name || '',
+      payer1Phone: data.payer1Phone || '',
+      payer2Name: data.payer2Name || '',
+      payer2Phone: data.payer2Phone || '',
+      classroom: data.classroom || '',
+      grade: data.grade || '',
+      level: (data.level ?? '') as Client['level'],
+      hasAccount: Boolean(data.hasAccount),
+      isActive: data.isActive ?? true,
+      debt: data.debt ?? 0,
+      isStaff: Boolean(data.isStaff),
+      staffType: (data.staffType ?? null) as Client['staffType'],
+      personalEmail: data.personalEmail || '',
+      personalPhone: data.personalPhone || '',
+    };
+
+    // Si es personal, aseguramos limpieza/forzado:
+    if (base.isStaff) {
+      base.level = '';
+      base.grade = '';
+      base.classroom = '';
+      base.hasAccount = false;
+    }
+
+    return base;
+  };
+
   const saveClient = async () => {
     try {
       if (editingClient) {
-        // Edit existing client - save to RTDB
-        const updatedClient = { ...newClient as Client, id: editingClient.id };
+        const updatedClient = normalizeForSave({ ...newClient, id: editingClient.id });
         await RTDBHelper.setData(`${RTDB_PATHS.clients}/${editingClient.id}`, updatedClient);
         setClients(prev => prev.map(c => 
           c.id === editingClient.id ? updatedClient : c
         ));
         setEditingClient(null);
       } else {
-        // Create new client - save to RTDB
-        const client: Client = {
-          ...newClient as Client,
-          id: generateClientId(),
-          debt: 0
-        };
+        const client = normalizeForSave(newClient);
         await RTDBHelper.setData(`${RTDB_PATHS.clients}/${client.id}`, client);
         setClients(prev => [...prev, client]);
       }
@@ -205,6 +253,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
 
   const getGradeBadgeColor = (grade: string) => {
     const gradeNum = parseInt(grade);
+    if (isNaN(gradeNum)) return "bg-muted text-foreground";
     if (gradeNum <= 3) return "bg-success text-success-foreground";
     if (gradeNum <= 6) return "bg-warning text-warning-foreground";
     return "bg-primary text-primary-foreground";
@@ -237,7 +286,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
     
     // Auto-width columns
     const colWidths = Object.keys(template[0]).map(key => ({ wch: Math.max(key.length, 15) }));
-    ws['!cols'] = colWidths;
+    (ws as any)['!cols'] = colWidths;
     
     XLSX.writeFile(wb, "plantilla_clientes.xlsx");
   };
@@ -286,6 +335,14 @@ export const Clients = ({ onBack }: ClientsProps) => {
               personalPhone: row.Telefono_Personal?.toString() || ''
             };
 
+            // Normalización post-import para personal
+            if (newClient.isStaff) {
+              newClient.level = '';
+              newClient.grade = '';
+              newClient.classroom = '';
+              newClient.hasAccount = false;
+            }
+
             // Save to RTDB
             await RTDBHelper.setData(`${RTDB_PATHS.clients}/${newClient.id}`, newClient);
             importedCount++;
@@ -310,7 +367,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
     reader.readAsArrayBuffer(file);
     
     // Reset input
-    event.target.value = '';
+    (event.target as HTMLInputElement).value = '';
   };
 
   return (
@@ -390,7 +447,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="isStaff"
-                      checked={newClient.isStaff}
+                      checked={!!newClient.isStaff}
                       onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, isStaff: checked }))}
                     />
                     <Label htmlFor="isStaff">¿Es personal docente/administrativo?</Label>
@@ -440,7 +497,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
                       </div>
                     </>
                   ) : (
-                    /* Student fields */
+                    /* Student + responsables de pago */
                     <>
                       <div>
                         <Label htmlFor="payer1Name">Responsable de Pago 1 (Obligatorio)</Label>
@@ -475,58 +532,63 @@ export const Clients = ({ onBack }: ClientsProps) => {
                           />
                         </div>
                       </div>
+
+                      {/* Solo estudiantes: Nivel / Grado / Salón */}
+                      <div>
+                        <Label htmlFor="level">Nivel Educativo</Label>
+                        <Select
+                          value={(newClient.level as 'primaria' | 'secundaria') || 'primaria'}
+                          onValueChange={(value: 'primaria' | 'secundaria') => 
+                            setNewClient(prev => ({ ...prev, level: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar nivel" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="primaria">Primaria</SelectItem>
+                            <SelectItem value="secundaria">Secundaria</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="grade">Grado</Label>
+                          <Input
+                            id="grade"
+                            value={newClient.grade}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, grade: e.target.value }))}
+                            placeholder="Ej: 3"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="classroom">Salón</Label>
+                          <Input
+                            id="classroom"
+                            value={newClient.classroom}
+                            onChange={(e) => setNewClient(prev => ({ ...prev, classroom: e.target.value }))}
+                            placeholder="Ej: 3A"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Solo estudiantes: cuenta de crédito */}
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="hasAccount"
+                          checked={!!newClient.hasAccount}
+                          onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, hasAccount: checked }))}
+                        />
+                        <Label htmlFor="hasAccount">¿Tiene cuenta de crédito?</Label>
+                      </div>
                     </>
                   )}
-
-                  <div>
-                    <Label htmlFor="level">Nivel Educativo</Label>
-                    <Select value={newClient.level} onValueChange={(value: 'primaria' | 'secundaria') => 
-                      setNewClient(prev => ({ ...prev, level: value }))
-                    }>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar nivel" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="primaria">Primaria</SelectItem>
-                        <SelectItem value="secundaria">Secundaria</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="grade">Grado</Label>
-                      <Input
-                        id="grade"
-                        value={newClient.grade}
-                        onChange={(e) => setNewClient(prev => ({ ...prev, grade: e.target.value }))}
-                        placeholder="Ej: 3"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="classroom">Salón</Label>
-                      <Input
-                        id="classroom"
-                        value={newClient.classroom}
-                        onChange={(e) => setNewClient(prev => ({ ...prev, classroom: e.target.value }))}
-                        placeholder="Ej: 3A"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="hasAccount"
-                      checked={newClient.hasAccount}
-                      onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, hasAccount: checked }))}
-                    />
-                    <Label htmlFor="hasAccount">¿Tiene cuenta de crédito?</Label>
-                  </div>
 
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="isActive"
-                      checked={newClient.isActive}
+                      checked={!!newClient.isActive}
                       onCheckedChange={(checked) => setNewClient(prev => ({ ...prev, isActive: checked }))}
                     />
                     <Label htmlFor="isActive">Cliente Activo</Label>
@@ -631,15 +693,18 @@ export const Clients = ({ onBack }: ClientsProps) => {
                       <span className="text-sm">{client.payer1Phone}</span>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <GraduationCap className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm">{client.classroom}</span>
+                    {/* Ocultar datos académicos para personal */}
+                    {!client.isStaff && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <GraduationCap className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm">{client.classroom}</span>
+                        </div>
+                        <Badge className={getGradeBadgeColor(client.grade)}>
+                          {client.grade}° {client.level}
+                        </Badge>
                       </div>
-                      <Badge className={getGradeBadgeColor(client.grade)}>
-                        {client.grade}° {client.level}
-                      </Badge>
-                    </div>
+                    )}
 
                     <div className="flex items-center justify-between">
                       <div className="flex space-x-2">
