@@ -297,19 +297,27 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       return;
     }
     if (step === "confirm") {
+      console.log("🎯 Confirm step - payMethod:", payMethod);
       // Aquí es donde verificamos autorización parental si es crédito
       if (payMethod === "credito") {
+        console.log("💳 Credit payment detected, checking parental auth...");
         setCheckingAuth(true);
         try {
           const needsAuth = await checkParentalAuth();
-          if (needsAuth) return; // el modal de autorización manejará el flujo desde aquí
+          console.log("🔍 checkParentalAuth result:", needsAuth);
+          if (needsAuth) {
+            console.log("🚪 Authorization needed, modal will handle the flow");
+            return; // el modal de autorización manejará el flujo desde aquí
+          }
         } finally {
           setCheckingAuth(false);
         }
+        console.log("✅ No authorization needed for this credit sale");
         // Si llegamos aquí, significa que no necesitaba autorización o ya se procesó
         return;
       }
       
+      console.log("💰 Non-credit payment, processing sale directly...");
       // Solo procesar venta si NO es crédito (porque crédito se maneja arriba)
       flowManager.updateCart(cart);
       await processSale({
@@ -322,6 +330,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
           : { id: "varios", name: "Cliente Varios", fullName: "Cliente Varios" },
         origin: "PV",
       });
+      console.log("✅ Non-credit sale processed, clearing state...");
       setCart([]);
       setPayMethod(null);
       setSelectedClient(null);
