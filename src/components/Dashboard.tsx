@@ -134,6 +134,11 @@ export const Dashboard = ({ onModuleSelect }: DashboardProps) => {
     module.roles.includes(user?.role || 'cajero')
   );
 
+  console.log('User role:', user?.role);
+  console.log('Total modules:', modules.length);
+  console.log('User modules:', userModules.length);
+  console.log('Lunch module exists:', modules.find(m => m.id === 'lunch-admin'));
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-accent">
       {/* Header */}
