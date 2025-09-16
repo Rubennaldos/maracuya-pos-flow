@@ -15,7 +15,8 @@ import {
   AlertTriangle,
   LogOut,
   Calculator,
-  Trash2
+  Trash2,
+  UtensilsCrossed
 } from "lucide-react";
 
 export type ModuleType = 
@@ -28,7 +29,8 @@ export type ModuleType =
   | 'historical' 
   | 'promos' 
   | 'unregistered'
-  | 'deleted';
+  | 'deleted'
+  | 'lunch-admin';
 
 interface DashboardProps {
   onModuleSelect: (module: ModuleType) => void;
@@ -116,6 +118,14 @@ export const Dashboard = ({ onModuleSelect }: DashboardProps) => {
       description: 'Papelera de ventas eliminadas',
       icon: Trash2,
       color: 'from-muted to-muted-foreground',
+      roles: ['admin']
+    },
+    {
+      id: 'lunch-admin' as ModuleType,
+      title: 'Administrar Almuerzos',
+      description: 'Gestionar menú y pedidos de almuerzos',
+      icon: UtensilsCrossed,
+      color: 'from-warning to-primary',
       roles: ['admin']
     }
   ];

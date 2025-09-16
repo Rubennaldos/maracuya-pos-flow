@@ -12,6 +12,7 @@ import { HistoricalSales } from "@/components/modules/HistoricalSales";
 import { Promotions } from "@/components/modules/Promotions";
 import { UnregisteredSales } from "@/components/modules/UnregisteredSales";
 import { DeletedSalesHistory } from "@/components/modules/DeletedSalesHistory";
+import LunchAdmin from "@/components/modules/LunchAdmin";
 
 const Index = () => {
   const { isAuthenticated } = useSession();
@@ -62,6 +63,10 @@ const Index = () => {
 
   if (currentModule === 'deleted') {
     return <DeletedSalesHistory onBack={() => setCurrentModule(null)} />;
+  }
+
+  if (currentModule === 'lunch-admin') {
+    return <LunchAdmin onBack={() => setCurrentModule(null)} />;
   }
 
   // Other modules still in development

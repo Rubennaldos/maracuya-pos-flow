@@ -17,7 +17,8 @@ import {
   Package,
   Settings,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  ArrowLeft
 } from "lucide-react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -61,7 +62,11 @@ interface LunchSettings {
   deliveryTracking: boolean;
 }
 
-const LunchAdmin = () => {
+interface LunchAdminProps {
+  onBack?: () => void;
+}
+
+const LunchAdmin = ({ onBack }: LunchAdminProps = {}) => {
   const { user } = useSession();
   const [menu, setMenu] = useState<LunchMenuItem[]>([]);
   const [settings, setSettings] = useState<LunchSettings>({
@@ -441,6 +446,18 @@ const LunchAdmin = () => {
         {/* Header */}
         <Card className="mb-6">
           <CardHeader className="text-center">
+            {onBack && (
+              <div className="flex justify-start mb-4">
+                <Button
+                  variant="ghost"
+                  onClick={onBack}
+                  className="flex items-center gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Volver al Dashboard
+                </Button>
+              </div>
+            )}
             <CardTitle className="text-3xl font-bold text-primary">
               Administración de Almuerzos
             </CardTitle>
