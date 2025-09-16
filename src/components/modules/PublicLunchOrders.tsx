@@ -17,6 +17,7 @@ import {
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 import { toast } from "@/components/ui/use-toast";
+import { initializeDemoLunchData } from "@/lib/demoData";
 
 interface LunchMenuItem {
   id: string;
@@ -80,8 +81,15 @@ const PublicLunchOrders = () => {
 
   // Load menu and settings
   useEffect(() => {
-    loadMenu();
-    loadSettings();
+    const initializeData = async () => {
+      // Initialize demo data first
+      await initializeDemoLunchData();
+      // Then load the data
+      loadMenu();
+      loadSettings();
+    };
+    
+    initializeData();
   }, []);
 
   // Load existing order when student is validated
@@ -149,7 +157,30 @@ const PublicLunchOrders = () => {
 
     setLoading(true);
     try {
-      const client = await RTDBHelper.getData(`${RTDB_PATHS.clients}/${studentCode}`);
+      // Primero intentamos buscar directamente por código como ID
+      let client = await RTDBHelper.getData(`${RTDB_PATHS.clients}/${studentCode}`);
+      
+      // Si no se encuentra, buscamos en toda la colección por el campo 'code'
+      if (!client || !client.fullName) {
+        console.log("Cliente no encontrado por ID directo, buscando en toda la colección...");
+        const allClients = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
+        
+        if (allClients) {
+          // Buscar por el campo 'code' o 'id' en todos los clientes
+          const clientEntry = Object.entries(allClients).find(([key, clientData]) => {
+            const data = clientData as any;
+            return data.code === studentCode || 
+                   data.id === studentCode || 
+                   key === studentCode;
+          });
+          
+          if (clientEntry) {
+            client = clientEntry[1];
+            console.log("Cliente encontrado:", client);
+          }
+        }
+      }
+      
       if (client && client.fullName) {
         setValidatedStudent({ code: studentCode, name: client.fullName });
         toast({
@@ -157,6 +188,7 @@ const PublicLunchOrders = () => {
           description: `Alumno: ${client.fullName}`
         });
       } else {
+        console.log("Cliente no encontrado para código:", studentCode);
         toast({
           title: "Código no encontrado",
           description: "Verifique el código del alumno",
