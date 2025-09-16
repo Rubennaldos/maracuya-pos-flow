@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "@/state/session";
 import { RTDBLogin } from "@/components/modules/RTDBLogin";
 import { Dashboard, ModuleType } from "@/components/Dashboard";
+import { Button } from "@/components/ui/button";
 import { PointOfSale } from "@/components/modules/PointOfSale";
 import { SalesList } from "@/components/modules/SalesList";
 import { Products } from "@/components/modules/Products";
@@ -87,7 +88,29 @@ const Index = () => {
     );
   }
 
-  return <Dashboard onModuleSelect={setCurrentModule} />;
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Banner público para padres */}
+      <div className="bg-gradient-to-r from-primary to-primary-light p-4 text-center">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-xl font-bold text-primary-foreground mb-2">
+            🍽️ ¡Padres de Familia!
+          </h2>
+          <p className="text-primary-foreground/90 mb-3">
+            Ordena el almuerzo de tu hijo de forma fácil y rápida
+          </p>
+          <Button 
+            onClick={() => window.open('/pedidos', '_blank')}
+            className="bg-white text-primary hover:bg-gray-100 font-semibold px-6 py-2"
+          >
+            📱 Ir a Almuerzos y Pedidos
+          </Button>
+        </div>
+      </div>
+      
+      <Dashboard onModuleSelect={setCurrentModule} />
+    </div>
+  );
 };
 
 export default Index;
