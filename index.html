@@ -1,27 +1,24 @@
 <!doctype html>
 <html lang="es">
   <head>
-    <meta charset="utf-8" />
-    <title>Redirigiendo…</title>
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- Redirección inmediata: -->
-    <meta http-equiv="refresh" content="0; url=/maracuya-pos-flow/pedidos/">
+    <title>Maracuyá POS</title>
+
+    <!-- Fuerza Home al entrar al base del repo sin hash -->
     <script>
-      // Conserva querystring y hash
-      const target = '/maracuya-pos-flow/pedidos' + location.search + location.hash;
-      // Evita historial extra:
-      location.replace(target);
+      (function () {
+        // Ruta base exacta del repo en Pages
+        var BASE = "/maracuya-pos-flow/";
+        // Si estamos justo en el base y NO hay hash, manda a "#/"
+        if (location.pathname === BASE && (!location.hash || location.hash === "#")) {
+          location.replace(BASE + "#/");
+        }
+      })();
     </script>
-    <style>
-      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
-           display:grid;place-items:center;height:100dvh;margin:0}
-      .box{text-align:center}
-      a{color:#0a7cff;text-decoration:none}
-    </style>
   </head>
   <body>
-    <div class="box">
-      <p>Redirigiendo a <a href="/maracuya-pos-flow/pedidos/">/maracuya-pos-flow/pedidos/</a>…</p>
-    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
