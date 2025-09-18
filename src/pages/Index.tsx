@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+// src/pages/Index.tsx
+import { useState } from "react";
 import { useSession } from "@/state/session";
 import { RTDBLogin } from "@/components/modules/RTDBLogin";
 import { Dashboard, ModuleType } from "@/components/Dashboard";
-import { Button } from "@/components/ui/button";
 import { PointOfSale } from "@/components/modules/PointOfSale";
 import { SalesList } from "@/components/modules/SalesList";
 import { Products } from "@/components/modules/Products";
@@ -12,105 +12,101 @@ import { AccountsReceivable } from "@/components/modules/AccountsReceivable";
 import { HistoricalSales } from "@/components/modules/HistoricalSales";
 import { Promotions } from "@/components/modules/Promotions";
 import { UnregisteredSales } from "@/components/modules/UnregisteredSales";
-import { DeletedSalesHistory } from "@/components/modules/DeletedSalesHistory";
-import LunchAdmin from "@/components/modules/LunchAdmin";
 
-const Index = () => {
+export default function Index() {
   const { isAuthenticated } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType | null>(null);
 
-  console.log('Index component loaded, isAuthenticated:', isAuthenticated);
+  // URL pública para padres (siempre con hash)
+  const FAMILIAS_URL = `${import.meta.env.BASE_URL}#/familias`;
+
+  // 🔎 Debug banner
+  const DebugBar = (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        background: "#111",
+        color: "#0f0",
+        fontSize: 12,
+        padding: "6px 10px",
+        zIndex: 9999,
+      }}
+    >
+      base={import.meta.env.BASE_URL} • auth={String(isAuthenticated)} • module=
+      {String(currentModule ?? "dashboard")}
+    </div>
+  );
 
   if (!isAuthenticated) {
-    console.log('Not authenticated, showing RTDBLogin');
-    return <RTDBLogin />;
-  }
-
-  if (currentModule === 'pos') {
-    return <PointOfSale onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'sales') {
-    return <SalesList onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'products') {
-    return <Products onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'clients') {
-    return <Clients onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'checkout') {
-    return <Checkout onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'accounts') {
-    return <AccountsReceivable onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'historical') {
-    return <HistoricalSales onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'promos') {
-    return <Promotions onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'unregistered') {
-    return <UnregisteredSales onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'deleted') {
-    return <DeletedSalesHistory onBack={() => setCurrentModule(null)} />;
-  }
-
-  if (currentModule === 'lunch-admin') {
-    return <LunchAdmin onBack={() => setCurrentModule(null)} />;
-  }
-
-  // Other modules still in development
-  if (currentModule) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Módulo: {currentModule}</h1>
-          <p className="text-muted-foreground mb-4">En desarrollo...</p>
-          <button 
-            onClick={() => setCurrentModule(null)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-          >
-            Volver al Dashboard
-          </button>
-        </div>
-      </div>
+      <>
+        {DebugBar}
+        <RTDBLogin />
+        <noscript>
+          <div style={{ padding: 24 }}>Cargando login…</div>
+        </noscript>
+      </>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Banner público para padres */}
-      <div className="bg-gradient-to-r from-primary to-primary-light p-4 text-center">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-xl font-bold text-primary-foreground mb-2">
-            🍽️ ¡Padres de Familia!
-          </h2>
-          <p className="text-primary-foreground/90 mb-3">
-            Ordena el almuerzo de tu hijo de forma fácil y rápida
-          </p>
-          <Button 
-            onClick={() => window.open('/pedidos', '_blank')}
-            className="bg-white text-primary hover:bg-gray-100 font-semibold px-6 py-2"
-          >
-            📱 Ir a Almuerzos y Pedidos
-          </Button>
-        </div>
-      </div>
-      
-      <Dashboard onModuleSelect={setCurrentModule} />
-    </div>
-  );
-};
+  if (currentModule === "pos") return <PointOfSale onBack={() => setCurrentModule(null)} />;
+  if (currentModule === "sales") return <SalesList onBack={() => setCurrentModule(null)} />;
+  if (currentModule === "products") return <Products onBack={() => setCurrentModule(null)} />;
+  if (currentModule === "clients") return <Clients onBack={() => setCurrentModule(null)} />;
+  if (currentModule === "checkout") return <Checkout onBack={() => setCurrentModule(null)} />;
+  if (currentModule === "accounts") return <AccountsReceivable onBack={() => setCurrentModule(null)} />;
+  if (currentModule === "historical") return <HistoricalSales onBack={() => setCurrentModule(null)} />;
+  if (currentModule === "promos") return <Promotions onBack={() => setCurrentModule(null)} />;
+  if (currentModule === "unregistered") return <UnregisteredSales onBack={() => setCurrentModule(null)} />;
 
-export default Index;
+  if (currentModule) {
+    return (
+      <>
+        {DebugBar}
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Módulo: {currentModule}</h1>
+            <p className="text-muted-foreground mb-4">En desarrollo…</p>
+            <button
+              onClick={() => setCurrentModule(null)}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+            >
+              Volver al Dashboard
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // 🟢 Panel principal con banner para padres
+  return (
+    <>
+      {DebugBar}
+
+      {/* Banner para padres */}
+      <section className="w-full bg-green-600 text-white">
+        <div className="mx-auto max-w-5xl px-4 py-4 text-center">
+          <h2 className="text-lg md:text-xl font-bold">🍽️ ¡Padres de Familia!</h2>
+          <p className="opacity-90">Ordena el almuerzo de tu hijo de forma fácil y rápida</p>
+          <div className="mt-3">
+            <a
+              href={FAMILIAS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block rounded-lg bg-white/95 text-green-700 px-4 py-2 font-medium shadow hover:bg-white"
+            >
+              Ir a Almuerzos y Pedidos
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Dashboard normal */}
+      <Dashboard onModuleSelect={setCurrentModule} />
+    </>
+  );
+}
