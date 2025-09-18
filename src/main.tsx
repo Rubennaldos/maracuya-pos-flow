@@ -1,24 +1,39 @@
-// src/main.tsx
+import "./index.css"; // 👈 importa Tailwind + variables
+
 import React from "react";
-import "./index.css";
 import { createRoot } from "react-dom/client";
-import {
-  BrowserRouter,
-  HashRouter,
-} from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 
-import "./index.css";
+// --- Fix GitHub Pages SPA: si venimos de 404.html habrá ?p=/ruta/original ---
+(function fixGhPagesDeepLink() {
+  try {
+    const url = new URL(window.location.href);
+    const p = url.searchParams.get("p");
+    if (p) {
+      // BASE_URL trae "/maracuya-pos-flow/" en producción
+      const base = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
+      const next = base + p; // p ya comienza con "/"
+      // Reescribe la barra de direcciones sin recargar
+      window.history.replaceState(null, "", next);
+    }
+  } catch (e) {
+    console.warn("[gh-pages-spa] no se pudo normalizar la URL:", e);
+  }
+})();
 
-// En GitHub Pages (build de producción) SIEMPRE usar HashRouter
-const Router =
-  import.meta.env.PROD ? HashRouter : BrowserRouter;
+console.log("[main] cargando…", { base: import.meta.env.BASE_URL });
 
-const root = document.getElementById("root");
-createRoot(root!).render(
-  <React.StrictMode>
-    <Router>
-      <App />
-    </Router>
-  </React.StrictMode>
-);
+const rootEl = document.getElementById("root");
+if (!rootEl) {
+  console.error("[main] #root NO encontrado");
+} else {
+  createRoot(rootEl).render(
+    <React.StrictMode>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
+        <App />
+      </BrowserRouter>
+    </React.StrictMode>
+  );
+  console.log("[main] renderizado");
+}
