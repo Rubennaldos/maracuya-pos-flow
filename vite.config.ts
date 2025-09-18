@@ -1,35 +1,31 @@
+// vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
-export default defineConfig(({ mode }) => {
-  const isProd = mode === "production";
+export default defineConfig({
+  // ❗️Base fija al nombre del repositorio de GitHub Pages
+  base: "/maracuya-pos-flow/",
 
-  return {
-    // Para GitHub Pages en REPO de proyecto:
-    // usa el nombre EXACTO del repositorio como base.
-    // Si tu repo es "maracuya-pos-flow", esto está correcto.
-    base: isProd ? "/maracuya-pos-flow/" : "/",
+  server: {
+    host: "::",
+    port: 8080,
+  },
 
-    server: {
-      host: "::",
-      port: 8080,
-    },
+  preview: {
+    port: 8080,
+  },
 
-    preview: {
-      port: 8080,
-    },
+  build: {
+    outDir: "dist",
+    sourcemap: true,
+  },
 
-    build: {
-      outDir: "dist",
-      sourcemap: true,
-    },
+  // Solo usamos lovable-tagger en desarrollo
+  plugins: [react(), componentTagger()].filter(Boolean),
 
-    plugins: [react(), !isProd && componentTagger()].filter(Boolean) as any,
-
-    resolve: {
-      alias: { "@": path.resolve(__dirname, "./src") },
-    },
-  };
+  resolve: {
+    alias: { "@": path.resolve(__dirname, "./src") },
+  },
 });
