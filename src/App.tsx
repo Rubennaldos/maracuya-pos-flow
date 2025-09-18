@@ -1,32 +1,46 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Routes, Route, Navigate } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
-import PublicLunchOrders from "./components/modules/PublicLunchOrders";
-import LunchAdmin from "./components/modules/LunchAdmin";
+// src/App.tsx
+import { Routes, Route, Link } from "react-router-dom";
 
-const queryClient = new QueryClient();
+function Home() {
+  console.log("[Home] render");
+  return (
+    <div style={{ padding: 24 }}>
+      <h1>Hola desde Vite + React</h1>
+      <p>
+        Ir a <Link to="/pedidos">Pedidos</Link>
+      </p>
+    </div>
+  );
+}
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
+function Pedidos() {
+  console.log("[Pedidos] render");
+  return (
+    <div style={{ padding: 24 }}>
+      <h1>Página de Pedidos</h1>
+      <p>Ruta funcionando con HashRouter.</p>
+      <p>
+        Volver a <Link to="/">Inicio</Link>
+      </p>
+    </div>
+  );
+}
+
+export default function App() {
+  console.log("[App] render");
+  return (
+    <>
+      {/* Mini navegación para probar rutas */}
+      <nav style={{ padding: 12, borderBottom: "1px solid #ddd" }}>
+        <Link to="/" style={{ marginRight: 12 }}>Inicio</Link>
+        <Link to="/pedidos">Pedidos</Link>
+      </nav>
+
       <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/pedidos" element={<PublicLunchOrders />} />
-        <Route path="/admin/almuerzos" element={<LunchAdmin />} />
-        {/* Si prefieres mostrar tu NotFound, déjalo; si no, redirige al home */}
-        <Route path="*" element={<NotFound />} />
-        {/* o usa esto para redirigir todo al home:
-            <Route path="*" element={<Navigate to="/" replace />} />
-        */}
+        <Route path="/" element={<Home />} />
+        <Route path="/pedidos" element={<Pedidos />} />
+        <Route path="*" element={<Home />} />
       </Routes>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
-
-export default App;
+    </>
+  );
+}
