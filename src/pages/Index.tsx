@@ -13,30 +13,18 @@ import { HistoricalSales } from "@/components/modules/HistoricalSales";
 import { Promotions } from "@/components/modules/Promotions";
 import { UnregisteredSales } from "@/components/modules/UnregisteredSales";
 
+// 👇 AÑADE ESTO
+import { DeletedSalesHistory } from "@/components/modules/DeletedSalesHistory";
+
 export default function Index() {
   const { isAuthenticated } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType | null>(null);
 
-  // URL pública para padres (siempre con hash)
   const FAMILIAS_URL = `${import.meta.env.BASE_URL}#/familias`;
 
-  // 🔎 Debug banner
   const DebugBar = (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        background: "#111",
-        color: "#0f0",
-        fontSize: 12,
-        padding: "6px 10px",
-        zIndex: 9999,
-      }}
-    >
-      base={import.meta.env.BASE_URL} • auth={String(isAuthenticated)} • module=
-      {String(currentModule ?? "dashboard")}
+    <div style={{position:"fixed",top:0,left:0,right:0,background:"#111",color:"#0f0",fontSize:12,padding:"6px 10px",zIndex:9999}}>
+      base={import.meta.env.BASE_URL} • auth={String(isAuthenticated)} • module={String(currentModule ?? "dashboard")}
     </div>
   );
 
@@ -45,9 +33,7 @@ export default function Index() {
       <>
         {DebugBar}
         <RTDBLogin />
-        <noscript>
-          <div style={{ padding: 24 }}>Cargando login…</div>
-        </noscript>
+        <noscript><div style={{ padding: 24 }}>Cargando login…</div></noscript>
       </>
     );
   }
@@ -61,51 +47,25 @@ export default function Index() {
   if (currentModule === "historical") return <HistoricalSales onBack={() => setCurrentModule(null)} />;
   if (currentModule === "promos") return <Promotions onBack={() => setCurrentModule(null)} />;
   if (currentModule === "unregistered") return <UnregisteredSales onBack={() => setCurrentModule(null)} />;
+  // 👇 AÑADE ESTE CASE
+  if (currentModule === "deleted") return <DeletedSalesHistory onBack={() => setCurrentModule(null)} />;
 
-  if (currentModule) {
-    return (
-      <>
-        {DebugBar}
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Módulo: {currentModule}</h1>
-            <p className="text-muted-foreground mb-4">En desarrollo…</p>
-            <button
-              onClick={() => setCurrentModule(null)}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-            >
-              Volver al Dashboard
-            </button>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // 🟢 Panel principal con banner para padres
   return (
     <>
       {DebugBar}
 
-      {/* Banner para padres */}
       <section className="w-full bg-green-600 text-white">
         <div className="mx-auto max-w-5xl px-4 py-4 text-center">
           <h2 className="text-lg md:text-xl font-bold">🍽️ ¡Padres de Familia!</h2>
           <p className="opacity-90">Ordena el almuerzo de tu hijo de forma fácil y rápida</p>
           <div className="mt-3">
-            <a
-              href={FAMILIAS_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block rounded-lg bg-white/95 text-green-700 px-4 py-2 font-medium shadow hover:bg-white"
-            >
+            <a href={FAMILIAS_URL} target="_blank" rel="noreferrer" className="inline-block rounded-lg bg-white/95 text-green-700 px-4 py-2 font-medium shadow hover:bg-white">
               Ir a Almuerzos y Pedidos
             </a>
           </div>
         </div>
       </section>
 
-      {/* Dashboard normal */}
       <Dashboard onModuleSelect={setCurrentModule} />
     </>
   );

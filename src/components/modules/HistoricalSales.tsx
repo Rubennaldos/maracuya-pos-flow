@@ -131,7 +131,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     setFilteredClients(!q ? allClients : allClients.filter((c) => c.name.toLowerCase().includes(q)));
   }, [clientQuery, allClients]);
 
-  // Auto-seleccionar el primer cliente cuando se abre el modal (para Enter directo)
+  // Auto-seleccionar el primer cliente cuando se abre el modal
   useEffect(() => {
     if (clientModalOpen && filteredClients.length > 0 && !selectedClient) {
       setSelectedClient(filteredClients[0]);
@@ -154,7 +154,6 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
         setClientModalOpen(true);
         return;
       }
-      // Si el modal está abierto, pasamos a confirmar (no guardamos aún)
       if (clientModalOpen && selectedClient) {
         setConfirmOpen(true);
         setTimeout(() => confirmBtnRef.current?.focus(), 0);
@@ -164,6 +163,21 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     window.addEventListener("keydown", onKey, { capture: true });
     return () => window.removeEventListener("keydown", onKey as any, { capture: true } as any);
   }, [cart.length, clientModalOpen, selectedClient]);
+
+  /* -------- ENTER dentro del modal de confirmación -> guardar -------- */
+  useEffect(() => {
+    if (!confirmOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isSaving) {
+        processHistoricalSale();
+      }
+    };
+    window.addEventListener("keydown", handler, { capture: true });
+    return () => window.removeEventListener("keydown", handler as any, { capture: true } as any);
+  }, [confirmOpen, isSaving]); // no es necesario agregar la función como dependencia
 
   /* -------- Productos -------- */
   const filteredProducts = products.filter((p) =>
@@ -202,7 +216,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
 
   /* -------- Guardar venta histórica (siempre crédito) -------- */
   const processHistoricalSale = async () => {
-    if (isSaving) return; // evita doble guardado
+    if (isSaving) return;
     if (cart.length === 0) {
       alert("Agregue productos al carrito");
       return;
@@ -221,20 +235,17 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     try {
       const correlative = await RTDBHelper.getNextCorrelative("historical");
       const saleDateStr = format(selectedDate, "yyyy-MM-dd");
-
-      // 👇 MUY IMPORTANTE:
-      // Forzamos createdAt a la fecha elegida (al mediodía local para evitar desfaces por zona horaria).
       const createdAtIso = isoAtLocalNoon(selectedDate);
 
       const saleData = {
         correlative,
-        date: saleDateStr,          // fecha elegida (para tus listados)
+        date: saleDateStr,          // fecha elegida (para listados)
         items: cart,
         total: getTotalAmount(),
         paymentMethod: "credito",
         type: "historical",
         status: "completed",
-        createdAt: createdAtIso,    // ¡ahora respeta la fecha elegida!
+        createdAt: createdAtIso,    // respeta la fecha elegida
         client: { id: selectedClient.id, fullName: selectedClient.name },
         user: "Sistema",
       };
@@ -249,15 +260,13 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
         status: "pending",
         amount: saleData.total,
         date: saleData.date,
-        type: "VH", // Venta Histórica
+        type: "VH",
         items: saleData.items,
         correlative: saleData.correlative,
         clientName: selectedClient.name,
         saleId,
         createdAt: createdAtIso,
       });
-
-      // ❗️ No escribir en `${accounts_receivable}/${saleId}` para evitar duplicados.
 
       setClientModalOpen(false);
       setConfirmOpen(false);
@@ -287,8 +296,8 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             Ventas Históricas (Crédito)
           </h2>
 
+        {/* Fecha + Cliente */}
           <div className="flex items-center gap-3">
-            {/* Fecha (se respeta al guardar) */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -470,7 +479,6 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             onChange={(e) => setClientQuery(e.target.value)}
             className="h-14 text-lg"
           />
-        {/* Lista */}
           <div className="max-h-80 overflow-y-auto border rounded-md">
             {filteredClients.map((c) => (
               <button
