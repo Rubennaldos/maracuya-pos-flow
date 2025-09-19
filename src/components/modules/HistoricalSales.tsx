@@ -116,6 +116,11 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const confirmBtnRef = useRef<HTMLButtonElement | null>(null);
 
+  /* --------- Refs / navegación de productos --------- */
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const productRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [activeIndex, setActiveIndex] = useState(0);
+
   // Carga inicial
   useEffect(() => {
     loadProducts().then(setProducts);
@@ -123,15 +128,17 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
       setAllClients(list);
       setFilteredClients(list);
     });
+    // foco inicial en búsqueda
+    setTimeout(() => searchInputRef.current?.focus(), 0);
   }, []);
 
-  // Filtrado de clientes
+  // Mantener lista de clientes filtrada
   useEffect(() => {
     const q = clientQuery.trim().toLowerCase();
     setFilteredClients(!q ? allClients : allClients.filter((c) => c.name.toLowerCase().includes(q)));
   }, [clientQuery, allClients]);
 
-  // Auto-seleccionar el primer cliente cuando se abre el modal
+  // Auto-seleccionar primer cliente cuando se abre el modal
   useEffect(() => {
     if (clientModalOpen && filteredClients.length > 0 && !selectedClient) {
       setSelectedClient(filteredClients[0]);
@@ -177,21 +184,76 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     };
     window.addEventListener("keydown", handler, { capture: true });
     return () => window.removeEventListener("keydown", handler as any, { capture: true } as any);
-  }, [confirmOpen, isSaving]); // no es necesario agregar la función como dependencia
+  }, [confirmOpen, isSaving]);
 
-  /* -------- Productos -------- */
+  /* -------- Productos + navegación por teclado -------- */
   const filteredProducts = products.filter((p) =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Mantén el índice activo dentro de rango cuando cambia el filtro
+  useEffect(() => {
+    if (activeIndex > filteredProducts.length - 1) {
+      setActiveIndex(Math.max(0, filteredProducts.length - 1));
+    }
+  }, [filteredProducts.length, activeIndex]);
+
+  // Autoscroll al ítem activo
+  useEffect(() => {
+    const prod = filteredProducts[activeIndex];
+    if (!prod) return;
+    const el = productRowRefs.current[prod.id];
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, filteredProducts]);
+
   const addToCart = (p: { id: string; name: string; price: number }) => {
     setCart((prev) => {
       const ex = prev.find((i) => i.id === p.id);
-      return ex
+      const next = ex
         ? prev.map((i) => (i.id === p.id ? { ...i, quantity: i.quantity + 1 } : i))
         : [...prev, { id: p.id, name: p.name, price: p.price, quantity: 1 }];
+
+      return next;
     });
+
+    // limpiar y volver a foco de búsqueda
+    setSearchTerm("");
+    setActiveIndex(0);
+    setTimeout(() => searchInputRef.current?.focus(), 0);
   };
+
+  // Atajos: flechas para moverse, Enter/+ para agregar el resaltado
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // si un modal está abierto, no interferir
+      if (clientModalOpen || confirmOpen) return;
+
+      // si el foco está en un input distinto a la búsqueda, no tomarlo
+      const tag = (document.activeElement?.tagName || "").toLowerCase();
+      if (tag === "input" && document.activeElement !== searchInputRef.current) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(i + 1, filteredProducts.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter" || e.key === "+") {
+        const prod = filteredProducts[activeIndex];
+        if (prod) {
+          e.preventDefault();
+          addToCart({
+            id: prod.id,
+            name: prod.name,
+            price: Number(prod.salePrice ?? prod.price ?? 0),
+          });
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [filteredProducts, activeIndex, clientModalOpen, confirmOpen]);
 
   const removeFromCart = (productId: string) => {
     setCart((prev) => {
@@ -239,22 +301,19 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
 
       const saleData = {
         correlative,
-        date: saleDateStr,          // fecha elegida (para listados)
+        date: saleDateStr,
         items: cart,
         total: getTotalAmount(),
         paymentMethod: "credito",
         type: "historical",
         status: "completed",
-        createdAt: createdAtIso,    // respeta la fecha elegida
+        createdAt: createdAtIso,
         client: { id: selectedClient.id, fullName: selectedClient.name },
         user: "Sistema",
       };
 
-      // 1) Guardar la venta
       const saleId = await RTDBHelper.pushData(RTDB_PATHS.sales, saleData);
 
-      // 2) Registrar SOLO UNA entrada en Cuentas por Cobrar:
-      //    accounts_receivable/{clientId}/entries/{saleId}
       const arEntryPath = `${RTDB_PATHS.accounts_receivable}/${selectedClient.id}/entries/${saleId}`;
       await RTDBHelper.setData(arEntryPath, {
         status: "pending",
@@ -274,6 +333,8 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
 
       clearCart();
       setSelectedClient(null);
+      // foco a búsqueda para continuar
+      setTimeout(() => searchInputRef.current?.focus(), 0);
     } catch (error) {
       console.error("Error processing historical sale:", error);
       alert("Error al procesar la venta histórica");
@@ -296,7 +357,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             Ventas Históricas (Crédito)
           </h2>
 
-        {/* Fecha + Cliente */}
+          {/* Fecha + Cliente */}
           <div className="flex items-center gap-3">
             <Popover>
               <PopoverTrigger asChild>
@@ -336,45 +397,59 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
+                ref={searchInputRef}
                 placeholder="Buscar productos..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setActiveIndex(0);
+                }}
                 className="pl-10"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-              {filteredProducts.map((product) => (
-                <Card
-                  key={product.id}
-                  className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() =>
-                    addToCart({
-                      id: product.id,
-                      name: product.name,
-                      price: Number(product.salePrice ?? product.price ?? 0),
-                    })
-                  }
-                >
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h3 className="font-medium">{product.name}</h3>
-                        <p className="text-sm text-muted-foreground">{product.category}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Badge variant="outline">
-                            <DollarSign className="h-3 w-3 mr-1" />
-                            S/ {(product.salePrice ?? product.price ?? 0).toFixed(2)}
-                          </Badge>
+              {filteredProducts.map((product, idx) => {
+                const isActive = idx === activeIndex;
+                return (
+                  <Card
+                    key={product.id}
+                    ref={(el) => (productRowRefs.current[product.id] = el)}
+                    className={cn(
+                      "cursor-pointer transition-shadow border",
+                      isActive ? "border-primary ring-2 ring-primary/30" : "hover:shadow-md"
+                    )}
+                    onClick={() =>
+                      addToCart({
+                        id: product.id,
+                        name: product.name,
+                        price: Number(product.salePrice ?? product.price ?? 0),
+                      })
+                    }
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h3 className="font-medium">{product.name}</h3>
+                          <p className="text-sm text-muted-foreground">{product.category}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge variant="outline">
+                              <DollarSign className="h-3 w-3 mr-1" />
+                              S/ {(product.salePrice ?? product.price ?? 0).toFixed(2)}
+                            </Badge>
+                            <kbd className="text-[10px] px-1 py-0.5 border rounded">
+                              Enter / +
+                            </kbd>
+                          </div>
                         </div>
+                        {product.image && (
+                          <img src={product.image} alt={product.name} className="w-12 h-12 rounded object-cover ml-4" />
+                        )}
                       </div>
-                      {product.image && (
-                        <img src={product.image} alt={product.name} className="w-12 h-12 rounded object-cover ml-4" />
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
 
             {filteredProducts.length === 0 && (
@@ -401,13 +476,26 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                         <p className="font-medium text-sm">{item.name}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs text-muted-foreground">S/</span>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={item.price.toFixed(2)}
-                            onChange={(e) => updatePrice(item.id, parseFloat(e.target.value) || 0)}
-                            className="h-5 w-14 text-xs text-center"
+                          {/* Input sin flechas, más grande y 100% teclado */}
+                          <input
+                            inputMode="decimal"
+                            type="text"
+                            value={Number.isFinite(item.price) ? item.price.toFixed(2) : "0.00"}
+                            onFocus={(e) => {
+                              // seleccionar todo para reescribir con números
+                              setTimeout(() => e.currentTarget.select(), 0);
+                            }}
+                            onChange={(e) => {
+                              // admitir “,” o “.” como decimal
+                              const raw = e.target.value.replace(",", ".");
+                              const val = parseFloat(raw);
+                              updatePrice(item.id, Number.isFinite(val) ? val : 0);
+                            }}
+                            className="h-9 w-20 text-base text-center rounded border border-input bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                            style={{
+                              // oculta spinners en navegadores que los agregan a inputs text
+                              MozAppearance: "textfield" as any,
+                            }}
                           />
                           <span className="text-xs text-muted-foreground">x {item.quantity}</span>
                         </div>
@@ -422,6 +510,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                           size="sm"
                           onClick={() => addToCart({ id: item.id, name: item.name, price: item.price })}
                           type="button"
+                          title="Agregar uno (+)"
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
@@ -454,7 +543,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                         Limpiar Carrito
                       </Button>
                       <p className="text-xs text-muted-foreground text-center">
-                        Tip: presiona <b>Enter</b> para abrir selección de cliente y <b>Enter</b> otra vez para confirmar.
+                        Tip: busca con el teclado, usa <b>↑/↓</b> para moverte y <b>Enter</b> o <b>+</b> para agregar.
                       </p>
                     </div>
                   </div>
