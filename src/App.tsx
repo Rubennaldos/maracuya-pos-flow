@@ -1,29 +1,32 @@
+// src/App.tsx
 import { Routes, Route, NavLink, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
 import Pedidos from "./pages/Pedidos";
-import NotFound from "./pages/NotFound";
 import Familias from "./pages/Familias";
+import NotFound from "./pages/NotFound";
 
 export default function App() {
-  // Con HashRouter la ruta vive en location.hash (ej. "#/familias")
   const { hash } = useLocation();
-  const isPublicFamilies = hash.startsWith("#/familias");
+  const isFamilies = hash.startsWith("#/familias");
 
+  // Ocultamos menú si es la pública
   return (
     <>
-      {/* Oculta el menú cuando estás en la pública */}
-      {!isPublicFamilies && (
+      {!isFamilies && (
         <nav style={{ padding: 12, borderBottom: "1px solid #ddd", display: "flex", gap: 12 }}>
           <NavLink to="/" end>Inicio</NavLink>
           <NavLink to="/pedidos">Pedidos</NavLink>
+          {/* opcional: NavLink a familias dentro del sistema */}
+          <NavLink to="/familias">Familias</NavLink>
         </nav>
       )}
 
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/pedidos" element={<Pedidos />} />
-        <Route path="/familias" element={<Familias />} />   {/* 👈 RUTA PÚBLICA */}
-        <Route path="*" element={<NotFound />} />           {/* 👈 NUNCA volver al Dashboard */}
+        {/* 👇 Esta ruta renderiza SOLO el módulo de padres */}
+        <Route path="/familias" element={<Familias />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   );

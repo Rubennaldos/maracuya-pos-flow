@@ -1,9 +1,9 @@
-// src/pages/NotFound.tsx
 import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 
 export default function NotFound() {
   const location = useLocation();
+
   useEffect(() => {
     console.error("404:", location.pathname);
   }, [location.pathname]);

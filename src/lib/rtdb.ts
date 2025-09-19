@@ -1,3 +1,4 @@
+// src/lib/rtdb.ts
 import { initializeApp } from "firebase/app";
 import { getDatabase, Database } from "firebase/database";
 
@@ -41,6 +42,8 @@ export const RTDB_PATHS = {
   config: "config",
   correlatives: "correlatives",
   logs: "logs",
+
+  // 👇 extras para el flujo de almuerzos (página pública)
   lunch_menu: "lunch_menu",
   lunch_orders: "lunch_orders",
   lunch_settings: "lunch_settings",

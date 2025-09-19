@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Redirigiendo…</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Redirección inmediata: -->
+    <meta http-equiv="refresh" content="0; url=/maracuya-pos-flow/pedidos/">
+    <script>
+      // Conserva querystring y hash
+      const target = '/maracuya-pos-flow/pedidos' + location.search + location.hash;
+      // Evita historial extra:
+      location.replace(target);
+    </script>
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;
+           display:grid;place-items:center;height:100dvh;margin:0}
+      .box{text-align:center}
+      a{color:#0a7cff;text-decoration:none}
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <p>Redirigiendo a <a href="/maracuya-pos-flow/pedidos/">/maracuya-pos-flow/pedidos/</a>…</p>
+    </div>
+  </body>
+</html>

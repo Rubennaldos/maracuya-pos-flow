@@ -8,9 +8,7 @@
     <!-- Fuerza Home al entrar al base del repo sin hash -->
     <script>
       (function () {
-        // Ruta base exacta del repo en Pages
-        var BASE = "/maracuya-pos-flow/";
-        // Si estamos justo en el base y NO hay hash, manda a "#/"
+        var BASE = "/maracuya-pos-flow/"; // 👈 nombre EXACTO del repo
         if (location.pathname === BASE && (!location.hash || location.hash === "#")) {
           location.replace(BASE + "#/");
         }

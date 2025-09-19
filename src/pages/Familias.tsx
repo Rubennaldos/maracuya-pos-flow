@@ -1,4 +1,3 @@
-// src/pages/Familias.tsx
 import Pedidos from "./Pedidos";
 
 export default function Familias() {

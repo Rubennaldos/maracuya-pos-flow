@@ -18,7 +18,9 @@ function isTypingTarget(el: EventTarget | null) {
   const tag = el.tagName.toLowerCase();
   const ce = el.isContentEditable === true || el.getAttribute("contenteditable") === "true";
   // Permitir Enter global si el input lo pide explícitamente
-  const allowEnter = el.getAttribute("data-hotkey-allow")?.toLowerCase().includes("enter");
+  const allowEnter = (el.getAttribute("data-hotkey-allow") || "")
+    .toLowerCase()
+    .includes("enter");
   if (allowEnter) return false;
   return tag === "input" || tag === "textarea" || tag === "select" || ce;
 }
@@ -34,10 +36,21 @@ function isCtrlLike(e: KeyboardEvent) {
   return e.ctrlKey || e.metaKey;
 }
 
-// Evita doble disparo entre keydown/keyup en ciertos navegadores
+// ---------- De-dupe & throttle ----------
 const pressedOnce = new Set<string>();
+const lastFireAt: Record<string, number> = {};
+const THROTTLE_MS = 200; // evita repeticiones muy rápidas
+
 const makeId = (e: KeyboardEvent) =>
   `${isCtrlLike(e) ? "M-" : ""}${keyLower(e)}`; // M- = ctrl/meta
+
+function shouldThrottle(id: string) {
+  const now = Date.now();
+  const last = lastFireAt[id] || 0;
+  if (now - last < THROTTLE_MS) return true;
+  lastFireAt[id] = now;
+  return false;
+}
 
 function handle(map: HotkeyMap, e: KeyboardEvent) {
   const typing = isTypingTarget(e.target);
@@ -105,6 +118,10 @@ export function bindHotkeys(map: HotkeyMap) {
     const id = makeId(e);
     if (pressedOnce.has(id)) return;
     pressedOnce.add(id);
+
+    // throttle adicional para evitar repeticiones fantasma
+    if (shouldThrottle(id)) return;
+
     handle(map, e);
   };
 
@@ -113,14 +130,12 @@ export function bindHotkeys(map: HotkeyMap) {
     pressedOnce.delete(makeId(e));
   };
 
-  // Escuchamos en window/document para iframes/embeds; passive:false para poder preventDefault
+  // Usamos solo window para evitar dobles notificaciones entre document/window
   window.addEventListener("keydown", kd, { passive: false, capture: true });
-  document.addEventListener("keydown", kd, { passive: false, capture: true });
   window.addEventListener("keyup", ku, { passive: false, capture: true });
 
   return () => {
     window.removeEventListener("keydown", kd, { capture: true } as any);
-    document.removeEventListener("keydown", kd, { capture: true } as any);
     window.removeEventListener("keyup", ku, { capture: true } as any);
     pressedOnce.clear();
   };
