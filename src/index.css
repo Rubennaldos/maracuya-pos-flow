@@ -1,13 +1,17 @@
+/* Tailwind layers */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ===========================
-   Design tokens (HSL variables)
-   =========================== */
+/*
+  Nota (solo editor):
+  - Si VS Code marca @tailwind o @apply como "Unknown at rule",
+    instala la extensión “Tailwind CSS IntelliSense”.
+*/
+
 @layer base {
   :root {
-    /* Maracuyá Brand */
+    /* Maracuyá Brand – Fresh & Natural (HSL) */
     --background: 120 20% 98%;
     --foreground: 140 25% 15%;
 
@@ -29,39 +33,37 @@
     --secondary-light: 25 70% 70%;
     --secondary-dark: 25 90% 50%;
 
-    /* Status */
+    /* Success / Warning */
     --success: 140 60% 40%;
     --success-foreground: 120 20% 98%;
-
     --warning: 35 90% 55%;
     --warning-foreground: 140 25% 15%;
 
     /* Muted / Accent */
     --muted: 120 15% 90%;
     --muted-foreground: 140 10% 45%;
-
     --accent: 130 40% 85%;
     --accent-foreground: 140 25% 15%;
 
+    /* Destructive */
     --destructive: 0 70% 55%;
     --destructive-foreground: 120 20% 98%;
 
-    /* Surfaces & rings */
+    /* UI tokens */
     --border: 120 20% 85%;
     --input: 120 30% 94%;
     --ring: 130 60% 35%;
 
-    /* Radius */
     --radius: 0.75rem;
 
-    /* POS specific */
+    /* POS específicos */
     --pos-checkout: 130 50% 92%;
     --pos-checkout-foreground: 140 25% 15%;
     --pos-product: 120 30% 96%;
     --pos-kitchen: 15 80% 88%;
     --pos-credit: 210 60% 88%;
 
-    /* Gradients (usadas desde CSS util) */
+    /* Gradientes */
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-light)));
     --gradient-secondary: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--secondary-light)));
     --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
@@ -121,11 +123,7 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground;
-  }
+  /* Resets de base */
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
 }
