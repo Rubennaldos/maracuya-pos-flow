@@ -89,6 +89,12 @@ function Modal({
   );
 }
 
+/* Util: ISO al mediodía local (evita que al convertir a UTC se nos vaya al día anterior) */
+function isoAtLocalNoon(d: Date) {
+  const local = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0);
+  return local.toISOString();
+}
+
 /* ---------- Componente ---------- */
 interface HistoricalSalesProps { onBack: () => void; }
 
@@ -214,18 +220,21 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     setIsSaving(true);
     try {
       const correlative = await RTDBHelper.getNextCorrelative("historical");
-      const nowIso = new Date().toISOString();
       const saleDateStr = format(selectedDate, "yyyy-MM-dd");
+
+      // 👇 MUY IMPORTANTE:
+      // Forzamos createdAt a la fecha elegida (al mediodía local para evitar desfaces por zona horaria).
+      const createdAtIso = isoAtLocalNoon(selectedDate);
 
       const saleData = {
         correlative,
-        date: saleDateStr,          // RESPETA la fecha elegida
+        date: saleDateStr,          // fecha elegida (para tus listados)
         items: cart,
         total: getTotalAmount(),
         paymentMethod: "credito",
         type: "historical",
         status: "completed",
-        createdAt: nowIso,
+        createdAt: createdAtIso,    // ¡ahora respeta la fecha elegida!
         client: { id: selectedClient.id, fullName: selectedClient.name },
         user: "Sistema",
       };
@@ -245,11 +254,10 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
         correlative: saleData.correlative,
         clientName: selectedClient.name,
         saleId,
-        createdAt: nowIso,
+        createdAt: createdAtIso,
       });
 
-      // ❗️IMPORTANTE: Se eliminó el "espejo plano" que causaba duplicado:
-      //    NO escribir en `${accounts_receivable}/${saleId}`
+      // ❗️ No escribir en `${accounts_receivable}/${saleId}` para evitar duplicados.
 
       setClientModalOpen(false);
       setConfirmOpen(false);
@@ -462,6 +470,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             onChange={(e) => setClientQuery(e.target.value)}
             className="h-14 text-lg"
           />
+        {/* Lista */}
           <div className="max-h-80 overflow-y-auto border rounded-md">
             {filteredClients.map((c) => (
               <button
