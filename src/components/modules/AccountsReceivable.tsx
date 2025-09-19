@@ -1,3 +1,4 @@
+// AccountsReceivable.tsx (corregido)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle, 
   CheckCircle, Clock, CreditCard, FileText, Receipt, Download, 
-  Calendar as CalendarIcon, Eye, X
+  Calendar as CalendarIcon
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
 import {
@@ -28,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { format } from "date-fns";
+import { format, parse, parseISO, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
@@ -38,6 +39,21 @@ import "jspdf-autotable";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 
+/* ===== Helper de fechas seguro (evita corrimiento por UTC) ===== */
+const toLocalDateSafe = (d: string | Date): Date => {
+  if (d instanceof Date) return d;
+  if (!d) return new Date();
+  // "yyyy-MM-dd" -> fecha local 00:00
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    const local = parse(d, "yyyy-MM-dd", new Date());
+    return isValid(local) ? local : new Date();
+  }
+  // ISO completo u otros
+  const iso = parseISO(d);
+  return isValid(iso) ? iso : new Date();
+};
+const fmtDMY = (d: string | Date) => format(toLocalDateSafe(d), "dd/MM/yyyy");
+
 /* =========================
    Carga robusta de deudores
    ========================= */
@@ -46,19 +62,24 @@ const loadDebtors = async () => {
     const arData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
     if (!arData) return [];
 
-    // Estructura interna en memoria
     type Debtor = {
       id: string;
       name: string;
       totalDebt: number;
-      invoices: { id: string; amount: number; date: string; type?: string; products: string[] }[];
+      invoices: {
+        id: string;
+        amount: number;
+        date: string;     // para mostrar
+        dateSort: number; // para ordenar
+        type?: string;
+        products: string[];
+      }[];
       urgentCollection: boolean;
       phone?: string;
       lastReminder?: string;
     };
 
     const debtorMap = new Map<string, Debtor>();
-
     const ensureDebtor = (clientId: string, clientName?: string): Debtor => {
       if (!debtorMap.has(clientId)) {
         debtorMap.set(clientId, {
@@ -83,12 +104,17 @@ const loadDebtors = async () => {
             const d = ensureDebtor(clientId, entry.clientName);
             const amount = Number(entry.amount || 0);
             d.totalDebt += amount;
+
+            const dObj = toLocalDateSafe(entry.date);
             d.invoices.push({
               id: entry.correlative || entry.saleId || "SIN-ID",
               amount,
-              date: entry.date ? new Date(entry.date).toLocaleDateString() : "",
+              date: format(dObj, "dd/MM/yyyy"),
+              dateSort: dObj.getTime(),
               type: entry.type,
-              products: Array.isArray(entry.items) ? entry.items.map((it: any) => it?.name).filter(Boolean) : [],
+              products: Array.isArray(entry.items)
+                ? entry.items.map((it: any) => it?.name).filter(Boolean)
+                : [],
             });
           }
         });
@@ -106,17 +132,21 @@ const loadDebtors = async () => {
         const d = ensureDebtor(clientId, flat.clientName);
         const amount = Number(flat.amount || 0);
         d.totalDebt += amount;
+
+        const dObj = toLocalDateSafe(flat.date);
         d.invoices.push({
           id: flat.correlative || flat.saleId || key,
           amount,
-          date: flat.date ? new Date(flat.date).toLocaleDateString() : "",
+          date: format(dObj, "dd/MM/yyyy"),
+          dateSort: dObj.getTime(),
           type: flat.type,
-          products: Array.isArray(flat.items) ? flat.items.map((it: any) => it?.name).filter(Boolean) : [],
+          products: Array.isArray(flat.items)
+            ? flat.items.map((it: any) => it?.name).filter(Boolean)
+            : [],
         });
       }
     });
 
-    // Devuelve array ordenado por nombre
     return Array.from(debtorMap.values()).sort((a, b) =>
       a.name.localeCompare(b.name, "es", { sensitivity: "base" })
     );
@@ -154,7 +184,6 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("pending");
 
-  // Cargar deudores al montar
   useEffect(() => {
     const fetchDebtors = async () => {
       setLoading(true);
@@ -165,23 +194,20 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     fetchDebtors();
   }, []);
 
-  // Filtrar datos de ventas cuando cambie el término de búsqueda o las fechas
   useEffect(() => {
     let filtered = salesDetailData;
 
-    // Filtrar por término de búsqueda
     if (salesSearchTerm) {
       filtered = filtered.filter(item =>
-        item.correlative.toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
-        item.productName.toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
-        item.seller.toLowerCase().includes(salesSearchTerm.toLowerCase())
+        (item.correlative || "").toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
+        (item.productName || "").toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
+        (item.seller || "").toLowerCase().includes(salesSearchTerm.toLowerCase())
       );
     }
 
-    // Filtrar por rango de fechas
     if (dateFrom || dateTo) {
       filtered = filtered.filter(item => {
-        const itemDate = new Date(item.date);
+        const itemDate = toLocalDateSafe(item.date);
         if (dateFrom && itemDate < dateFrom) return false;
         if (dateTo && itemDate > dateTo) return false;
         return true;
@@ -229,7 +255,6 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     window.open(url, "_blank");
   };
 
-  // Cargar detalles de ventas para un cliente específico
   const loadSalesDetail = async (clientId: string) => {
     try {
       const salesData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.sales);
@@ -245,7 +270,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
             clientSales.push({
               saleId: saleId,
               correlative: sale.correlative || saleId,
-              date: sale.date || sale.createdAt,
+              date: sale.date || sale.createdAt, // puede ser "yyyy-MM-dd" o ISO
               seller: sale.user || sale.cashier || "Sistema",
               clientName: sale.client?.name || sale.clientName || "Cliente",
               productName: item.name || "Producto",
@@ -258,23 +283,24 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         }
       });
 
-      return clientSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      return clientSales.sort(
+        (a, b) => toLocalDateSafe(b.date).getTime() - toLocalDateSafe(a.date).getTime()
+      );
     } catch (error) {
       console.error("Error loading sales detail:", error);
       return [];
     }
   };
 
-  // Exportar a Excel
   const exportToExcel = (data: any[], filename: string) => {
     const exportData = data.map(item => ({
       'Correlativo': item.correlative,
-      'Fecha': format(new Date(item.date), "dd/MM/yyyy"),
+      'Fecha': format(toLocalDateSafe(item.date), "dd/MM/yyyy"),
       'Vendedor': item.seller,
       'Producto': item.productName,
       'Cantidad': item.quantity,
-      'Precio': `S/ ${item.price.toFixed(2)}`,
-      'Total': `S/ ${item.total.toFixed(2)}`
+      'Precio': `S/ ${Number(item.price || 0).toFixed(2)}`,
+      'Total': `S/ ${Number(item.total || 0).toFixed(2)}`
     }));
     
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -283,26 +309,18 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     XLSX.writeFile(wb, `${filename}.xlsx`);
   };
 
-  // Exportar a PDF
   const exportToPDF = (data: any[], clientName: string) => {
     try {
-      console.log('Starting PDF export for:', clientName, 'with', data.length, 'records');
-      
       const doc = new jsPDF();
-      
-      // Header company info
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
       doc.text("MARACUYÁ VILLA GRATIA", 105, 20, { align: "center" });
-      
       doc.setFontSize(14);
       doc.setFont("helvetica", "normal");
       doc.text(`Detalle de Ventas - ${clientName}`, 105, 35, { align: "center" });
-      
       doc.setFontSize(10);
       doc.text(`Fecha de emisión: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}`, 105, 45, { align: "center" });
-      
-      // Date range if filters are applied
+
       let startY = 55;
       if (dateFrom || dateTo) {
         const fromDate = dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Inicio";
@@ -311,75 +329,42 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         startY = 65;
       }
 
-      // Prepare table data
       const tableData = data.map(item => [
         item.correlative || '',
-        format(new Date(item.date), "dd/MM/yyyy"),
+        format(toLocalDateSafe(item.date), "dd/MM/yyyy"),
         item.seller || '',
         item.productName || '',
-        item.quantity.toString(),
-        `S/ ${item.price.toFixed(2)}`,
-        `S/ ${item.total.toFixed(2)}`
+        String(item.quantity ?? 0),
+        `S/ ${Number(item.price || 0).toFixed(2)}`,
+        `S/ ${Number(item.total || 0).toFixed(2)}`
       ]);
 
-      console.log('Table data prepared:', tableData.length, 'rows');
-
-      // Calculate totals
-      const totalAmount = data.reduce((sum, item) => sum + (item.total || 0), 0);
-      const totalItems = data.reduce((sum, item) => sum + (item.quantity || 0), 0);
-
-      // Add table using autoTable
       const autoTable = (doc as any).autoTable;
       if (typeof autoTable === 'function') {
         autoTable({
           head: [["Correlativo", "Fecha", "Vendedor", "Producto", "Cantidad", "Precio", "Total"]],
           body: tableData,
           startY: startY,
-          styles: { 
-            fontSize: 9,
-            cellPadding: 3,
-            halign: 'center'
-          },
-          headStyles: { 
-            fillColor: [34, 197, 94],
-            textColor: 255,
-            fontStyle: 'bold'
-          },
+          styles: { fontSize: 9, cellPadding: 3, halign: 'center' },
+          headStyles: { fillColor: [34, 197, 94], textColor: 255, fontStyle: 'bold' },
           columnStyles: {
-            0: { halign: 'center' },
-            1: { halign: 'center' },
-            2: { halign: 'left' },
-            3: { halign: 'left' },
-            4: { halign: 'center' },
-            5: { halign: 'right' },
-            6: { halign: 'right' }
-          },
-          foot: [["", "", "", "TOTALES:", totalItems.toString(), "", `S/ ${totalAmount.toFixed(2)}`]],
-          footStyles: {
-            fillColor: [243, 244, 246],
-            textColor: 0,
-            fontStyle: 'bold'
+            0: { halign: 'center' }, 1: { halign: 'center' },
+            2: { halign: 'left' },   3: { halign: 'left' },
+            4: { halign: 'center' }, 5: { halign: 'right' }, 6: { halign: 'right' }
           }
         });
-
-        // Footer
         const finalY = (doc as any).lastAutoTable?.finalY + 20 || 200;
         doc.setFontSize(8);
         doc.setFont("helvetica", "italic");
         doc.text("Este documento fue generado automáticamente por el sistema de Maracuyá Villa Gratia", 105, finalY, { align: "center" });
-        
-        console.log('PDF generated successfully, saving...');
         doc.save(`detalle_ventas_${clientName.replace(/\s+/g, "_")}.pdf`);
-        console.log('PDF saved successfully');
       } else {
-        console.error('autoTable function not available');
-        // Fallback: simple PDF without table
-        doc.text("Error: No se pudo generar la tabla. Funcionalidad limitada.", 20, startY + 20);
+        doc.text("No se pudo generar la tabla (autoTable no disponible).", 20, startY + 20);
         doc.save(`detalle_ventas_${clientName.replace(/\s+/g, "_")}_simple.pdf`);
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Error al generar el PDF. Verifique la consola para más detalles.');
+      alert('Error al generar el PDF.');
     }
   };
 
@@ -387,7 +372,6 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     if (!selectedDebtor || paymentAmount <= 0) return;
 
     try {
-      // Registrar el pago en RTDB
       const paymentData = {
         clientId: selectedDebtor.id,
         clientName: selectedDebtor.name,
@@ -397,26 +381,20 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         invoices: selectedInvoices,
         status: "paid",
         paidAt: new Date().toISOString(),
-        paidBy: "sistema" // Aquí iría el usuario actual
+        paidBy: "sistema"
       };
 
       await RTDBHelper.pushData("payments", paymentData);
 
-      // Actualizar las facturas como pagadas
       const updates: Record<string, any> = {};
       selectedInvoices.forEach(invoiceId => {
         updates[`${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${invoiceId}/status`] = "paid";
         updates[`${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${invoiceId}/paidAt`] = new Date().toISOString();
       });
+      if (Object.keys(updates).length > 0) await RTDBHelper.updateData(updates);
 
-      if (Object.keys(updates).length > 0) {
-        await RTDBHelper.updateData(updates);
-      }
-
-      // Agregar a facturas pagadas
       setPaidInvoices(prev => [...prev, paymentData]);
 
-      // Recargar deudores
       const updatedDebtors = await loadDebtors();
       setDebtors(updatedDebtors);
 
@@ -458,8 +436,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
             <TabsTrigger value="paid">Boletas Pagadas</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pending" className="space-y-6">{/* Contenido de cuentas pendientes */}
-
+          <TabsContent value="pending" className="space-y-6">
             {/* Summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <Card>
@@ -677,10 +654,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                       .map((payment, index) => (
                         <TableRow key={index}>
                           <TableCell>{payment.clientName}</TableCell>
-                          <TableCell>{format(new Date(payment.date), "dd/MM/yyyy")}</TableCell>
-                          <TableCell>S/ {payment.amount.toFixed(2)}</TableCell>
+                          <TableCell>{fmtDMY(payment.date)}</TableCell>
+                          <TableCell>S/ {Number(payment.amount || 0).toFixed(2)}</TableCell>
                           <TableCell className="capitalize">{payment.method}</TableCell>
-                          <TableCell>{payment.invoices.join(", ")}</TableCell>
+                          <TableCell>{(payment.invoices || []).join(", ")}</TableCell>
                         </TableRow>
                       ))
                     }
@@ -718,7 +695,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                         }}
                       />
                       <label htmlFor={invoice.id} className="text-sm flex-1">
-                        {invoice.id} - S/ {invoice.amount.toFixed(2)}
+                        {invoice.id} - S/ {invoice.amount.toFixed(2)} — {invoice.date}
                       </label>
                     </div>
                   ))}
@@ -801,10 +778,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    console.log('Excel button clicked, data length:', filteredSalesDetail.length);
-                    exportToExcel(filteredSalesDetail, `detalle_ventas_${selectedDebtorForDetail?.name}`);
-                  }}
+                  onClick={() => exportToExcel(filteredSalesDetail, `detalle_ventas_${selectedDebtorForDetail?.name}`)}
                   disabled={filteredSalesDetail.length === 0}
                 >
                   <Download className="w-4 h-4 mr-1" />
@@ -813,10 +787,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    console.log('PDF button clicked, data length:', filteredSalesDetail.length);
-                    exportToPDF(filteredSalesDetail, selectedDebtorForDetail?.name || "Cliente");
-                  }}
+                  onClick={() => exportToPDF(filteredSalesDetail, selectedDebtorForDetail?.name || "Cliente")}
                   disabled={filteredSalesDetail.length === 0}
                 >
                   <Download className="w-4 h-4 mr-1" />
@@ -915,12 +886,12 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                       filteredSalesDetail.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.correlative}</TableCell>
-                          <TableCell>{format(new Date(item.date), "dd/MM/yyyy")}</TableCell>
+                          <TableCell>{format(toLocalDateSafe(item.date), "dd/MM/yyyy")}</TableCell>
                           <TableCell>{item.seller}</TableCell>
                           <TableCell>{item.productName}</TableCell>
                           <TableCell className="text-center">{item.quantity}</TableCell>
-                          <TableCell className="text-right">S/ {item.price.toFixed(2)}</TableCell>
-                          <TableCell className="text-right font-medium">S/ {item.total.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">S/ {Number(item.price || 0).toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-medium">S/ {Number(item.total || 0).toFixed(2)}</TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -942,32 +913,6 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 </Table>
               </CardContent>
             </Card>
-
-            {/* Summary */}
-            {filteredSalesDetail.length > 0 && (
-              <Card>
-                <CardContent className="p-4">
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total de Registros</p>
-                      <p className="text-lg font-bold">{filteredSalesDetail.length}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Cantidad Total</p>
-                      <p className="text-lg font-bold">
-                        {filteredSalesDetail.reduce((sum, item) => sum + item.quantity, 0)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Monto Total</p>
-                      <p className="text-lg font-bold text-primary">
-                        S/ {filteredSalesDetail.reduce((sum, item) => sum + item.total, 0).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -987,7 +932,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {selectedDebtor.invoices
-                  .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                  .sort((a: any, b: any) => a.dateSort - b.dateSort)
                   .map((invoice: any) => (
                     <div key={invoice.id} className="flex items-center justify-between p-3 border rounded">
                       <div className="flex items-center space-x-2">
