@@ -1,6 +1,7 @@
 // src/lib/rtdb.ts
 import { initializeApp } from "firebase/app";
 import { getDatabase, Database } from "firebase/database";
+import { getAuth } from "firebase/auth";           // 👈 Añadido
 
 // ⚠️ En producción, lee desde variables de entorno (Vite)
 const firebaseConfig = {
@@ -23,6 +24,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const rtdb: Database = getDatabase(app);
+export const auth = getAuth(app);                  // 👈 Exportado
 
 // Rutas de la base de datos
 export const RTDB_PATHS = {

@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { Routes, Route, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import Index from "./pages/Index";
@@ -7,10 +7,10 @@ import Pedidos from "./pages/Pedidos";
 import Familias from "./pages/Familias";
 import NotFound from "./pages/NotFound";
 
-// 🔐 usamos tu sesión real
+// sesión real
 import { useSession } from "@/state/session";
-// tu login de PIN existente
-import RTDBLogin from "@/components/modules/RTDBLogin";
+// login por correo/contraseña
+import EmailLogin from "@/components/modules/EmailLogin";
 
 /* ============== Pantalla de bloqueo (inline) ============== */
 function LockedScreen({ onBackToFamilies }: { onBackToFamilies: () => void }) {
@@ -28,7 +28,6 @@ function LockedScreen({ onBackToFamilies }: { onBackToFamilies: () => void }) {
               </p>
             </div>
 
-            {/* Botón con ancho contenido y separado del borde */}
             <div className="mt-8">
               <button
                 type="button"
@@ -40,10 +39,10 @@ function LockedScreen({ onBackToFamilies }: { onBackToFamilies: () => void }) {
             </div>
           </div>
 
-          {/* Columna derecha: Login admin (PIN) */}
+          {/* Columna derecha: Login admin */}
           <div className="bg-white border rounded-2xl shadow-sm p-4">
             <div className="max-w-md mx-auto">
-              <RTDBLogin />
+              <EmailLogin /> {/* 👈 AQUÍ antes estaba RTDBLogin */}
             </div>
           </div>
         </div>
@@ -55,11 +54,10 @@ function LockedScreen({ onBackToFamilies }: { onBackToFamilies: () => void }) {
 /* ================= Wrapper de ruta protegida ================= */
 function Protected({ element }: { element: JSX.Element }) {
   const navigate = useNavigate();
-  const { user } = useSession(); // ← sin localStorage
+  const { user } = useSession();
   const isAdmin = user?.role === "admin";
 
   if (isAdmin) return element;
-  // si NO es admin, no redirigimos: mostramos el candado con login + botón volver
   return <LockedScreen onBackToFamilies={() => navigate("/familias", { replace: true })} />;
 }
 
@@ -67,7 +65,7 @@ function Protected({ element }: { element: JSX.Element }) {
 export default function App() {
   const location = useLocation();
 
-  // En HashRouter, pathname refleja la ruta (# ya lo maneja el router)
+  // En HashRouter, pathname refleja la ruta
   const isFamilies = location.pathname.startsWith("/familias");
 
   // Navbar solo si sesión admin y NO estamos en /familias
@@ -85,9 +83,7 @@ export default function App() {
             gap: 12,
           }}
         >
-          <NavLink to="/" end>
-            Inicio
-          </NavLink>
+          <NavLink to="/" end>Inicio</NavLink>
           <NavLink to="/pedidos">Pedidos</NavLink>
           <NavLink to="/familias">Familias</NavLink>
         </nav>
@@ -97,11 +93,9 @@ export default function App() {
         {/* 🔓 Público */}
         <Route path="/familias" element={<Familias />} />
 
-        {/* 🔒 Protegidas (si no hay admin → LockedScreen inline) */}
+        {/* 🔒 Protegidas */}
         <Route path="/" element={<Protected element={<Index />} />} />
         <Route path="/pedidos" element={<Protected element={<Pedidos />} />} />
-
-        {/* 404 también protegida para no exponer nada */}
         <Route path="*" element={<Protected element={<NotFound />} />} />
       </Routes>
     </>
