@@ -582,6 +582,16 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             onChange={(e) => setClientQuery(e.target.value)}
             className="h-14 text-lg"
           />
+
+          {/* === Cliente seleccionado grande === */}
+          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border rounded-md px-4 py-3">
+            <p className="text-xs text-muted-foreground">Cliente seleccionado</p>
+            <p className="text-2xl font-bold leading-tight truncate">
+              {selectedClient?.name ?? "—"}
+            </p>
+          </div>
+          {/* ================================== */}
+
           <div className="max-h-80 overflow-y-auto border rounded-md">
             {filteredClients.map((c) => (
               <button
