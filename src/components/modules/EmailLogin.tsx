@@ -21,10 +21,10 @@ export default function EmailLogin() {
     setErr(null);
     setLoading(true);
     try {
+      // Inicia sesión; bindAuth() en App.tsx actualizará el user/rol
       await signInWithEmailAndPassword(auth, email.trim(), pass);
       setMsg("Inicio de sesión correcto.");
     } catch (e: any) {
-      // Mensajes más amigables
       const code = String(e?.code || "");
       let friendly = "Error de inicio de sesión";
       if (code.includes("auth/invalid-credential")) friendly = "Correo o contraseña inválidos.";
@@ -40,12 +40,13 @@ export default function EmailLogin() {
   const onResetPassword = async () => {
     setMsg(null);
     setErr(null);
-    if (!email.trim()) {
+    const val = email.trim();
+    if (!val) {
       setErr("Escribe tu correo para enviarte el enlace de recuperación.");
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      await sendPasswordResetEmail(auth, val);
       setMsg("Te enviamos un enlace para restablecer tu contraseña.");
     } catch (e: any) {
       const code = String(e?.code || "");

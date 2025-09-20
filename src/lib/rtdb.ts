@@ -1,9 +1,8 @@
 // src/lib/rtdb.ts
 import { initializeApp } from "firebase/app";
 import { getDatabase, Database } from "firebase/database";
-import { getAuth } from "firebase/auth";           // 👈 Añadido
+import { getAuth } from "firebase/auth";
 
-// ⚠️ En producción, lee desde variables de entorno (Vite)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FB_API_KEY ?? "AIzaSyCaqH273YfTajeMMVCr_3HEoNffH1XQcFs",
   authDomain: import.meta.env.VITE_FB_PROJECT_ID
@@ -24,9 +23,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const rtdb: Database = getDatabase(app);
-export const auth = getAuth(app);                  // 👈 Exportado
+export const auth = getAuth(app); // 👈 importante
 
-// Rutas de la base de datos
 export const RTDB_PATHS = {
   users: "users",
   products: "products",
@@ -44,11 +42,7 @@ export const RTDB_PATHS = {
   config: "config",
   correlatives: "correlatives",
   logs: "logs",
-
-  // 👇 extras para el flujo de almuerzos (página pública)
   lunch_menu: "lunch_menu",
   lunch_orders: "lunch_orders",
   lunch_settings: "lunch_settings",
 } as const;
-
-export type RTDBPath = keyof typeof RTDB_PATHS;

@@ -1,5 +1,5 @@
-import "./index.css"; // 👈 importa Tailwind + variables
-
+// src/main.tsx
+import "./index.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";
@@ -13,7 +13,7 @@ if (!rootEl) {
 } else {
   createRoot(rootEl).render(
     <React.StrictMode>
-      {/* 👇 HashRouter evita 404 y parpadeo en GitHub Pages */}
+      {/* HashRouter evita 404 en GitHub Pages */}
       <HashRouter>
         <App />
       </HashRouter>
