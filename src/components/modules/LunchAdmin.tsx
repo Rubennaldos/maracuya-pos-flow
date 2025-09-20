@@ -448,6 +448,31 @@ export default function LunchAdmin({ onBack }: Props = {}) {
           </CardHeader>
         </Card>
 
+        // dentro de src/components/modules/LunchAdmin.tsx, en el return(), arriba del Tabs
+
+<Card>
+  <CardHeader className="flex items-center justify-between">
+    <div className="flex items-center gap-3">
+      {onBack && (
+        <Button
+          variant="ghost"
+          onClick={onBack}
+          className="flex items-center gap-2 px-2"
+          title="Volver al dashboard"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Volver</span>
+        </Button>
+      )}
+      <CardTitle className="text-2xl font-bold">Administración de Almuerzos</CardTitle>
+    </div>
+    <p className="text-muted-foreground hidden sm:block">
+      Configura el portal, categorías y productos.
+    </p>
+  </CardHeader>
+</Card>
+
+
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="space-y-6">
           <TabsList className="grid grid-cols-4">
             <TabsTrigger value="settings" className="flex items-center gap-2">

@@ -1,7 +1,6 @@
 // src/pages/Index.tsx
 import { useState } from "react";
 import { useSession } from "@/state/session";
-// ✅ así SÍ
 import RTDBLogin from "@/components/modules/RTDBLogin";
 
 import { Dashboard, ModuleType } from "@/components/Dashboard";
@@ -14,9 +13,10 @@ import { AccountsReceivable } from "@/components/modules/AccountsReceivable";
 import { HistoricalSales } from "@/components/modules/HistoricalSales";
 import { Promotions } from "@/components/modules/Promotions";
 import { UnregisteredSales } from "@/components/modules/UnregisteredSales";
-
-// 👇 AÑADE ESTO
 import { DeletedSalesHistory } from "@/components/modules/DeletedSalesHistory";
+
+// 👇 IMPORTA el módulo de almuerzos (admin)
+import LunchAdmin from "@/components/modules/LunchAdmin";
 
 export default function Index() {
   const { isAuthenticated } = useSession();
@@ -25,8 +25,21 @@ export default function Index() {
   const FAMILIAS_URL = `${import.meta.env.BASE_URL}#/familias`;
 
   const DebugBar = (
-    <div style={{position:"fixed",top:0,left:0,right:0,background:"#111",color:"#0f0",fontSize:12,padding:"6px 10px",zIndex:9999}}>
-      base={import.meta.env.BASE_URL} • auth={String(isAuthenticated)} • module={String(currentModule ?? "dashboard")}
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        background: "#111",
+        color: "#0f0",
+        fontSize: 12,
+        padding: "6px 10px",
+        zIndex: 9999,
+      }}
+    >
+      base={import.meta.env.BASE_URL} • auth={String(isAuthenticated)} • module=
+      {String(currentModule ?? "dashboard")}
     </div>
   );
 
@@ -35,7 +48,9 @@ export default function Index() {
       <>
         {DebugBar}
         <RTDBLogin />
-        <noscript><div style={{ padding: 24 }}>Cargando login…</div></noscript>
+        <noscript>
+          <div style={{ padding: 24 }}>Cargando login…</div>
+        </noscript>
       </>
     );
   }
@@ -49,8 +64,11 @@ export default function Index() {
   if (currentModule === "historical") return <HistoricalSales onBack={() => setCurrentModule(null)} />;
   if (currentModule === "promos") return <Promotions onBack={() => setCurrentModule(null)} />;
   if (currentModule === "unregistered") return <UnregisteredSales onBack={() => setCurrentModule(null)} />;
-  // 👇 AÑADE ESTE CASE
   if (currentModule === "deleted") return <DeletedSalesHistory onBack={() => setCurrentModule(null)} />;
+
+  // 👇 ESTE ES EL CASE QUE FALTABA
+  if (currentModule === "lunch-admin") return <LunchAdmin onBack={() => setCurrentModule(null)} />;
+
 
   return (
     <>
@@ -61,7 +79,12 @@ export default function Index() {
           <h2 className="text-lg md:text-xl font-bold">🍽️ ¡Padres de Familia!</h2>
           <p className="opacity-90">Ordena el almuerzo de tu hijo de forma fácil y rápida</p>
           <div className="mt-3">
-            <a href={FAMILIAS_URL} target="_blank" rel="noreferrer" className="inline-block rounded-lg bg-white/95 text-green-700 px-4 py-2 font-medium shadow hover:bg-white">
+            <a
+              href={FAMILIAS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block rounded-lg bg-white/95 text-green-700 px-4 py-2 font-medium shadow hover:bg-white"
+            >
               Ir a Almuerzos y Pedidos
             </a>
           </div>
