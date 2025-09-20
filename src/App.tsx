@@ -15,29 +15,37 @@ import RTDBLogin from "@/components/modules/RTDBLogin";
 /* ============== Pantalla de bloqueo (inline) ============== */
 function LockedScreen({ onBackToFamilies }: { onBackToFamilies: () => void }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4 flex items-center justify-center">
-      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-6">
-        {/* Columna izquierda: Mensaje + volver */}
-        <div className="bg-white border rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">Acceso restringido</h1>
-            <p className="text-muted-foreground mb-6">
-              Esta sección es solo para administradores. Si eres padre de familia, por favor vuelve
-              al portal de almuerzos.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onBackToFamilies}
-            className="inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent"
-          >
-            ← Volver al módulo de almuerzos
-          </button>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center">
+      <div className="w-full max-w-5xl mx-auto px-4">
+        <div className="grid gap-6 md:grid-cols-2 items-stretch">
+          {/* Columna izquierda: Mensaje + botón */}
+          <div className="bg-white border rounded-2xl shadow-sm p-6 flex flex-col">
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold">Acceso restringido</h1>
+              <p className="text-muted-foreground">
+                Esta sección es solo para administradores. Si eres padre de familia,
+                por favor vuelve al portal de almuerzos.
+              </p>
+            </div>
 
-        {/* Columna derecha: Login admin (PIN) */}
-        <div className="bg-white border rounded-2xl p-2 shadow-sm">
-          <RTDBLogin />
+            {/* Botón con ancho contenido y separado del borde */}
+            <div className="mt-8">
+              <button
+                type="button"
+                onClick={onBackToFamilies}
+                className="inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent"
+              >
+                ← Volver al módulo de almuerzos
+              </button>
+            </div>
+          </div>
+
+          {/* Columna derecha: Login admin (PIN) */}
+          <div className="bg-white border rounded-2xl shadow-sm p-4">
+            <div className="max-w-md mx-auto">
+              <RTDBLogin />
+            </div>
+          </div>
         </div>
       </div>
     </div>
