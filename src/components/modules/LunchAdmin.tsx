@@ -12,14 +12,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 
 import {
   Package,
   Settings,
   FileText,
-  Plus,
   Save,
   Trash2,
   Edit,
@@ -31,6 +29,8 @@ import {
 /* ================== Tipos ================== */
 type SettingsT = {
   isOpen?: boolean;
+  showPrices?: boolean;       // 👈 usado por familias
+  cutoffTime?: string;        // 👈 usado por familias (ej: "11:00")
   allowSameDay?: boolean;
   orderWindow?: { start?: string; end?: string };
 };
@@ -86,7 +86,13 @@ export default function LunchAdmin({ onBack }: Props = {}) {
   const { user } = useSession();
 
   /* ---------- Estado ---------- */
-  const [settings, setSettings] = useState<SettingsT>({ isOpen: true, allowSameDay: true });
+  const [settings, setSettings] = useState<SettingsT>({
+    isOpen: true,
+    showPrices: true,
+    cutoffTime: "11:00",
+    allowSameDay: true,
+    orderWindow: { start: "", end: "" },
+  });
   const [menu, setMenu] = useState<MenuT>({});
   const [ordersToday, setOrdersToday] = useState<OrderT[]>([]);
 
@@ -111,7 +117,13 @@ export default function LunchAdmin({ onBack }: Props = {}) {
     const loadAll = async () => {
       try {
         const s = await RTDBHelper.getData<SettingsT>(RTDB_PATHS.lunch_settings);
-        if (s) setSettings(s);
+        if (s) setSettings({
+          isOpen: s.isOpen ?? true,
+          showPrices: s.showPrices ?? true,
+          cutoffTime: s.cutoffTime || "11:00",
+          allowSameDay: s.allowSameDay ?? true,
+          orderWindow: s.orderWindow || { start: "", end: "" },
+        });
 
         const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
         if (m) setMenu(m);
@@ -326,7 +338,7 @@ export default function LunchAdmin({ onBack }: Props = {}) {
       const cat =
         categories.find((c) => c.name.toLowerCase() === catName.toLowerCase()) || categories[0];
       if (!cat) continue;
-      const id = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
+      const id = (crypto as any).randomUUID?.() || Math.random().toString(36).slice(2);
       updates[`${RTDB_PATHS.lunch_menu}/products/${id}`] = {
         id,
         name,
@@ -470,39 +482,59 @@ export default function LunchAdmin({ onBack }: Props = {}) {
 
                   <div className="flex items-center gap-2">
                     <Switch
-                      checked={settings.allowSameDay ?? true}
-                      onCheckedChange={(v) => setSettings({ ...settings, allowSameDay: v })}
+                      checked={settings.showPrices ?? true}
+                      onCheckedChange={(v) => setSettings({ ...settings, showPrices: v })}
                     />
-                    <Label>Permitir pedido el mismo día</Label>
+                    <Label>Mostrar precios a familias</Label>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <Label>Desde</Label>
+                      <Label>Hora límite</Label>
                       <Input
                         type="time"
-                        value={settings.orderWindow?.start || ""}
-                        onChange={(e) =>
-                          setSettings({
-                            ...settings,
-                            orderWindow: { ...settings.orderWindow, start: e.target.value },
-                          })
-                        }
+                        value={settings.cutoffTime || "11:00"}
+                        onChange={(e) => setSettings({ ...settings, cutoffTime: e.target.value })}
                       />
                     </div>
                     <div>
-                      <Label>Hasta</Label>
-                      <Input
-                        type="time"
-                        value={settings.orderWindow?.end || ""}
-                        onChange={(e) =>
-                          setSettings({
-                            ...settings,
-                            orderWindow: { ...settings.orderWindow, end: e.target.value },
-                          })
-                        }
-                      />
+                      <Label>Permitir mismo día</Label>
+                      <div className="flex items-center gap-2 h-9">
+                        <Switch
+                          checked={settings.allowSameDay ?? true}
+                          onCheckedChange={(v) => setSettings({ ...settings, allowSameDay: v })}
+                        />
+                      </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Ventana desde</Label>
+                    <Input
+                      type="time"
+                      value={settings.orderWindow?.start || ""}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          orderWindow: { ...settings.orderWindow, start: e.target.value },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>Ventana hasta</Label>
+                    <Input
+                      type="time"
+                      value={settings.orderWindow?.end || ""}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          orderWindow: { ...settings.orderWindow, end: e.target.value },
+                        })
+                      }
+                    />
                   </div>
                 </div>
 

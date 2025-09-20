@@ -9,6 +9,7 @@ import NotFound from "./pages/NotFound";
 
 import { useSession } from "@/state/session";
 import EmailLogin from "@/components/modules/EmailLogin";
+import LunchAdminPage from "./pages/LunchAdmin"; // 👈 asegúrate que exista
 
 /* ============== Pantalla de bloqueo ============== */
 function LockedScreen({ onBackToFamilies }: { onBackToFamilies: () => void }) {
@@ -92,6 +93,7 @@ export default function App() {
           <NavLink to="/" end>Inicio</NavLink>
           <NavLink to="/pedidos">Pedidos</NavLink>
           <NavLink to="/familias">Familias</NavLink>
+          <NavLink to="/lunch-admin">Administrar Almuerzos</NavLink> {/* 👈 acceso directo */}
         </nav>
       )}
 
@@ -102,6 +104,7 @@ export default function App() {
         {/* Protegidas */}
         <Route path="/" element={<Protected element={<Index />} />} />
         <Route path="/pedidos" element={<Protected element={<Pedidos />} />} />
+        <Route path="/lunch-admin" element={<Protected element={<LunchAdminPage />} />} /> {/* 👈 NUEVA */}
         <Route path="*" element={<Protected element={<NotFound />} />} />
       </Routes>
     </>
