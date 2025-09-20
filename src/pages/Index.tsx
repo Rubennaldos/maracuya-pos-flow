@@ -1,7 +1,9 @@
 // src/pages/Index.tsx
 import { useState } from "react";
 import { useSession } from "@/state/session";
-import { RTDBLogin } from "@/components/modules/RTDBLogin";
+// ✅ así SÍ
+import RTDBLogin from "@/components/modules/RTDBLogin";
+
 import { Dashboard, ModuleType } from "@/components/Dashboard";
 import { PointOfSale } from "@/components/modules/PointOfSale";
 import { SalesList } from "@/components/modules/SalesList";

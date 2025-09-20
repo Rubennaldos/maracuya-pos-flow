@@ -1,22 +1,44 @@
 // src/App.tsx
-import { Routes, Route, NavLink, useLocation } from "react-router-dom";
+import { Routes, Route, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import Index from "./pages/Index";
 import Pedidos from "./pages/Pedidos";
 import Familias from "./pages/Familias";
 import NotFound from "./pages/NotFound";
 
-export default function App() {
-  const { hash } = useLocation();
-  const isFamilies = hash.startsWith("#/familias");
+function isAdminSession() {
+  return localStorage.getItem("admin_auth") === "1";
+}
+function hasAuthQuery(search: string) {
+  const qs = new URLSearchParams(search);
+  return qs.get("auth") === "true";
+}
 
-  // Ocultamos menú si es la pública
+export default function App() {
+  const { hash, search, hostname } = window.location;
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const isFamilies = hash.startsWith("#/familias");
+  const isProdPublic = hostname.endsWith("github.io"); // tu Pages público
+  const allowAdminHere = isAdminSession() || hasAuthQuery(search);
+
+  // 🔒 Guard: en github.io, si NO es /familias y no hay sesión admin → forzar /familias
+  useEffect(() => {
+    if (isProdPublic && !isFamilies && !allowAdminHere) {
+      navigate("/familias", { replace: true });
+    }
+  }, [isProdPublic, isFamilies, allowAdminHere, navigate, location.key]);
+
+  // Ocultamos menú si estamos en familias o si no hay sesión admin
+  const showNav = allowAdminHere && !isFamilies;
+
   return (
     <>
-      {!isFamilies && (
+      {showNav && (
         <nav style={{ padding: 12, borderBottom: "1px solid #ddd", display: "flex", gap: 12 }}>
           <NavLink to="/" end>Inicio</NavLink>
           <NavLink to="/pedidos">Pedidos</NavLink>
-          {/* opcional: NavLink a familias dentro del sistema */}
           <NavLink to="/familias">Familias</NavLink>
         </nav>
       )}
@@ -24,7 +46,6 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/pedidos" element={<Pedidos />} />
-        {/* 👇 Esta ruta renderiza SOLO el módulo de padres */}
         <Route path="/familias" element={<Familias />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
