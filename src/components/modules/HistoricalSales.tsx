@@ -121,6 +121,11 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
   const productRefs = useRef<HTMLDivElement[]>([]);
   const [activeProductIdx, setActiveProductIdx] = useState<number>(-1);
 
+  // 🔹 Helper para devolver el foco al buscador
+  const focusSearch = () => {
+    requestAnimationFrame(() => searchRef.current?.focus());
+  };
+
   // Carga inicial
   useEffect(() => {
     loadProducts().then(setProducts);
@@ -171,7 +176,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     addToCart(p);
     setSearchTerm("");
     setActiveProductIdx(filteredProducts.length ? 0 : -1);
-    requestAnimationFrame(() => searchRef.current?.focus());
+    focusSearch();
   };
 
   /* -------- navegación con teclado en la búsqueda -------- */
@@ -294,6 +299,13 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     setCart((prev) => prev.map((i) => (i.id === id ? { ...i, price: newPrice } : i)));
   };
 
+  /* 🔹 Cuando NO haya modales abiertos, volver a enfocar el buscador */
+  useEffect(() => {
+    if (!clientModalOpen && !confirmOpen) {
+      focusSearch();
+    }
+  }, [clientModalOpen, confirmOpen]);
+
   /* -------- Guardar venta histórica (siempre crédito) -------- */
   const processHistoricalSale = async () => {
     if (isSaving) return;
@@ -353,6 +365,9 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
 
       clearCart();
       setSelectedClient(null);
+
+      // 🔹 Devuelve el foco al buscador después del alert
+      setTimeout(focusSearch, 0);
     } catch (error) {
       console.error("Error processing historical sale:", error);
       alert("Error al procesar la venta histórica");
