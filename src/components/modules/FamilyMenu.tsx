@@ -1,4 +1,3 @@
-// src/components/modules/FamilyMenu.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -23,16 +22,29 @@ type MenuData = {
 
 type Settings = {
   isOpen?: boolean;
-  orderWindow?: { start?: string; end?: string };
+  orderWindow?: { start?: string; end?: string }; // ej. "08:00" - "11:00"
   allowSameDay?: boolean;
 };
 
 type CartItem = Product & { qty: number; subtotal: number };
 
+type Props = {
+  client: Client;
+  onLogout?: () => void; // ← ahora opcional
+};
+
 const formatPrice = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n ?? 0);
 
-export default function FamilyMenu({ client }: { client: Client }) {
+function inWindow(win?: { start?: string; end?: string }) {
+  if (!win?.start || !win?.end) return true; // si no hay ventana, no limitamos
+  const now = new Date();
+  const pad = (x: number) => String(x).padStart(2, "0");
+  const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return hhmm >= win.start && hhmm <= win.end;
+}
+
+export default function FamilyMenu({ client, onLogout }: Props) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [menu, setMenu] = useState<MenuData | null>(null);
   const [activeCat, setActiveCat] = useState<string | null>(null);
@@ -67,8 +79,7 @@ export default function FamilyMenu({ client }: { client: Client }) {
     const all = Object.values(menu?.products || {}).filter((p) => p?.active !== false);
     for (const p of all) {
       const key = p.categoryId || "otros";
-      if (!out[key]) out[key] = [];
-      out[key].push(p);
+      (out[key] ||= []).push(p);
     }
     for (const key of Object.keys(out)) {
       out[key].sort((a, b) => a.name.localeCompare(b.name));
@@ -115,6 +126,9 @@ export default function FamilyMenu({ client }: { client: Client }) {
     if (settings?.isOpen === false) {
       return setMessage("El pedido no está disponible en este momento.");
     }
+    if (!inWindow(settings?.orderWindow)) {
+      return setMessage("Fuera del horario permitido para pedidos.");
+    }
     if (!Object.keys(cart).length) {
       return setMessage("Agregue al menos un producto.");
     }
@@ -135,7 +149,7 @@ export default function FamilyMenu({ client }: { client: Client }) {
         items,
         total,
         status: "pending",
-        createdAt: Date.now(),
+        createdAt: Date.now(), // número (compatible con reglas)
         channel: "familias",
       };
 
@@ -149,7 +163,7 @@ export default function FamilyMenu({ client }: { client: Client }) {
 
       clearCart();
       setMessage(`¡Pedido enviado! N° ${orderId.slice(-6).toUpperCase()}`);
-    } catch (e) {
+    } catch {
       setMessage("No se pudo enviar el pedido. Intente nuevamente.");
     } finally {
       setPosting(false);
@@ -158,6 +172,31 @@ export default function FamilyMenu({ client }: { client: Client }) {
 
   return (
     <section>
+      {/* Barra de saludo / Salir (si el padre lo quiere desde aquí) */}
+      {onLogout && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginBottom: 8,
+          }}
+        >
+          <button
+            type="button"
+            onClick={onLogout}
+            style={{
+              border: "1px solid #ddd",
+              background: "white",
+              padding: "6px 10px",
+              borderRadius: 10,
+              cursor: "pointer",
+            }}
+          >
+            Salir
+          </button>
+        </div>
+      )}
+
       {/* Avisos / ventana */}
       {settings?.isOpen === false && (
         <div
