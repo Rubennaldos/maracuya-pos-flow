@@ -1,9 +1,11 @@
+// src/components/modules/FamilyMenu.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
+import FamilyOrderHistory from "@/components/modules/lunch/FamilyOrderHistory";
 
-/* ===== Tipos locales (simples) ===== */
-type Client = { code: string; name: string };
+/* ===== Tipos ===== */
+type Client = { code: string; name?: string };
 
 type Category = { id: string; name: string; order?: number };
 type Product = {
@@ -14,7 +16,7 @@ type Product = {
   image?: string;
   categoryId: string;
   active?: boolean;
-  isCombo?: boolean; // 👈 regla de recreo
+  isCombo?: boolean;
 };
 
 type MenuData = {
@@ -24,7 +26,7 @@ type MenuData = {
 
 type Settings = {
   isOpen?: boolean;
-  orderWindow?: { start?: string; end?: string }; // ej. "08:00" - "11:00"
+  orderWindow?: { start?: string; end?: string };
   allowSameDay?: boolean;
 };
 
@@ -32,14 +34,14 @@ type CartItem = Product & { qty: number; subtotal: number };
 
 type Props = {
   client: Client;
-  onLogout?: () => void; // opcional
+  onLogout?: () => void;
 };
 
-const formatPrice = (n: number) =>
+const PEN = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n ?? 0);
 
 function inWindow(win?: { start?: string; end?: string }) {
-  if (!win?.start || !win?.end) return true; // si no hay ventana, no limitamos
+  if (!win?.start || !win?.end) return true;
   const now = new Date();
   const pad = (x: number) => String(x).padStart(2, "0");
   const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -54,10 +56,42 @@ export default function FamilyMenu({ client, onLogout }: Props) {
   const [posting, setPosting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // 👇 nombre real del alumno (buscado por código)
-  const [studentName, setStudentName] = useState<string>(client.name || "");
+  // Saludo
+  const [resolvedName, setResolvedName] = useState<string>("");
 
-  // Escuchar configuración y menú en vivo
+  // Historial
+  const [showHistory, setShowHistory] = useState(false);
+
+  /* ======= Resolver nombre del cliente ======= */
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      // 1) Si viene por props
+      if (client.name && client.name.trim()) {
+        if (mounted) setResolvedName(client.name.trim());
+        return;
+      }
+      // 2) Buscar en /clients/{code}
+      const direct = await RTDBHelper.getData<any>(`${RTDB_PATHS.clients}/${client.code}`);
+      if (mounted && direct?.name) {
+        setResolvedName(String(direct.name));
+        return;
+      }
+      // 3) Índice plano opcional
+      const idx = await RTDBHelper.getData<any>(`clients_by_code/${client.code}`);
+      if (mounted && idx?.name) {
+        setResolvedName(String(idx.name));
+        return;
+      }
+      // 4) Fallback
+      if (mounted) setResolvedName("Estudiante");
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [client.code, client.name]);
+
+  /* ======= Escuchar configuración y menú ======= */
   useEffect(() => {
     const off1 = RTDBHelper.listenToData<Settings>(RTDB_PATHS.lunch_settings, (d) =>
       setSettings(d || null)
@@ -71,24 +105,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     };
   }, []);
 
-  // Cargar nombre del alumno desde /clients/{code}
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await RTDBHelper.getData<any>(`${RTDB_PATHS.clients}/${client.code}`);
-        if (data) {
-          const full =
-            data.fullName?.toString().trim() ||
-            `${data.firstName || ""} ${data.lastName || ""}`.trim();
-          if (full) setStudentName(full);
-        }
-      } catch {
-        /* noop */
-      }
-    })();
-  }, [client.code]);
-
-  // Derivados
+  /* ======= Derivados ======= */
   const categories = useMemo<Category[]>(() => {
     const m = menu?.categories || {};
     return Object.values(m)
@@ -118,12 +135,13 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     [cart]
   );
 
-  const addToCart = (p: Product) => {
+  /* ======= Carrito ======= */
+  const addToCart = (p: Product | CartItem) => {
     setCart((prev) => {
       const curr = prev[p.id];
       const qty = (curr?.qty ?? 0) + 1;
       const subtotal = qty * (p.price ?? 0);
-      return { ...prev, [p.id]: { ...p, qty, subtotal } };
+      return { ...prev, [p.id]: { ...(p as Product), qty, subtotal } };
     });
   };
 
@@ -141,7 +159,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
   const clearCart = () => setCart({});
 
-  /* ========== Confirmación y guardado del pedido ========== */
+  /* ======= Confirmación + Guardado ======= */
   const placeOrder = async () => {
     setMessage(null);
 
@@ -155,18 +173,15 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       return setMessage("Agregue al menos un producto.");
     }
 
-    // ===== Paso de confirmación simple (prompts) =====
-    const alumno = window.prompt("Nombre del alumno (obligatorio):", studentName || "");
-    if (!alumno || !alumno.trim()) {
+    // Paso de confirmación
+    const alumno = window.prompt("Nombre del alumno (obligatorio):", resolvedName) || "";
+    if (!alumno.trim()) {
       return setMessage("Debes indicar el nombre del alumno.");
     }
 
     let recreo =
-      (window.prompt(
-        '¿Recreo? Escribe "primero" o "segundo" (segundo por defecto):',
-        "segundo"
-      ) || "segundo"
-      ).toLowerCase();
+      (window.prompt('¿Recreo? Escribe "primero" o "segundo" (segundo por defecto):', "segundo") ||
+        "segundo")?.toLowerCase();
     if (recreo !== "primero" && recreo !== "segundo") recreo = "segundo";
 
     const hasCombo = Object.values(cart).some((it) => it.isCombo);
@@ -178,7 +193,6 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
     setPosting(true);
     try {
-      // correlativo legible (A001-00001…)
       const orderCode = await RTDBHelper.getNextCorrelative("lunch");
 
       const items = Object.values(cart).map((it) => ({
@@ -191,14 +205,14 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
       const payload = {
         id: "",
-        code: orderCode, // correlativo
+        code: orderCode,
         clientCode: client.code,
-        clientName: alumno.trim(), // 👈 usar nombre real del estudiante
+        clientName: resolvedName || client.name || "Estudiante",
         items,
         note: nota || null,
         total,
         status: "pending",
-        createdAt: Number(Date.now()), // número consistente
+        createdAt: Date.now(),
         channel: "familias",
         recess: recreo as "primero" | "segundo",
         studentName: alumno.trim(),
@@ -207,7 +221,6 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       const orderId = await RTDBHelper.pushData(RTDB_PATHS.lunch_orders, payload);
       await RTDBHelper.updateData({
         [`${RTDB_PATHS.lunch_orders}/${orderId}/id`]: orderId,
-        // Índice por cliente (útil para historial)
         [`lunch_orders_by_client/${client.code}/${orderId}`]: true,
       });
 
@@ -222,7 +235,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
   return (
     <section>
-      {/* Saludo + salir */}
+      {/* Saludo ÚNICO */}
       <div
         style={{
           display: "flex",
@@ -236,11 +249,15 @@ export default function FamilyMenu({ client, onLogout }: Props) {
           borderRadius: 12,
         }}
       >
-        <div>¡Bienvenidos, papitos de <strong>{studentName || client.name}</strong>!</div>
-        {onLogout && (
+        <div>
+          ¡Bienvenido(a), <strong>{resolvedName || "Estudiante"}</strong> —{" "}
+          <span style={{ opacity: 0.9 }}>{client.code}</span>!
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
-            onClick={onLogout}
+            onClick={() => setShowHistory((v) => !v)}
             style={{
               border: "1px solid #ddd",
               background: "white",
@@ -249,12 +266,35 @@ export default function FamilyMenu({ client, onLogout }: Props) {
               cursor: "pointer",
             }}
           >
-            Salir
+            {showHistory ? "Ocultar historial" : "Ver historial"}
           </button>
-        )}
+
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              style={{
+                border: "1px solid #ddd",
+                background: "white",
+                padding: "6px 10px",
+                borderRadius: 10,
+                cursor: "pointer",
+              }}
+            >
+              Salir
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Avisos / ventana */}
+      {/* Historial del cliente */}
+      {showHistory && (
+        <div style={{ marginBottom: 14 }}>
+          <FamilyOrderHistory clientCode={client.code} />
+        </div>
+      )}
+
+      {/* Aviso cerrado */}
       {settings?.isOpen === false && (
         <div
           style={{
@@ -294,7 +334,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
           gap: 12,
         }}
       >
@@ -314,13 +354,13 @@ export default function FamilyMenu({ client, onLogout }: Props) {
               <img
                 src={p.image}
                 alt={p.name}
-                style={{ width: "100%", height: 140, objectFit: "cover" }}
+                style={{ width: "100%", height: 180, objectFit: "cover" }}
                 loading="lazy"
               />
             ) : (
               <div
                 style={{
-                  height: 140,
+                  height: 180,
                   background: "#f3f4f6",
                   display: "grid",
                   placeItems: "center",
@@ -337,7 +377,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
                 <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>{p.description}</p>
               )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end" }}>
-                <span style={{ fontWeight: 600 }}>{formatPrice(p.price)}</span>
+                <span style={{ fontWeight: 600 }}>{PEN(p.price)}</span>
                 <button
                   onClick={() => addToCart(p)}
                   style={{
@@ -386,10 +426,10 @@ export default function FamilyMenu({ client, onLogout }: Props) {
                 <div>
                   <div style={{ fontWeight: 600 }}>{it.name}</div>
                   <div style={{ fontSize: 12, color: "#6b7280" }}>
-                    {it.qty} × {formatPrice(it.price)}
+                    {it.qty} × {PEN(it.price)}
                   </div>
                 </div>
-                <div style={{ fontWeight: 600 }}>{formatPrice(it.subtotal)}</div>
+                <div style={{ fontWeight: 600 }}>{PEN(it.subtotal)}</div>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button
                     onClick={() => decItem(it.id)}
@@ -432,7 +472,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
               }}
             >
               <strong>Total</strong>
-              <strong>{formatPrice(total)}</strong>
+              <strong>{PEN(total)}</strong>
             </div>
 
             <div style={{ display: "flex", gap: 8 }}>
