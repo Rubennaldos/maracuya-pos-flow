@@ -1,5 +1,3 @@
-// src/components/modules/lunch/types.ts
-
 export type SettingsT = {
   isOpen?: boolean;
   showPrices?: boolean;
@@ -35,17 +33,31 @@ export type MenuT = {
   products?: Record<string, ProductT>;
 };
 
+export type Recess = "primero" | "segundo";
+
+export type OrderItem = {
+  id?: string;          // id del producto (opcional)
+  name: string;
+  price: number;
+  qty: number;
+  isCombo?: boolean;
+};
+
 export type OrderT = {
   id: string;
-  code: string;
-  clientId: string;
+  code: string;         // correlativo legible (A001-00001)
+  clientCode: string;   // id/código del padre
   clientName: string;
-  items: Array<{ id: string; name: string; price: number; qty: number }>;
+  items: OrderItem[];
   note?: string;
   total: number;
   status: "pending" | "preparing" | "delivered" | "canceled" | "confirmed" | "ready";
-  createdAt: string;
+  createdAt: number;    // 👈 SIEMPRE número (ms)
   deliveryAt?: string;
+
+  // extras del portal
+  recess?: Recess;
+  studentName?: string;
 };
 
 export type ComboTemplate = {

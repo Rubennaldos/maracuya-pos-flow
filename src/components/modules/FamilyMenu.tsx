@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 
+/* ===== Tipos locales (simples) ===== */
 type Client = { code: string; name: string };
 
 type Category = { id: string; name: string; order?: number };
@@ -13,6 +14,7 @@ type Product = {
   image?: string;
   categoryId: string;
   active?: boolean;
+  isCombo?: boolean; // 👈 necesario para la regla de recreo
 };
 
 type MenuData = {
@@ -30,7 +32,7 @@ type CartItem = Product & { qty: number; subtotal: number };
 
 type Props = {
   client: Client;
-  onLogout?: () => void; // ← ahora opcional
+  onLogout?: () => void; // opcional
 };
 
 const formatPrice = (n: number) =>
@@ -119,7 +121,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
   const clearCart = () => setCart({});
 
-  // Crear pedido en /lunch_orders (+ índice opcional /lunch_orders_by_client/{code})
+  /* ========== Confirmación y guardado del pedido ========== */
   const placeOrder = async () => {
     setMessage(null);
 
@@ -133,36 +135,59 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       return setMessage("Agregue al menos un producto.");
     }
 
+    // ===== Paso de confirmación simple (prompts) =====
+    const alumno = window.prompt("Nombre del alumno (obligatorio):", "");
+    if (!alumno || !alumno.trim()) {
+      return setMessage("Debes indicar el nombre del alumno.");
+    }
+
+    let recreo = (window.prompt('¿Recreo? Escribe "primero" o "segundo" (segundo por defecto):', "segundo") || "segundo").toLowerCase();
+    if (recreo !== "primero" && recreo !== "segundo") recreo = "segundo";
+
+    const hasCombo = Object.values(cart).some((it) => it.isCombo);
+    if (hasCombo && recreo === "primero") {
+      return setMessage("El almuerzo no puede entregarse en el 1er recreo. Elige segundo recreo.");
+    }
+
+    const nota = window.prompt("Observación (opcional):", "") || undefined;
+
     setPosting(true);
     try {
+      // correlativo legible (A001-00001…)
+      const orderCode = await RTDBHelper.getNextCorrelative("lunch");
+
       const items = Object.values(cart).map((it) => ({
-        productId: it.id,
+        id: it.id,
         name: it.name,
         qty: it.qty,
         price: it.price,
-        subtotal: it.subtotal,
+        isCombo: !!it.isCombo,
       }));
 
       const payload = {
+        id: "",
+        code: orderCode,              // 👈 correlativo
         clientCode: client.code,
         clientName: client.name,
         items,
+        note: nota || null,
         total,
         status: "pending",
-        createdAt: Date.now(), // número (compatible con reglas)
+        createdAt: Date.now(),        // 👈 número consistente
         channel: "familias",
+        recess: recreo as "primero" | "segundo",
+        studentName: alumno.trim(),
       };
 
-      // push devuelve id generado (lo guardamos en el mismo nodo)
       const orderId = await RTDBHelper.pushData(RTDB_PATHS.lunch_orders, payload);
       await RTDBHelper.updateData({
         [`${RTDB_PATHS.lunch_orders}/${orderId}/id`]: orderId,
-        // Índice opcional por cliente (útil para historial)
+        // Índice por cliente (útil para historial)
         [`lunch_orders_by_client/${client.code}/${orderId}`]: true,
       });
 
       clearCart();
-      setMessage(`¡Pedido enviado! N° ${orderId.slice(-6).toUpperCase()}`);
+      setMessage(`¡Pedido enviado! N° ${orderCode}`);
     } catch {
       setMessage("No se pudo enviar el pedido. Intente nuevamente.");
     } finally {
@@ -170,17 +195,31 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     }
   };
 
+  // nombre lindo para el saludo
+  const prettyName = useMemo(() => {
+    const parts = (client.name || "").trim().split(/\s+/);
+    if (parts.length <= 1) return client.name || "";
+    return `${parts[0]} ${parts[1]}`;
+  }, [client.name]);
+
   return (
     <section>
-      {/* Barra de saludo / Salir (si el padre lo quiere desde aquí) */}
-      {onLogout && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginBottom: 8,
-          }}
-        >
+      {/* Saludo + salir */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 8,
+          background: "#EAF7EF",
+          border: "1px solid #CBEBD6",
+          color: "#0F5132",
+          padding: "10px 14px",
+          borderRadius: 12,
+        }}
+      >
+        <div>¡Bienvenido, {prettyName}!</div>
+        {onLogout && (
           <button
             type="button"
             onClick={onLogout}
@@ -194,8 +233,8 @@ export default function FamilyMenu({ client, onLogout }: Props) {
           >
             Salir
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Avisos / ventana */}
       {settings?.isOpen === false && (

@@ -1,4 +1,3 @@
-// src/components/modules/LunchAdmin.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -8,7 +7,6 @@ import { toast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -33,7 +31,6 @@ import type {
   OrderT,
 } from "@/components/modules/lunch/types";
 
-// Panel de productos separado
 import ProductsPanel from "@/components/modules/lunch/products/ProductsPanel";
 
 interface Props {
@@ -46,7 +43,6 @@ const PEN = (n: number) =>
 export default function LunchAdmin({ onBack }: Props = {}) {
   const { user } = useSession();
 
-  // ---------- Estado principal ----------
   const [settings, setSettings] = useState<SettingsT>({
     isOpen: true,
     showPrices: true,
@@ -87,9 +83,15 @@ export default function LunchAdmin({ onBack }: Props = {}) {
           RTDB_PATHS.lunch_orders
         );
         if (allOrders) {
-          const today = new Date().toISOString().slice(0, 10);
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+          const end = start + 24 * 60 * 60 * 1000 - 1;
+
           setOrdersToday(
-            Object.values(allOrders).filter((o) => (o.createdAt || "").startsWith(today))
+            Object.values(allOrders).filter((o) => {
+              const t = typeof o.createdAt === "number" ? o.createdAt : Date.parse(String(o.createdAt || 0));
+              return t >= start && t <= end;
+            })
           );
         }
       } catch {
@@ -208,9 +210,15 @@ export default function LunchAdmin({ onBack }: Props = {}) {
         RTDB_PATHS.lunch_orders
       );
       if (allOrders) {
-        const today = new Date().toISOString().slice(0, 10);
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const end = start + 24 * 60 * 60 * 1000 - 1;
+
         setOrdersToday(
-          Object.values(allOrders).filter((x) => (x.createdAt || "").startsWith(today))
+          Object.values(allOrders).filter((x) => {
+            const t = typeof x.createdAt === "number" ? x.createdAt : Date.parse(String(x.createdAt || 0));
+            return t >= start && t <= end;
+          })
         );
       }
       toast({ title: "Pedido marcado como entregado" });
@@ -241,13 +249,15 @@ export default function LunchAdmin({ onBack }: Props = {}) {
           (o) => `
         <div class="o">
           <div class="row">
-            <div><strong>${o.clientName}</strong> (${o.code})</div>
+            <div><strong>${o.clientName}</strong> — <em>${o.code}</em></div>
             <div class="s">${o.status}</div>
           </div>
           <div><em>Productos:</em>${
             o.items?.map((i) => `<div class="it">• ${i.qty} x ${i.name}</div>`).join("") || ""
           }</div>
           ${o.note ? `<div><em>Obs:</em> ${o.note}</div>` : ""}
+          ${o.studentName ? `<div><em>Alumno:</em> ${o.studentName}</div>` : ""}
+          ${o.recess ? `<div><em>Recreo:</em> ${o.recess}</div>` : ""}
           <div style="text-align:right"><strong>Total:</strong> ${PEN(o.total)}</div>
         </div>`
         )
@@ -478,7 +488,7 @@ export default function LunchAdmin({ onBack }: Props = {}) {
             </div>
           </TabsContent>
 
-          {/* ================= Productos (panel separado) ================= */}
+          {/* ================= Productos ================= */}
           <TabsContent value="products">
             <ProductsPanel menu={menu} onMenuChange={setMenu} />
           </TabsContent>
@@ -521,7 +531,9 @@ export default function LunchAdmin({ onBack }: Props = {}) {
                           </Badge>
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
-                            {new Date(o.createdAt).toLocaleTimeString("es-PE", {
+                            {new Date(
+                              typeof o.createdAt === "number" ? o.createdAt : Date.parse(String(o.createdAt))
+                            ).toLocaleTimeString("es-PE", {
                               hour: "2-digit",
                               minute: "2-digit",
                             })}
@@ -537,6 +549,20 @@ export default function LunchAdmin({ onBack }: Props = {}) {
                           </div>
                         ))}
                       </div>
+
+                      {o.studentName && (
+                        <div className="text-sm">
+                          <div className="font-medium">Alumno:</div>
+                          <div className="ml-4 text-muted-foreground">{o.studentName}</div>
+                        </div>
+                      )}
+
+                      {o.recess && (
+                        <div className="text-sm">
+                          <div className="font-medium">Recreo:</div>
+                          <div className="ml-4 text-muted-foreground">{o.recess}</div>
+                        </div>
+                      )}
 
                       {o.note && (
                         <div className="text-sm">
