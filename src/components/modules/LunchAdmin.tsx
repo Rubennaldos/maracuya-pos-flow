@@ -1,3 +1,4 @@
+// src/components/modules/LunchAdmin.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -89,7 +90,10 @@ export default function LunchAdmin({ onBack }: Props = {}) {
 
           setOrdersToday(
             Object.values(allOrders).filter((o) => {
-              const t = typeof o.createdAt === "number" ? o.createdAt : Date.parse(String(o.createdAt || 0));
+              const t =
+                typeof o.createdAt === "number"
+                  ? o.createdAt
+                  : Date.parse(String(o.createdAt || 0));
               return t >= start && t <= end;
             })
           );
@@ -216,7 +220,10 @@ export default function LunchAdmin({ onBack }: Props = {}) {
 
         setOrdersToday(
           Object.values(allOrders).filter((x) => {
-            const t = typeof x.createdAt === "number" ? x.createdAt : Date.parse(String(x.createdAt || 0));
+            const t =
+              typeof x.createdAt === "number"
+                ? x.createdAt
+                : Date.parse(String(x.createdAt || 0));
             return t >= start && t <= end;
           })
         );
@@ -255,9 +262,9 @@ export default function LunchAdmin({ onBack }: Props = {}) {
           <div><em>Productos:</em>${
             o.items?.map((i) => `<div class="it">• ${i.qty} x ${i.name}</div>`).join("") || ""
           }</div>
+          ${(o as any).studentName ? `<div><em>Alumno:</em> ${(o as any).studentName}</div>` : ""}
+          ${(o as any).recess ? `<div><em>Recreo:</em> ${(o as any).recess}</div>` : ""}
           ${o.note ? `<div><em>Obs:</em> ${o.note}</div>` : ""}
-          ${o.studentName ? `<div><em>Alumno:</em> ${o.studentName}</div>` : ""}
-          ${o.recess ? `<div><em>Recreo:</em> ${o.recess}</div>` : ""}
           <div style="text-align:right"><strong>Total:</strong> ${PEN(o.total)}</div>
         </div>`
         )
@@ -497,26 +504,36 @@ export default function LunchAdmin({ onBack }: Props = {}) {
           <TabsContent value="orders">
             <Card>
               <CardHeader className="flex items-center justify-between">
-                <CardTitle>Pedidos del día — {new Date().toLocaleDateString("es-PE")}</CardTitle>
+                <CardTitle>
+                  Pedidos del día — {new Date().toLocaleDateString("es-PE")}
+                </CardTitle>
                 <Button variant="outline" onClick={printOrders}>
                   <FileText className="h-4 w-4 mr-2" />
                   Imprimir comanda
                 </Button>
               </CardHeader>
+
               <CardContent className="space-y-3">
                 {ordersToday.length === 0 && (
                   <p className="text-center text-muted-foreground py-8">
                     No hay pedidos registrados hoy.
                   </p>
                 )}
+
                 {ordersToday.map((o) => (
                   <Card key={o.id} className="border-l-4 border-l-primary">
                     <CardContent className="p-4 space-y-2">
+                      {/* ===== Encabezado ===== */}
                       <div className="flex items-start justify-between">
                         <div>
-                          <div className="font-semibold text-lg">{o.clientName}</div>
-                          <div className="text-xs text-muted-foreground">Código: {o.code}</div>
+                          <div className="font-semibold text-lg">
+                            {o.clientName || (o as any).studentName || "Estudiante"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Código: {(o as any).clientCode ?? o.code ?? "—"}
+                          </div>
                         </div>
+
                         <div className="flex items-center gap-2">
                           <Badge
                             variant={
@@ -529,18 +546,26 @@ export default function LunchAdmin({ onBack }: Props = {}) {
                           >
                             {o.status}
                           </Badge>
+
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
-                            {new Date(
-                              typeof o.createdAt === "number" ? o.createdAt : Date.parse(String(o.createdAt))
-                            ).toLocaleTimeString("es-PE", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {
+                              (() => {
+                                const ts =
+                                  typeof o.createdAt === "number"
+                                    ? o.createdAt
+                                    : Date.parse(String(o.createdAt || ""));
+                                return new Date(Number.isFinite(ts) ? ts : Date.now()).toLocaleTimeString(
+                                  "es-PE",
+                                  { hour: "2-digit", minute: "2-digit" }
+                                );
+                              })()
+                            }
                           </div>
                         </div>
                       </div>
 
+                      {/* ===== Detalle de productos ===== */}
                       <div className="text-sm">
                         <div className="font-medium">Productos:</div>
                         {o.items?.map((i, k) => (
@@ -550,17 +575,21 @@ export default function LunchAdmin({ onBack }: Props = {}) {
                         ))}
                       </div>
 
-                      {o.studentName && (
+                      {(o as any).studentName && (
                         <div className="text-sm">
                           <div className="font-medium">Alumno:</div>
-                          <div className="ml-4 text-muted-foreground">{o.studentName}</div>
+                          <div className="ml-4 text-muted-foreground">
+                            {(o as any).studentName}
+                          </div>
                         </div>
                       )}
 
-                      {o.recess && (
+                      {(o as any).recess && (
                         <div className="text-sm">
                           <div className="font-medium">Recreo:</div>
-                          <div className="ml-4 text-muted-foreground">{o.recess}</div>
+                          <div className="ml-4 text-muted-foreground">
+                            {(o as any).recess}
+                          </div>
                         </div>
                       )}
 
@@ -594,10 +623,11 @@ export default function LunchAdmin({ onBack }: Props = {}) {
 
 /* ---------- util local ---------- */
 function slugId(label: string) {
+  // versión compatible: elimina acentos usando el rango Unicode de diacríticos
   const s = label
     .toLowerCase()
     .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return `${s || "id"}-${Math.random().toString(36).slice(2, 6)}`;

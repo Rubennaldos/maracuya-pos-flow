@@ -14,7 +14,7 @@ type Product = {
   image?: string;
   categoryId: string;
   active?: boolean;
-  isCombo?: boolean; // 👈 necesario para la regla de recreo
+  isCombo?: boolean; // 👈 regla de recreo
 };
 
 type MenuData = {
@@ -54,6 +54,9 @@ export default function FamilyMenu({ client, onLogout }: Props) {
   const [posting, setPosting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // 👇 nombre real del alumno (buscado por código)
+  const [studentName, setStudentName] = useState<string>(client.name || "");
+
   // Escuchar configuración y menú en vivo
   useEffect(() => {
     const off1 = RTDBHelper.listenToData<Settings>(RTDB_PATHS.lunch_settings, (d) =>
@@ -67,6 +70,23 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       off2?.();
     };
   }, []);
+
+  // Cargar nombre del alumno desde /clients/{code}
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await RTDBHelper.getData<any>(`${RTDB_PATHS.clients}/${client.code}`);
+        if (data) {
+          const full =
+            data.fullName?.toString().trim() ||
+            `${data.firstName || ""} ${data.lastName || ""}`.trim();
+          if (full) setStudentName(full);
+        }
+      } catch {
+        /* noop */
+      }
+    })();
+  }, [client.code]);
 
   // Derivados
   const categories = useMemo<Category[]>(() => {
@@ -136,12 +156,17 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     }
 
     // ===== Paso de confirmación simple (prompts) =====
-    const alumno = window.prompt("Nombre del alumno (obligatorio):", "");
+    const alumno = window.prompt("Nombre del alumno (obligatorio):", studentName || "");
     if (!alumno || !alumno.trim()) {
       return setMessage("Debes indicar el nombre del alumno.");
     }
 
-    let recreo = (window.prompt('¿Recreo? Escribe "primero" o "segundo" (segundo por defecto):', "segundo") || "segundo").toLowerCase();
+    let recreo =
+      (window.prompt(
+        '¿Recreo? Escribe "primero" o "segundo" (segundo por defecto):',
+        "segundo"
+      ) || "segundo"
+      ).toLowerCase();
     if (recreo !== "primero" && recreo !== "segundo") recreo = "segundo";
 
     const hasCombo = Object.values(cart).some((it) => it.isCombo);
@@ -166,14 +191,14 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
       const payload = {
         id: "",
-        code: orderCode,              // 👈 correlativo
+        code: orderCode, // correlativo
         clientCode: client.code,
-        clientName: client.name,
+        clientName: alumno.trim(), // 👈 usar nombre real del estudiante
         items,
         note: nota || null,
         total,
         status: "pending",
-        createdAt: Date.now(),        // 👈 número consistente
+        createdAt: Number(Date.now()), // número consistente
         channel: "familias",
         recess: recreo as "primero" | "segundo",
         studentName: alumno.trim(),
@@ -195,13 +220,6 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     }
   };
 
-  // nombre lindo para el saludo
-  const prettyName = useMemo(() => {
-    const parts = (client.name || "").trim().split(/\s+/);
-    if (parts.length <= 1) return client.name || "";
-    return `${parts[0]} ${parts[1]}`;
-  }, [client.name]);
-
   return (
     <section>
       {/* Saludo + salir */}
@@ -218,7 +236,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
           borderRadius: 12,
         }}
       >
-        <div>¡Bienvenido, {prettyName}!</div>
+        <div>¡Bienvenidos, papitos de <strong>{studentName || client.name}</strong>!</div>
         {onLogout && (
           <button
             type="button"
