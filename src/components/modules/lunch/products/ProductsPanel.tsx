@@ -146,7 +146,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     dragInfo.current = { groupIdx, itemIdx };
     ev.dataTransfer.effectAllowed = "move";
   };
-  const onDragOver = (groupIdx: number, itemIdx: number) => (ev: React.DragEvent) => {
+  const onDragOver = (groupIdx: number, _itemIdx: number) => (ev: React.DragEvent) => {
     ev.preventDefault();
     const d = dragInfo.current;
     if (!d) return;
@@ -928,3 +928,4 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     </div>
   );
 }
+    

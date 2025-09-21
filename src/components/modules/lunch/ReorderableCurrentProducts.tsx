@@ -18,7 +18,7 @@ type Menu = {
       active?: boolean;
       categoryId?: string | null;
       isCombo?: boolean;
-      order?: number; // ← persistimos aquí el orden
+      position?: number; // 👈 usamos 'position' en todo el sistema
       image?: string;
       description?: string;
     }
@@ -63,15 +63,15 @@ export default function ReorderableCurrentProducts() {
 
     const result: Group[] = [];
     byCat.forEach((ids, cid) => {
-      // orden interno por "order"
+      // orden interno por "position"
       const sorted = ids
-        .map((id) => ({ id, order: menu.products?.[id]?.order ?? 0 }))
-        .sort((a, b) => a.order - b.order)
+        .map((id) => ({ id, position: menu.products?.[id]?.position ?? Number.POSITIVE_INFINITY }))
+        .sort((a, b) => a.position - b.position)
         .map((x) => x.id);
+
       if (sorted.length === 0) return; // no mostrar categorías vacías
-      const name = cid === "__uncat"
-        ? "Sin categoría"
-        : categories.find((c) => c.id === cid)?.name || "Sin categoría";
+      const name =
+        cid === "__uncat" ? "Sin categoría" : categories.find((c) => c.id === cid)?.name || "Sin categoría";
       result.push({ catId: cid, catName: name, items: sorted });
     });
 
@@ -106,8 +106,9 @@ export default function ReorderableCurrentProducts() {
 
     setMenu((m) => {
       const next: Menu = { ...m, products: { ...(m.products || {}) } };
+      // reasignar 'position' 0..N
       items.forEach((pid, idx) => {
-        next.products![pid] = { ...next.products![pid], order: (idx + 1) * 10 };
+        next.products![pid] = { ...next.products![pid], position: idx };
       });
       return next;
     });
@@ -122,7 +123,8 @@ export default function ReorderableCurrentProducts() {
     try {
       const updates: Record<string, any> = {};
       Object.values(menu.products || {}).forEach((p) => {
-        updates[`${RTDB_PATHS.lunch_menu}/products/${p.id}/order`] = p.order ?? 0;
+        updates[`${RTDB_PATHS.lunch_menu}/products/${p.id}/position`] =
+          typeof p.position === "number" ? p.position : Number.POSITIVE_INFINITY;
       });
       await RTDBHelper.updateData(updates);
       toast({ title: "Orden guardado" });
@@ -145,9 +147,7 @@ export default function ReorderableCurrentProducts() {
       <div className="space-y-6">
         {groups.map((g) => (
           <div key={g.catId} className="rounded-md border border-muted overflow-hidden">
-            <div className="px-3 py-2 border-b bg-muted/50 font-semibold">
-              {g.catName}
-            </div>
+            <div className="px-3 py-2 border-b bg-muted/50 font-semibold">{g.catName}</div>
 
             {g.items.map((id) => {
               const p = prods[id];
@@ -174,7 +174,7 @@ export default function ReorderableCurrentProducts() {
                     <Badge variant={p.active === false ? "outline" : "default"}>
                       {p.active === false ? "Inactivo" : "Activo"}
                     </Badge>
-                    {/* Botones decorativos para mantener UI homogénea (lógica la manejas en tu panel) */}
+                    {/* Botones decorativos para mantener UI homogénea */}
                     <Button size="icon" variant="ghost" disabled>
                       <Power className="h-4 w-4" />
                     </Button>
@@ -193,9 +193,7 @@ export default function ReorderableCurrentProducts() {
       </div>
 
       {groups.length === 0 && (
-        <div className="text-muted-foreground text-sm px-3 py-4">
-          No hay productos activos para ordenar.
-        </div>
+        <div className="text-muted-foreground text-sm px-3 py-4">No hay productos activos para ordenar.</div>
       )}
     </div>
   );
