@@ -46,14 +46,14 @@ export default function FamilyLogin({ onLogged }: Props) {
     >
       <h2 style={{ marginTop: 0 }}>Ingresar código del estudiante</h2>
       <p style={{ color: "#6b7280" }}>
-        Escriba el <b>código único</b> (por ejemplo: <code>C169111</code>) para acceder al menú.
+        Escriba el <b>código único</b> (por ejemplo: <code>C169123</code>) para acceder al menú.
       </p>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <input
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          placeholder="Código (ej. C169111)"
+          placeholder="Código (ej. C169123)"
           style={{
             flex: 1,
             padding: "10px 12px",
