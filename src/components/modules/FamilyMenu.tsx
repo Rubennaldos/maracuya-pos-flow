@@ -1,4 +1,3 @@
-// src/components/modules/FamilyMenu.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -48,6 +47,27 @@ function inWindow(win?: { start?: string; end?: string }) {
   return hhmm >= win.start && hhmm <= win.end;
 }
 
+/** Unifica nombre desde diferentes esquemas (incluye names + lastNames) */
+function deriveName(row: any): string | null {
+  if (!row) return null;
+
+  // campos directos frecuentes
+  const direct = row.name || row.fullName || row.fullname;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+
+  // tu esquema: names + lastNames
+  const names = typeof row.names === "string" ? row.names.trim() : "";
+  const last = typeof row.lastNames === "string" ? row.lastNames.trim() : "";
+  const composed = `${names} ${last}`.trim();
+  if (composed) return composed;
+
+  // otros alias por si acaso
+  const n = (row.firstName || row.givenName || "").toString().trim();
+  const l = (row.lastName || row.surname || "").toString().trim();
+  const alt = `${n} ${l}`.trim();
+  return alt || null;
+}
+
 export default function FamilyMenu({ client, onLogout }: Props) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [menu, setMenu] = useState<MenuData | null>(null);
@@ -56,42 +76,72 @@ export default function FamilyMenu({ client, onLogout }: Props) {
   const [posting, setPosting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Saludo
+  // Nombre resuelto (desde props o RTDB)
   const [resolvedName, setResolvedName] = useState<string>("");
 
   // Historial
   const [showHistory, setShowHistory] = useState(false);
 
-  /* ======= Resolver nombre del cliente ======= */
+  /* ==== Resolver nombre del cliente ==== */
   useEffect(() => {
     let mounted = true;
+
+    async function get(path: string) {
+      try {
+        const v = await RTDBHelper.getData<any>(path);
+        return v ?? null;
+      } catch {
+        return null;
+      }
+    }
+
     (async () => {
-      // 1) Si viene por props
+      // 1) si vino por props
       if (client.name && client.name.trim()) {
         if (mounted) setResolvedName(client.name.trim());
         return;
       }
-      // 2) Buscar en /clients/{code}
-      const direct = await RTDBHelper.getData<any>(`${RTDB_PATHS.clients}/${client.code}`);
-      if (mounted && direct?.name) {
-        setResolvedName(String(direct.name));
+
+      // 2) intenta varios paths posibles
+      const candidates: string[] = [];
+      if ((RTDB_PATHS as any)?.clients) {
+        candidates.push(`${RTDB_PATHS.clients}/${client.code}`);
+      }
+      // fallbacks genéricos
+      candidates.push(
+        `/clients/${client.code}`,
+        `/students/${client.code}`,
+        `/alumnos/${client.code}`,
+        `/people/${client.code}`
+      );
+
+      for (const p of candidates) {
+        const row = await get(p);
+        const name = deriveName(row);
+        if (mounted && name) {
+          setResolvedName(name);
+          return;
+        }
+      }
+
+      // 3) índice plano opcional
+      const idx = await get(`clients_by_code/${client.code}`);
+      const idxName = deriveName(idx) || (idx?.name ?? "").toString().trim();
+      if (mounted && idxName) {
+        setResolvedName(idxName);
         return;
       }
-      // 3) Índice plano opcional
-      const idx = await RTDBHelper.getData<any>(`clients_by_code/${client.code}`);
-      if (mounted && idx?.name) {
-        setResolvedName(String(idx.name));
-        return;
-      }
-      // 4) Fallback
+
+      // 4) fallback
       if (mounted) setResolvedName("Estudiante");
     })();
+
     return () => {
       mounted = false;
     };
   }, [client.code, client.name]);
 
-  /* ======= Escuchar configuración y menú ======= */
+  /* ==== Escuchar configuración y menú ==== */
   useEffect(() => {
     const off1 = RTDBHelper.listenToData<Settings>(RTDB_PATHS.lunch_settings, (d) =>
       setSettings(d || null)
@@ -105,7 +155,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     };
   }, []);
 
-  /* ======= Derivados ======= */
+  /* ==== Derivados de menú ==== */
   const categories = useMemo<Category[]>(() => {
     const m = menu?.categories || {};
     return Object.values(m)
@@ -135,7 +185,6 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     [cart]
   );
 
-  /* ======= Carrito ======= */
   const addToCart = (p: Product | CartItem) => {
     setCart((prev) => {
       const curr = prev[p.id];
@@ -159,7 +208,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
   const clearCart = () => setCart({});
 
-  /* ======= Confirmación + Guardado ======= */
+  /* ==== Confirmación + guardar ==== */
   const placeOrder = async () => {
     setMessage(null);
 
@@ -173,7 +222,6 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       return setMessage("Agregue al menos un producto.");
     }
 
-    // Paso de confirmación
     const alumno = window.prompt("Nombre del alumno (obligatorio):", resolvedName) || "";
     if (!alumno.trim()) {
       return setMessage("Debes indicar el nombre del alumno.");
@@ -181,7 +229,8 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
     let recreo =
       (window.prompt('¿Recreo? Escribe "primero" o "segundo" (segundo por defecto):', "segundo") ||
-        "segundo")?.toLowerCase();
+        "segundo"
+      ).toLowerCase();
     if (recreo !== "primero" && recreo !== "segundo") recreo = "segundo";
 
     const hasCombo = Object.values(cart).some((it) => it.isCombo);
@@ -211,7 +260,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         items,
         note: nota || null,
         total,
-        status: "pending",
+        status: "pending" as const,
         createdAt: Date.now(),
         channel: "familias",
         recess: recreo as "primero" | "segundo",
@@ -235,7 +284,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
   return (
     <section>
-      {/* Saludo ÚNICO */}
+      {/* ====== Saludo ÚNICO ====== */}
       <div
         style={{
           display: "flex",
@@ -251,7 +300,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       >
         <div>
           ¡Bienvenido(a), <strong>{resolvedName || "Estudiante"}</strong> —{" "}
-          <span style={{ opacity: 0.9 }}>{client.code}</span>!
+          <span style={{ opacity: 0.85 }}>{client.code}</span>!
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
