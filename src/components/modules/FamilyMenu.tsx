@@ -1,3 +1,4 @@
+// src/components/modules/lunch/FamilyMenu.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -47,27 +48,6 @@ function inWindow(win?: { start?: string; end?: string }) {
   return hhmm >= win.start && hhmm <= win.end;
 }
 
-/** Unifica nombre desde diferentes esquemas (incluye names + lastNames) */
-function deriveName(row: any): string | null {
-  if (!row) return null;
-
-  // campos directos frecuentes
-  const direct = row.name || row.fullName || row.fullname;
-  if (typeof direct === "string" && direct.trim()) return direct.trim();
-
-  // tu esquema: names + lastNames
-  const names = typeof row.names === "string" ? row.names.trim() : "";
-  const last = typeof row.lastNames === "string" ? row.lastNames.trim() : "";
-  const composed = `${names} ${last}`.trim();
-  if (composed) return composed;
-
-  // otros alias por si acaso
-  const n = (row.firstName || row.givenName || "").toString().trim();
-  const l = (row.lastName || row.surname || "").toString().trim();
-  const alt = `${n} ${l}`.trim();
-  return alt || null;
-}
-
 export default function FamilyMenu({ client, onLogout }: Props) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [menu, setMenu] = useState<MenuData | null>(null);
@@ -82,32 +62,37 @@ export default function FamilyMenu({ client, onLogout }: Props) {
   // Historial
   const [showHistory, setShowHistory] = useState(false);
 
+  // Confirm modal state
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmStudent, setConfirmStudent] = useState<string>("");
+  const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("segundo");
+  const [confirmNote, setConfirmNote] = useState<string>("");
+
   /* ==== Resolver nombre del cliente ==== */
   useEffect(() => {
     let mounted = true;
 
-    async function get(path: string) {
+    async function tryGet(path: string) {
       try {
-        const v = await RTDBHelper.getData<any>(path);
-        return v ?? null;
+        const snap = await RTDBHelper.getData<any>(path);
+        return snap && typeof snap === "object" ? snap : null;
       } catch {
         return null;
       }
     }
 
     (async () => {
-      // 1) si vino por props
+      // 1) Si vino en props, úsalo
       if (client.name && client.name.trim()) {
         if (mounted) setResolvedName(client.name.trim());
         return;
       }
 
-      // 2) intenta varios paths posibles
+      // 2) Intentar varios paths posibles en RTDB
       const candidates: string[] = [];
       if ((RTDB_PATHS as any)?.clients) {
-        candidates.push(`${RTDB_PATHS.clients}/${client.code}`);
+        candidates.push(`${(RTDB_PATHS as any).clients}/${client.code}`);
       }
-      // fallbacks genéricos
       candidates.push(
         `/clients/${client.code}`,
         `/students/${client.code}`,
@@ -116,23 +101,33 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       );
 
       for (const p of candidates) {
-        const row = await get(p);
-        const name = deriveName(row);
+        const row = await tryGet(p);
+        // tu estructura muestra names + lastNames, intentamos componer
+        const name = row?.name || row?.fullName || row?.fullname;
         if (mounted && name) {
-          setResolvedName(name);
+          setResolvedName(String(name));
           return;
+        }
+        // algunos nodos usan 'names' + 'lastNames'
+        if (row?.names || row?.lastNames) {
+          const n = (row.names || "").toString().trim();
+          const ln = (row.lastNames || "").toString().trim();
+          const composed = `${n}${n && ln ? " " : ""}${ln}`.trim();
+          if (mounted && composed) {
+            setResolvedName(composed);
+            return;
+          }
         }
       }
 
-      // 3) índice plano opcional
-      const idx = await get(`clients_by_code/${client.code}`);
-      const idxName = deriveName(idx) || (idx?.name ?? "").toString().trim();
-      if (mounted && idxName) {
-        setResolvedName(idxName);
+      // 3) Último intento: índice plano opcional
+      const idx = await tryGet(`clients_by_code/${client.code}`);
+      if (mounted && idx?.name) {
+        setResolvedName(String(idx.name));
         return;
       }
 
-      // 4) fallback
+      // 4) Fallback
       if (mounted) setResolvedName("Estudiante");
     })();
 
@@ -208,37 +203,46 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
   const clearCart = () => setCart({});
 
-  /* ==== Confirmación + guardar ==== */
-  const placeOrder = async () => {
+  /* ===== Mostrar modal de confirmación (en lugar de prompt) ===== */
+  const openConfirm = () => {
     setMessage(null);
 
     if (settings?.isOpen === false) {
-      return setMessage("El pedido no está disponible en este momento.");
+      setMessage("El pedido no está disponible en este momento.");
+      return;
     }
     if (!inWindow(settings?.orderWindow)) {
-      return setMessage("Fuera del horario permitido para pedidos.");
+      setMessage("Fuera del horario permitido para pedidos.");
+      return;
     }
     if (!Object.keys(cart).length) {
-      return setMessage("Agregue al menos un producto.");
+      setMessage("Agregue al menos un producto.");
+      return;
     }
 
-    const alumno = window.prompt("Nombre del alumno (obligatorio):", resolvedName) || "";
-    if (!alumno.trim()) {
-      return setMessage("Debes indicar el nombre del alumno.");
+    // prefills
+    setConfirmStudent(resolvedName || client.name || "Estudiante");
+    setConfirmRecess("segundo");
+    setConfirmNote("");
+    setShowConfirm(true);
+  };
+
+  /* ===== Confirmar y guardar en RTDB ===== */
+  const confirmAndPlace = async () => {
+    setMessage(null);
+
+    // Validaciones modal
+    const alumno = (confirmStudent || "").trim();
+    if (!alumno) {
+      setMessage("Debe indicar el nombre del alumno.");
+      return;
     }
 
-    let recreo =
-      (window.prompt('¿Recreo? Escribe "primero" o "segundo" (segundo por defecto):', "segundo") ||
-        "segundo"
-      ).toLowerCase();
-    if (recreo !== "primero" && recreo !== "segundo") recreo = "segundo";
-
-    const hasCombo = Object.values(cart).some((it) => it.isCombo);
-    if (hasCombo && recreo === "primero") {
-      return setMessage("El almuerzo no puede entregarse en el 1er recreo. Elige segundo recreo.");
+    const hasCombo = Object.values(cart).some((it) => !!it.isCombo);
+    if (hasCombo && confirmRecess === "primero") {
+      setMessage("El almuerzo no puede entregarse en el 1er recreo. Elige segundo recreo.");
+      return;
     }
-
-    const nota = window.prompt("Observación (opcional):", "") || undefined;
 
     setPosting(true);
     try {
@@ -249,7 +253,8 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         name: it.name,
         qty: it.qty,
         price: it.price,
-        isCombo: !!it.isCombo,
+        // opcional: isCombo si viene
+        ...(it.isCombo ? { isCombo: true } : {}),
       }));
 
       const payload = {
@@ -258,24 +263,27 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         clientCode: client.code,
         clientName: resolvedName || client.name || "Estudiante",
         items,
-        note: nota || null,
+        note: confirmNote || null,
         total,
-        status: "pending" as const,
+        status: "pending",
         createdAt: Date.now(),
         channel: "familias",
-        recess: recreo as "primero" | "segundo",
-        studentName: alumno.trim(),
+        recess: confirmRecess,
+        studentName: alumno,
       };
 
       const orderId = await RTDBHelper.pushData(RTDB_PATHS.lunch_orders, payload);
       await RTDBHelper.updateData({
         [`${RTDB_PATHS.lunch_orders}/${orderId}/id`]: orderId,
+        // índice
         [`lunch_orders_by_client/${client.code}/${orderId}`]: true,
       });
 
       clearCart();
+      setShowConfirm(false);
       setMessage(`¡Pedido enviado! N° ${orderCode}`);
-    } catch {
+    } catch (err) {
+      console.error("Error pushing order:", err);
       setMessage("No se pudo enviar el pedido. Intente nuevamente.");
     } finally {
       setPosting(false);
@@ -299,8 +307,8 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         }}
       >
         <div>
-          ¡Bienvenido(a), <strong>{resolvedName || "Estudiante"}</strong> —{" "}
-          <span style={{ opacity: 0.85 }}>{client.code}</span>!
+          ¡Bienvenido(a), <strong>{resolvedName || "Estudiante"}</strong>{" "}
+          — <span style={{ opacity: 0.85 }}>{client.code}</span>!
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
@@ -539,7 +547,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
                 Vaciar
               </button>
               <button
-                onClick={placeOrder}
+                onClick={openConfirm}
                 disabled={posting || total <= 0}
                 style={{
                   border: "1px solid #10b981",
@@ -558,6 +566,133 @@ export default function FamilyMenu({ client, onLogout }: Props) {
           </div>
         )}
       </div>
+
+      {/* ===== Modal personalizado de confirmación (centro app) ===== */}
+      {showConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(0,0,0,0.35)",
+            zIndex: 2000,
+            padding: 16,
+          }}
+          onClick={() => {
+            // clic fuera = cerrar
+            setShowConfirm(false);
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(720px, 96%)",
+              background: "white",
+              borderRadius: 12,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+              padding: 18,
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Confirmar pedido</h3>
+            <div style={{ color: "#374151", marginBottom: 12 }}>
+              Estás a punto de solicitar <strong>{Object.values(cart).length}</strong> producto(s)
+              por un total de <strong>{PEN(total)}</strong> para el alumno{" "}
+              <strong>{confirmStudent}</strong>.
+            </div>
+
+            <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Productos</div>
+                <div style={{ maxHeight: 140, overflow: "auto", paddingRight: 6 }}>
+                  {Object.values(cart).map((it) => (
+                    <div key={it.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #eee" }}>
+                      <div style={{ color: "#374151" }}>
+                        {it.qty} × {it.name}
+                      </div>
+                      <div style={{ fontWeight: 600 }}>{PEN(it.subtotal)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ marginBottom: 6, fontWeight: 600 }}>Recreo</div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <label style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="recess"
+                      checked={confirmRecess === "primero"}
+                      onChange={() => setConfirmRecess("primero")}
+                      disabled={Object.values(cart).some((it) => !!it.isCombo)}
+                    />
+                    Primero
+                  </label>
+                  <label style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="recess"
+                      checked={confirmRecess === "segundo"}
+                      onChange={() => setConfirmRecess("segundo")}
+                    />
+                    Segundo
+                  </label>
+                  {Object.values(cart).some((it) => !!it.isCombo) && (
+                    <div style={{ color: "#b91c1c", fontSize: 12 }}>
+                      (Almuerzo detectado — no permitido en primer recreo)
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ marginBottom: 6, fontWeight: 600 }}>Observación (opcional)</div>
+                <textarea
+                  rows={3}
+                  value={confirmNote}
+                  onChange={(e) => setConfirmNote(e.target.value)}
+                  style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                onClick={() => setShowConfirm(false)}
+                style={{
+                  border: "1px solid #ddd",
+                  background: "white",
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                }}
+                disabled={posting}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmAndPlace}
+                style={{
+                  border: "1px solid #10b981",
+                  background: "#10b981",
+                  color: "white",
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  minWidth: 140,
+                }}
+                disabled={posting}
+              >
+                {posting ? "Enviando…" : `Confirmar — ${PEN(total)}`}
+              </button>
+            </div>
+            {message && <div style={{ color: "#065f46", marginTop: 12 }}>{message}</div>}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

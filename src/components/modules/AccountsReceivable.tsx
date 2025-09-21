@@ -1,54 +1,59 @@
-// AccountsReceivable.tsx (corregido)
+// AccountsReceivable.tsx (corregido completo con PDF: subtotales + paginación)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle, 
-  CheckCircle, Clock, CreditCard, FileText, Receipt, Download, 
+  ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle,
+  CheckCircle, Clock, CreditCard, FileText, Receipt, Download,
   Calendar as CalendarIcon
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, parse, parseISO, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable"; // <- import correcto
 
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
+
+/* ===== Helpers para mostrar nombre de vendedor legible ===== */
+const looksLikeUid = (s: any) =>
+  typeof s === "string" && /^[A-Za-z0-9_-]{22,36}$/.test(s);
+
+async function resolveVendorName(vendorField: string): Promise<string> {
+  if (!looksLikeUid(vendorField)) return vendorField || "Sistema";
+  const pathsToTry = [
+    `users/${vendorField}/profile/displayName`,
+    `users/${vendorField}/displayName`,
+    `users/${vendorField}/name`,
+    `users/${vendorField}/email`,
+  ];
+  for (const p of pathsToTry) {
+    const v = await RTDBHelper.getData<string>(p).catch(() => null);
+    if (v && String(v).trim()) return String(v);
+  }
+  return "Usuario";
+}
 
 /* ===== Helper de fechas seguro (evita corrimiento por UTC) ===== */
 const toLocalDateSafe = (d: string | Date): Date => {
   if (d instanceof Date) return d;
   if (!d) return new Date();
-  // "yyyy-MM-dd" -> fecha local 00:00
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
     const local = parse(d, "yyyy-MM-dd", new Date());
     return isValid(local) ? local : new Date();
   }
-  // ISO completo u otros
   const iso = parseISO(d);
   return isValid(iso) ? iso : new Date();
 };
@@ -69,8 +74,8 @@ const loadDebtors = async () => {
       invoices: {
         id: string;
         amount: number;
-        date: string;     // para mostrar
-        dateSort: number; // para ordenar
+        date: string;
+        dateSort: number;
         type?: string;
         products: string[];
       }[];
@@ -121,7 +126,7 @@ const loadDebtors = async () => {
       }
     });
 
-    // B) Formato PLANO/LEGADO (entradas sueltas en el root)
+    // B) Formato PLANO/LEGADO
     Object.entries(arData).forEach(([key, value]) => {
       const flat = value as any;
       const looksEntry =
@@ -201,7 +206,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       filtered = filtered.filter(item =>
         (item.correlative || "").toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
         (item.productName || "").toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
-        (item.seller || "").toLowerCase().includes(salesSearchTerm.toLowerCase())
+        (item.sellerShown || item.sellerRaw || "").toLowerCase().includes(salesSearchTerm.toLowerCase())
       );
     }
 
@@ -255,35 +260,45 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     window.open(url, "_blank");
   };
 
+  /* ===== Detalle de ventas: resuelve nombre del vendedor si viene UID ===== */
   const loadSalesDetail = async (clientId: string) => {
     try {
       const salesData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.sales);
       const historicalData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.historical_sales);
-      
       const allSales = { ...salesData, ...historicalData };
       const clientSales: any[] = [];
 
       Object.entries(allSales || {}).forEach(([saleId, sale]: [string, any]) => {
         if (sale?.clientId === clientId || sale?.client?.id === clientId) {
-          const saleItems = sale.items || [];
-          saleItems.forEach((item: any) => {
+          const items = Array.isArray(sale.items) ? sale.items : [];
+          const sellerRaw =
+            sale.userName || sale.seller || sale.user || sale.cashier || "Sistema";
+
+          items.forEach((item: any) => {
             clientSales.push({
-              saleId: saleId,
+              saleId,
               correlative: sale.correlative || saleId,
-              date: sale.date || sale.createdAt, // puede ser "yyyy-MM-dd" o ISO
-              seller: sale.user || sale.cashier || "Sistema",
+              date: sale.date || sale.createdAt,
+              sellerRaw,
               clientName: sale.client?.name || sale.clientName || "Cliente",
               productName: item.name || "Producto",
               quantity: item.quantity || 1,
               price: item.price || 0,
               total: (item.quantity || 1) * (item.price || 0),
-              paymentMethod: sale.paymentMethod || "efectivo"
+              paymentMethod: sale.paymentMethod || "efectivo",
             });
           });
         }
       });
 
-      return clientSales.sort(
+      const withSellerName = await Promise.all(
+        clientSales.map(async (r) => ({
+          ...r,
+          sellerShown: await resolveVendorName(r.sellerRaw),
+        }))
+      );
+
+      return withSellerName.sort(
         (a, b) => toLocalDateSafe(b.date).getTime() - toLocalDateSafe(a.date).getTime()
       );
     } catch (error) {
@@ -296,75 +311,149 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     const exportData = data.map(item => ({
       'Correlativo': item.correlative,
       'Fecha': format(toLocalDateSafe(item.date), "dd/MM/yyyy"),
-      'Vendedor': item.seller,
+      'Vendedor': item.sellerShown,
       'Producto': item.productName,
       'Cantidad': item.quantity,
       'Precio': `S/ ${Number(item.price || 0).toFixed(2)}`,
       'Total': `S/ ${Number(item.total || 0).toFixed(2)}`
     }));
-    
+
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Detalle de Ventas");
     XLSX.writeFile(wb, `${filename}.xlsx`);
   };
 
+  /* ========= PDF con subtotales por día + paginación ========= */
   const exportToPDF = (data: any[], clientName: string) => {
     try {
       const doc = new jsPDF();
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+
+      // Encabezado
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
-      doc.text("MARACUYÁ VILLA GRATIA", 105, 20, { align: "center" });
+      doc.text("MARACUYÁ VILLA GRATIA", pageW / 2, 20, { align: "center" });
+
       doc.setFontSize(14);
       doc.setFont("helvetica", "normal");
-      doc.text(`Detalle de Ventas - ${clientName}`, 105, 35, { align: "center" });
-      doc.setFontSize(10);
-      doc.text(`Fecha de emisión: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}`, 105, 45, { align: "center" });
+      doc.text(`Detalle de Ventas - ${clientName}`, pageW / 2, 35, { align: "center" });
 
-      let startY = 55;
+      doc.setFontSize(10);
+      doc.text(
+        `Fecha de emisión: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}`,
+        pageW / 2,
+        45,
+        { align: "center" }
+      );
+
+      // Rango de fechas (opcional)
+      let cursorY = 55;
       if (dateFrom || dateTo) {
         const fromDate = dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Inicio";
         const toDate = dateTo ? format(dateTo, "dd/MM/yyyy") : "Actual";
-        doc.text(`Período: ${fromDate} - ${toDate}`, 105, 55, { align: "center" });
-        startY = 65;
+        doc.text(`Período: ${fromDate} - ${toDate}`, pageW / 2, 55, { align: "center" });
+        cursorY = 65;
       }
 
-      const tableData = data.map(item => [
-        item.correlative || '',
-        format(toLocalDateSafe(item.date), "dd/MM/yyyy"),
-        item.seller || '',
-        item.productName || '',
-        String(item.quantity ?? 0),
-        `S/ ${Number(item.price || 0).toFixed(2)}`,
-        `S/ ${Number(item.total || 0).toFixed(2)}`
-      ]);
+      // Agrupar por día
+      const groups = new Map<string, any[]>();
+      data.forEach((item) => {
+        const key = format(toLocalDateSafe(item.date), "dd/MM/yyyy");
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(item);
+      });
 
-      const autoTable = (doc as any).autoTable;
-      if (typeof autoTable === 'function') {
-        autoTable({
-          head: [["Correlativo", "Fecha", "Vendedor", "Producto", "Cantidad", "Precio", "Total"]],
-          body: tableData,
-          startY: startY,
-          styles: { fontSize: 9, cellPadding: 3, halign: 'center' },
-          headStyles: { fillColor: [34, 197, 94], textColor: 255, fontStyle: 'bold' },
-          columnStyles: {
-            0: { halign: 'center' }, 1: { halign: 'center' },
-            2: { halign: 'left' },   3: { halign: 'left' },
-            4: { halign: 'center' }, 5: { halign: 'right' }, 6: { halign: 'right' }
-          }
+      // Orden por fecha ascendente
+      const entries = Array.from(groups.entries()).sort(
+        ([a], [b]) =>
+          toLocalDateSafe(a).getTime() - toLocalDateSafe(b).getTime()
+      );
+
+      // Color cabecera de tabla
+      const headStyles = { fillColor: [34, 197, 94], textColor: 255, fontStyle: "bold" as const };
+
+      let grandTotal = 0;
+
+      for (const [day, items] of entries) {
+        // Título de día
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text(day, 20, cursorY);
+        cursorY += 4;
+
+        // Filas
+        const body = items.map((item: any) => {
+          const rowTotal = Number(item.total || 0);
+          grandTotal += rowTotal;
+          return [
+            item.correlative || "",
+            format(toLocalDateSafe(item.date), "dd/MM/yyyy"),
+            item.sellerShown || "",
+            item.productName || "",
+            String(item.quantity ?? 0),
+            `S/ ${Number(item.price || 0).toFixed(2)}`,
+            `S/ ${rowTotal.toFixed(2)}`
+          ];
         });
-        const finalY = (doc as any).lastAutoTable?.finalY + 20 || 200;
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "italic");
-        doc.text("Este documento fue generado automáticamente por el sistema de Maracuyá Villa Gratia", 105, finalY, { align: "center" });
-        doc.save(`detalle_ventas_${clientName.replace(/\s+/g, "_")}.pdf`);
-      } else {
-        doc.text("No se pudo generar la tabla (autoTable no disponible).", 20, startY + 20);
-        doc.save(`detalle_ventas_${clientName.replace(/\s+/g, "_")}_simple.pdf`);
+
+        // Tabla del día
+        autoTable(doc, {
+          head: [["Correlativo", "Fecha", "Vendedor", "Producto", "Cantidad", "Precio", "Total"]],
+          body,
+          startY: cursorY,
+          styles: { fontSize: 9, cellPadding: 3, halign: "center" },
+          headStyles,
+          columnStyles: {
+            0: { halign: "center" }, 1: { halign: "center" },
+            2: { halign: "left" },   3: { halign: "left" },
+            4: { halign: "center" }, 5: { halign: "right" }, 6: { halign: "right" }
+          },
+          margin: { left: 20, right: 14 },
+        });
+
+        const lastY = (doc as any).lastAutoTable.finalY || cursorY + 10;
+
+        // Subtotal del día
+        const daySubtotal = items.reduce((s: number, it: any) => s + Number(it.total || 0), 0);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Subtotal ${day}: S/ ${daySubtotal.toFixed(2)}`, pageW - 20, lastY + 6, {
+          align: "right",
+        });
+
+        // Avanza cursor para siguiente bloque
+        cursorY = lastY + 14;
+
+        // Si estamos muy abajo, deja que la siguiente tabla pase a nueva página
+        if (cursorY > pageH - 30) {
+          doc.addPage();
+          cursorY = 20;
+        }
       }
+
+      // Total general
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(`TOTAL GENERAL: S/ ${grandTotal.toFixed(2)}`, pageW - 20, cursorY, {
+        align: "right",
+      });
+
+      // Pie de página con paginación (segunda pasada)
+      const totalPages = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Página ${i} de ${totalPages}`, pageW - 14, pageH - 10, { align: "right" });
+      }
+
+      const safeName = (clientName || "Cliente").replace(/\s+/g, "_");
+      doc.save(`detalle_ventas_${safeName}.pdf`);
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('Error al generar el PDF.');
+      console.error("Error generating PDF:", error);
+      alert("Error al generar el PDF.");
     }
   };
 
@@ -394,7 +483,6 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       if (Object.keys(updates).length > 0) await RTDBHelper.updateData(updates);
 
       setPaidInvoices(prev => [...prev, paymentData]);
-
       const updatedDebtors = await loadDebtors();
       setDebtors(updatedDebtors);
 
@@ -436,7 +524,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
             <TabsTrigger value="paid">Boletas Pagadas</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pending" className="space-y-6">
+        <TabsContent value="pending" className="space-y-6">
             {/* Summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <Card>
@@ -647,7 +735,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   </TableHeader>
                   <TableBody>
                     {paidInvoices
-                      .filter(payment => 
+                      .filter(payment =>
                         payment.clientName.toLowerCase().includes(searchPaidTerm.toLowerCase()) ||
                         payment.clientId.toLowerCase().includes(searchPaidTerm.toLowerCase())
                       )
@@ -887,7 +975,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.correlative}</TableCell>
                           <TableCell>{format(toLocalDateSafe(item.date), "dd/MM/yyyy")}</TableCell>
-                          <TableCell>{item.seller}</TableCell>
+                          <TableCell>{item.sellerShown}</TableCell>
                           <TableCell>{item.productName}</TableCell>
                           <TableCell className="text-center">{item.quantity}</TableCell>
                           <TableCell className="text-right">S/ {Number(item.price || 0).toFixed(2)}</TableCell>
@@ -900,10 +988,9 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                           <div className="flex flex-col items-center space-y-2">
                             <Search className="w-8 h-8 text-muted-foreground" />
                             <p className="text-muted-foreground">
-                              {salesDetailData.length === 0 
-                                ? "No se encontraron ventas para este cliente" 
-                                : "No se encontraron resultados con los filtros aplicados"
-                              }
+                              {salesDetailData.length === 0
+                                ? "No se encontraron ventas para este cliente"
+                                : "No se encontraron resultados con los filtros aplicados"}
                             </p>
                           </div>
                         </TableCell>
@@ -929,7 +1016,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               <p className="text-sm text-muted-foreground">
                 Selecciona las boletas que deseas marcar como pagadas:
               </p>
-              
+
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {selectedDebtor.invoices
                   .sort((a: any, b: any) => a.dateSort - b.dateSort)
@@ -1011,11 +1098,11 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               </div>
 
               <div className="flex space-x-2 pt-4">
-                <Button 
+                <Button
                   onClick={() => {
                     processPayment();
                     setShowCXCDialog(false);
-                  }} 
+                  }}
                   className="flex-1"
                   disabled={selectedInvoices.length === 0}
                 >

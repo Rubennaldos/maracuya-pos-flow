@@ -1,3 +1,4 @@
+// src/components/modules/lunch/products/ProductsPanel.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Edit, Trash2, Star, Loader2, Check } from "lucide-react";
+import { Save, Edit, Trash2, Star, Loader2, Check, GripVertical } from "lucide-react";
 import type { MenuT, ProductT, ComboTemplate } from "../types";
 
 /* ========= Util: Moneda ========= */
@@ -41,12 +42,14 @@ async function fileToWebPDataURL(file: File, max = 900, quality = 0.85): Promise
 const sanitize = <T extends Record<string, any>>(obj: T): T =>
   Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
 
-type Props = {
+export type ProductsPanelProps = {
   menu: MenuT;
   onMenuChange: (next: MenuT) => void;
 };
 
-export default function ProductsPanel({ menu, onMenuChange }: Props) {
+type Group = { catId: string; catName: string; items: ProductT[] };
+
+export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps) {
   /* ================== Derivados ================== */
   const categories = useMemo(() => {
     const c = menu.categories || {};
@@ -55,7 +58,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
 
   const products = useMemo(() => {
     const p = menu.products || {};
-    return Object.values(p).sort((a, b) => a.name.localeCompare(b.name));
+    return Object.values(p);
   }, [menu]);
 
   /* ================== Modo ================== */
@@ -79,16 +82,111 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
   const priceRef = useRef<HTMLInputElement | null>(null);
   const catRef = useRef<HTMLSelectElement | null>(null);
 
-  const filtered = useMemo(() => {
+  const filteredBase = useMemo(() => {
+    const arr = products.slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     const needle = q.trim().toLowerCase();
-    if (!needle) return products;
-    return products.filter(
+    if (!needle) return arr;
+    return arr.filter(
       (p) =>
-        p.name.toLowerCase().includes(needle) ||
-        menu.categories?.[p.categoryId]?.name.toLowerCase().includes(needle || "")
+        (p.name || "").toLowerCase().includes(needle) ||
+        ((menu.categories?.[p.categoryId!]?.name || "").toLowerCase().includes(needle))
     );
   }, [q, products, menu.categories]);
 
+  // ======= AGRUPADO por categoría (solo productos activos) =======
+  const groupsComputed = useMemo<Group[]>(() => {
+    const active = filteredBase.filter((p) => p.active !== false);
+    const catIndex: Record<string, { name: string; order: number }> = {};
+    categories.forEach((c) => (catIndex[c.id] = { name: c.name, order: c.order ?? 0 }));
+
+    const byCat: Record<string, ProductT[]> = {};
+    for (const p of active) {
+      const cid = p.categoryId || "__none__";
+      if (!byCat[cid]) byCat[cid] = [];
+      byCat[cid].push(p);
+    }
+
+    const result: Group[] = Object.entries(byCat).map(([catId, items]) => {
+      const meta = catIndex[catId];
+      // Orden por 'position' y luego nombre
+      const ordered = items
+        .slice()
+        .sort((a, b) => {
+          const pa = typeof (a as any).position === "number" ? (a as any).position : Number.POSITIVE_INFINITY;
+          const pb = typeof (b as any).position === "number" ? (b as any).position : Number.POSITIVE_INFINITY;
+          if (pa !== pb) return pa - pb;
+          return (a.name || "").localeCompare(b.name || "");
+        });
+      return {
+        catId,
+        catName: meta ? meta.name : "Sin categoría",
+        items: ordered,
+      };
+    });
+
+    // Ordenamos grupos por orden de categoría; los sin categoría al final
+    result.sort((A, B) => {
+      const aO = catIndex[A.catId]?.order ?? 9_999;
+      const bO = catIndex[B.catId]?.order ?? 9_999;
+      return aO - bO;
+    });
+
+    // ocultar categorías vacías
+    return result.filter((g) => g.items.length > 0);
+  }, [filteredBase, categories]);
+
+  // Copia local para drag&drop
+  const [localGroups, setLocalGroups] = useState<Group[]>([]);
+  useEffect(() => setLocalGroups(groupsComputed), [groupsComputed]);
+
+  // --- Drag & Drop (solo dentro de la misma categoría) ---
+  const dragInfo = useRef<{ groupIdx: number; itemIdx: number } | null>(null);
+
+  const onDragStart = (groupIdx: number, itemIdx: number) => (ev: React.DragEvent) => {
+    dragInfo.current = { groupIdx, itemIdx };
+    ev.dataTransfer.effectAllowed = "move";
+  };
+  const onDragOver = (groupIdx: number, itemIdx: number) => (ev: React.DragEvent) => {
+    ev.preventDefault();
+    const d = dragInfo.current;
+    if (!d) return;
+    if (d.groupIdx !== groupIdx) return; // no cruzamos categorías
+  };
+  const onDrop = (groupIdx: number, itemIdx: number) => () => {
+    const d = dragInfo.current;
+    if (!d || d.groupIdx !== groupIdx) return;
+    setLocalGroups((gs) => {
+      const next = gs.map((g) => ({ ...g, items: g.items.slice() }));
+      const g = next[groupIdx];
+      const [moved] = g.items.splice(d.itemIdx, 1);
+      g.items.splice(itemIdx, 0, moved);
+      return next;
+    });
+    dragInfo.current = null;
+  };
+  const onDragEnd = () => {
+    dragInfo.current = null;
+  };
+
+  const saveOrder = async () => {
+    try {
+      const updates: Record<string, any> = {};
+      localGroups.forEach((g) => {
+        g.items.forEach((p, idx) => {
+          updates[`${RTDB_PATHS.lunch_menu}/products/${p.id}/position`] = idx;
+        });
+      });
+      await RTDBHelper.updateData(updates);
+      toast({ title: "Orden guardado" });
+      const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
+      if (m) onMenuChange(m);
+    } catch (e) {
+      console.error(e);
+      toast({ title: "No se pudo guardar el orden", variant: "destructive" });
+    }
+  };
+
+  // ====== CRUD VARIADO ======
   const resetForm = () => {
     setEditing(null);
     setForm({ active: true });
@@ -109,7 +207,6 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
 
     setErrors(errs);
 
-    // auto-scroll al primer error
     if (errs.name) nameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     else if (errs.price) priceRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     else if (errs.categoryId) catRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -123,16 +220,15 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
       return;
     }
 
-    // construimos el payload SIN `undefined`
     const base = sanitize({
       id: editing?.id || "",
       name: (form.name || "").trim(),
       price: Number(form.price),
       categoryId: (form.categoryId || "").trim(),
-      description: form.description?.trim() || null, // null si vacío
-      image: form.image?.trim() || "", // string vacío si no hay
+      description: form.description?.trim() || null,
+      image: form.image?.trim() || "",
       active: form.active !== false,
-      // OJO: sin 'course' porque quitamos la clasificación en VARIADOS
+      isCombo: false, // variado
     });
 
     setLoading(true);
@@ -157,7 +253,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
       }
       const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
       if (m) onMenuChange(m);
-      resetForm(); // limpiar todo
+      resetForm();
     } catch (e) {
       console.error(e);
       toast({ title: "No se pudo guardar", variant: "destructive" });
@@ -166,10 +262,11 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
     }
   };
 
-  const edit = (p: ProductT) => {
+  const editVar = (p: ProductT) => {
     setEditing(p);
     setForm(p);
     setErrors({});
+    setMode("variado");
     nameRef.current?.focus();
   };
 
@@ -215,6 +312,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
         price,
         categoryId: cat.id,
         active: true,
+        isCombo: false,
       };
     }
     try {
@@ -256,6 +354,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
     templateId?: string;
   }>({ title: "", bebidaLabel: "Bebida del día" });
 
+  const [almEditingId, setAlmEditingId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<ComboTemplate[]>([]);
   const [almErrors, setAlmErrors] = useState<Record<string, string>>({});
   const almSegundoRef = useRef<HTMLInputElement | null>(null);
@@ -285,44 +384,69 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
     return Object.keys(errs).length === 0;
   };
 
-  const saveAlm = async () => {
-    if (!validateAlm()) {
-      toast({ title: "Faltan campos por completar", variant: "destructive" });
-      return;
-    }
-    const catId = alm.categoryId!;
+  const buildAlmDescription = () => {
     const parts = [
       alm.entrada ? `Entrada: ${alm.entrada}` : null,
       alm.segundo ? `Segundo: ${alm.segundo}` : null,
       alm.postre ? `Postre: ${alm.postre}` : null,
       alm.bebidaLabel ? `Bebida: ${alm.bebidaLabel}` : null,
     ].filter(Boolean);
-    const description = parts.join(" • ");
+    return parts.join(" • ");
+  };
+
+  const saveAlm = async () => {
+    if (!validateAlm()) {
+      toast({ title: "Faltan campos por completar", variant: "destructive" });
+      return;
+    }
+    const catId = alm.categoryId!;
     const name = (alm.title || "").trim() || `Almuerzo del día: ${alm.segundo}`;
+    const description = buildAlmDescription();
 
     try {
-      const newId = await RTDBHelper.pushData(`${RTDB_PATHS.lunch_menu}/products`, {
-        id: "",
-        name,
-        price: Number(alm.price),
-        categoryId: catId,
-        description,                 // string (nunca undefined)
-        active: true,
-        isCombo: true,
-        image: alm.image || "",
-        components: {
-          entradaId: null,
-          segundoId: null,
-          postreId: null,
-          bebidaLabel: alm.bebidaLabel || "Bebida del día",
-        },
-      });
-      await RTDBHelper.updateData({
-        [`${RTDB_PATHS.lunch_menu}/products/${newId}/id`]: newId,
-      });
+      if (almEditingId) {
+        // actualizar
+        await RTDBHelper.updateData({
+          [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/name`]: name,
+          [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/price`]: Number(alm.price),
+          [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/categoryId`]: catId,
+          [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/description`]: description,
+          [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/image`]: alm.image || "",
+          [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/isCombo`]: true,
+          [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/components`]: {
+            entradaId: null,
+            segundoId: null,
+            postreId: null,
+            bebidaLabel: alm.bebidaLabel || "Bebida del día",
+          },
+        });
+        toast({ title: "Almuerzo actualizado" });
+      } else {
+        // crear
+        const newId = await RTDBHelper.pushData(`${RTDB_PATHS.lunch_menu}/products`, {
+          id: "",
+          name,
+          price: Number(alm.price),
+          categoryId: catId,
+          description,
+          active: true,
+          isCombo: true,
+          image: alm.image || "",
+          components: {
+            entradaId: null,
+            segundoId: null,
+            postreId: null,
+            bebidaLabel: alm.bebidaLabel || "Bebida del día",
+          },
+        });
+        await RTDBHelper.updateData({
+          [`${RTDB_PATHS.lunch_menu}/products/${newId}/id`]: newId,
+        });
+        toast({ title: "Almuerzo guardado" });
+      }
+
       const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
       if (m) onMenuChange(m);
-      toast({ title: "Almuerzo guardado" });
 
       // limpiar
       setAlm({
@@ -337,6 +461,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
         templateId: "",
       });
       setAlmErrors({});
+      setAlmEditingId(null);
     } catch (e) {
       console.error(e);
       toast({ title: "No se pudo guardar", variant: "destructive" });
@@ -407,7 +532,115 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
     }
   };
 
+  /* ======= Decide editor por tipo ======= */
+  function parseAlmFromDescription(desc?: string) {
+    const out: { entrada?: string; segundo?: string; postre?: string; bebida?: string } = {};
+    if (!desc) return out;
+    const parts = desc.split("•").map((s) => s.trim());
+    for (const p of parts) {
+      const [label, ...rest] = p.split(":");
+      const val = rest.join(":").trim();
+      const L = (label || "").toLowerCase();
+      if (L.startsWith("entrada")) out.entrada = val;
+      else if (L.startsWith("segundo")) out.segundo = val;
+      else if (L.startsWith("postre")) out.postre = val;
+      else if (L.startsWith("bebida")) out.bebida = val;
+    }
+    return out;
+  }
+
+  const routeEdit = (p: ProductT) => {
+    if (p.isCombo) {
+      // editar en MODO ALMUERZO
+      const parsed = parseAlmFromDescription(p.description || "");
+      setMode("almuerzo");
+      setAlm({
+        title: p.name?.replace(/^Almuerzo del día:\s*/i, "") || "",
+        entrada: parsed.entrada || "",
+        segundo: parsed.segundo || "",
+        postre: parsed.postre || "",
+        bebidaLabel: parsed.bebida || "Bebida del día",
+        price: Number(p.price || 0),
+        categoryId: p.categoryId || categories[0]?.id,
+        image: p.image || "",
+        templateId: "",
+      });
+      setAlmEditingId(p.id!);
+      setAlmErrors({});
+      return;
+    }
+    // editar en VARIADO
+    editVar(p);
+  };
+
   /* ================== UI ================== */
+  const GroupedList = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Input
+          placeholder="Buscar por nombre o categoría…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="max-w-[520px]"
+        />
+        <Button onClick={saveOrder} disabled={localGroups.length === 0}>
+          Guardar orden
+        </Button>
+      </div>
+
+      {localGroups.length === 0 && (
+        <p className="text-muted-foreground">No hay productos activos.</p>
+      )}
+
+      {localGroups.map((g, gi) => (
+        <Card key={g.catId}>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base">{g.catName}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {g.items.map((p, pi) => (
+              <div
+                key={p.id}
+                className="flex items-center gap-3 border rounded px-3 py-2 bg-card"
+                draggable
+                onDragStart={onDragStart(gi, pi)}
+                onDragOver={onDragOver(gi, pi)}
+                onDrop={onDrop(gi, pi)}
+                onDragEnd={onDragEnd}
+              >
+                <div className="cursor-grab active:cursor-grabbing text-muted-foreground">
+                  <GripVertical className="h-5 w-5" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{p.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {menu.categories?.[p.categoryId!]?.name || "—"}
+                    {p.isCombo ? " • Combo" : ""}
+                  </div>
+                </div>
+
+                <div className="w-24 text-right">{PEN(p.price)}</div>
+
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => toggleActive(p)}>
+                    {p.active !== false ? "Desactivar" : "Activar"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => routeEdit(p)} title="Editar">
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => remove(p)} title="Eliminar">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Selector de modo */}
@@ -476,8 +709,6 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                 {errors.categoryId && <p className="text-xs text-destructive mt-1">{errors.categoryId}</p>}
               </div>
 
-              {/* 👇 Clasificación ELIMINADA en VARIADOS */}
-
               <div>
                 <Label>Descripción (opcional)</Label>
                 <Textarea
@@ -528,46 +759,13 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
             </CardContent>
           </Card>
 
-          {/* Lista + búsqueda (con acciones) */}
+          {/* Lista agrupada + drag (con guardar orden) */}
           <Card className="xl:col-span-2">
             <CardHeader>
               <CardTitle>Productos</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <Input placeholder="Buscar por nombre o categoría…" value={q} onChange={(e) => setQ(e.target.value)} />
-              {filtered.length === 0 && <p className="text-muted-foreground">No hay productos.</p>}
-              {filtered.map((p) => (
-                <div key={p.id} className="grid grid-cols-12 gap-2 items-center border rounded p-2">
-                  <div className="col-span-5">
-                    <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {menu.categories?.[p.categoryId]?.name || "—"}
-                      {p.isCombo ? " • Combo" : ""}
-                    </div>
-                  </div>
-                  <div className="col-span-2">{PEN(p.price)}</div>
-                  <div className="col-span-2">
-                    <span
-                      className={`text-xs px-2 py-1 rounded ${
-                        p.active !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {p.active !== false ? "Activo" : "Inactivo"}
-                    </span>
-                  </div>
-                  <div className="col-span-3 flex gap-2 justify-end">
-                    <Button variant="outline" onClick={() => toggleActive(p)}>
-                      {p.active !== false ? "Desactivar" : "Activar"}
-                    </Button>
-                    <Button variant="outline" onClick={() => edit(p)}>
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    <Button variant="destructive" onClick={() => remove(p)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+            <CardContent>
+              <GroupedList />
             </CardContent>
           </Card>
 
@@ -699,7 +897,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
               <div className="flex items-center gap-2">
                 <Button onClick={saveAlm}>
                   <Save className="h-4 w-4 mr-2" />
-                  Guardar almuerzo
+                  {almEditingId ? "Guardar cambios" : "Guardar almuerzo"}
                 </Button>
                 <Button variant="outline" onClick={saveFav} title="Guardar como favorito">
                   <Star className="h-4 w-4 mr-2" /> Guardar favorito
@@ -716,33 +914,13 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
             </CardContent>
           </Card>
 
-          {/* Lista de productos con acciones también en este modo */}
+          {/* Lista agrupada + drag también aquí */}
           <Card>
             <CardHeader>
               <CardTitle>Productos actuales</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 max-h-[600px] overflow-auto">
-              {products.length === 0 && <p className="text-muted-foreground">No hay productos.</p>}
-              {products.map((p) => (
-                <div key={p.id} className="grid grid-cols-12 gap-2 items-center border rounded p-2">
-                  <div className="col-span-6">
-                    <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">{menu.categories?.[p.categoryId]?.name || "—"}</div>
-                  </div>
-                  <div className="col-span-2">{PEN(p.price)}</div>
-                  <div className="col-span-4 flex gap-2 justify-end">
-                    <Button variant="outline" size="sm" onClick={() => toggleActive(p)}>
-                      {p.active !== false ? "Desactivar" : "Activar"}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => { setMode("variado"); edit(p); }}>
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => remove(p)}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+              <GroupedList />
             </CardContent>
           </Card>
         </div>

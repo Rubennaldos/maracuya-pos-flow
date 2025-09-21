@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { 
   ArrowLeft, Search, Plus, Edit, Trash2, Users,
-  Phone, GraduationCap, CreditCard, User, Download, Upload
+  Phone, GraduationCap, CreditCard, User, Download, Upload, FileSpreadsheet
 } from "lucide-react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -112,7 +112,7 @@ export const Clients = ({ onBack }: ClientsProps) => {
     personalPhone: ''
   });
 
-  // 🔒 Coherencia automática: al activar "Es personal", ocultamos y limpiamos campos académicos y desactivamos cuenta de crédito.
+  // 🔒 Coherencia automática para personal
   useEffect(() => {
     setNewClient(prev => {
       if (!prev) return prev;
@@ -125,7 +125,6 @@ export const Clients = ({ onBack }: ClientsProps) => {
           hasAccount: false,
         };
       } else {
-        // si vuelve a estudiante y no hay nivel, dejamos 'primaria' por defecto
         return {
           ...prev,
           level: prev.level === '' ? 'primaria' : (prev.level as 'primaria' | 'secundaria'),
@@ -167,7 +166,6 @@ export const Clients = ({ onBack }: ClientsProps) => {
       personalPhone: data.personalPhone || '',
     };
 
-    // Si es personal, aseguramos limpieza/forzado:
     if (base.isStaff) {
       base.level = '';
       base.grade = '';
@@ -370,6 +368,66 @@ export const Clients = ({ onBack }: ClientsProps) => {
     (event.target as HTMLInputElement).value = '';
   };
 
+  /** ================== EXPORTAR TODOS LOS CLIENTES A EXCEL ================== */
+  const handleExportAllClients = async () => {
+    try {
+      // Traemos TODO directamente de RTDB (no solo filtrados/visibles)
+      const data = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
+      const list: Client[] = Object.values(data || {});
+
+      if (!list.length) {
+        alert("No hay clientes para exportar.");
+        return;
+      }
+
+      // Orden por nombre completo
+      list.sort((a, b) =>
+        `${a.names} ${a.lastNames}`.localeCompare(`${b.names} ${b.lastNames}`, "es", { sensitivity: "base" })
+      );
+
+      // Mapeo de filas con cabeceras amigables
+      const rows = list.map((c) => ({
+        "ID": c.id || "",
+        "Nombres": c.names || "",
+        "Apellidos": c.lastNames || "",
+        "Responsable1_Nombre": c.payer1Name || "",
+        "Responsable1_Telefono": c.payer1Phone || "",
+        "Responsable2_Nombre": c.payer2Name || "",
+        "Responsable2_Telefono": c.payer2Phone || "",
+        "Nivel": c.isStaff ? "" : (c.level || ""),
+        "Grado": c.isStaff ? "" : (c.grade || ""),
+        "Salon": c.isStaff ? "" : (c.classroom || ""),
+        "Tiene_Cuenta": c.hasAccount ? "SI" : "NO",
+        "Esta_Activo": c.isActive ? "SI" : "NO",
+        "Deuda": Number(c.debt || 0),
+        "Es_Personal": c.isStaff ? "SI" : "NO",
+        "Tipo_Personal": c.isStaff ? (c.staffType || "") : "",
+        "Email_Personal": c.isStaff ? (c.personalEmail || "") : "",
+        "Telefono_Personal": c.isStaff ? (c.personalPhone || "") : "",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+
+      // Auto ancho de columnas
+      const headers = Object.keys(rows[0]);
+      const colWidths = headers.map((h) => {
+        const maxLen = Math.max(
+          h.length,
+          ...rows.map((r) => (r[h as keyof typeof r] ? String(r[h as keyof typeof r]).length : 0))
+        );
+        return { wch: Math.min(Math.max(12, maxLen + 2), 40) };
+      });
+      (ws as any)["!cols"] = colWidths;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Clientes");
+      XLSX.writeFile(wb, "clientes.xlsx");
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo exportar los clientes.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -387,6 +445,12 @@ export const Clients = ({ onBack }: ClientsProps) => {
             <Button variant="outline" onClick={downloadTemplate}>
               <Download className="w-4 h-4 mr-2" />
               Descargar Plantilla
+            </Button>
+
+            {/* NUEVO: Exportar Excel de todos los clientes */}
+            <Button variant="outline" onClick={handleExportAllClients}>
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Exportar Excel
             </Button>
             
             <input

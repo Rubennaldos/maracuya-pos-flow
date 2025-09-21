@@ -4,7 +4,7 @@ import { RTDB_PATHS } from "@/lib/rtdb";
 
 type Order = {
   id: string;
-  code?: string;          // correlativo legible
+  code?: string;
   clientCode?: string;
   clientName?: string;
   items?: { name: string; qty: number; price?: number }[];
@@ -12,8 +12,6 @@ type Order = {
   status?: string;
   createdAt?: number | string;
   note?: string;
-  recess?: "primero" | "segundo";
-  studentName?: string;
 };
 
 const PEN = (n: number | undefined) =>
@@ -29,10 +27,8 @@ export default function FamilyOrderHistory({ clientCode }: { clientCode: string 
   const [orders, setOrders] = useState<Order[]>([]);
   const [q, setQ] = useState("");
   const [date, setDate] = useState<string>(""); // yyyy-mm-dd
-  const [editing, setEditing] = useState<Record<string, Partial<Order>>>({});
-  const [savingId, setSavingId] = useState<string | null>(null);
 
-  // Escuchar índice
+  // Escuchar índice por cliente
   useEffect(() => {
     const off = RTDBHelper.listenToData<Record<string, true>>(
       `lunch_orders_by_client/${clientCode}`,
@@ -41,7 +37,7 @@ export default function FamilyOrderHistory({ clientCode }: { clientCode: string 
     return () => off?.();
   }, [clientCode]);
 
-  // Traer pedidos
+  // Traer pedidos por id
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -49,20 +45,20 @@ export default function FamilyOrderHistory({ clientCode }: { clientCode: string 
         if (mounted) setOrders([]);
         return;
       }
-      const chunk = await Promise.all(
+      const list = await Promise.all(
         ids.map(async (id) => {
           const o = await RTDBHelper.getData<Order>(`${RTDB_PATHS.lunch_orders}/${id}`);
           return o ? { ...o, id } : null;
         })
       );
-      if (mounted) setOrders(chunk.filter(Boolean) as Order[]);
+      if (mounted) setOrders(list.filter(Boolean) as Order[]);
     })();
     return () => {
       mounted = false;
     };
   }, [ids]);
 
-  // Filtro
+  // Filtros (texto + fecha)
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const dayMillis = date ? Date.parse(`${date}T00:00:00`) : null;
@@ -76,11 +72,9 @@ export default function FamilyOrderHistory({ clientCode }: { clientCode: string 
         }
         if (!needle) return true;
         const haystack = [
+          o.code,
           o.clientName,
           o.clientCode,
-          o.code,
-          o.studentName,
-          o.recess,
           o.note,
           ...(o.items || []).map((i) => `${i.qty}x ${i.name}`),
         ]
@@ -92,36 +86,6 @@ export default function FamilyOrderHistory({ clientCode }: { clientCode: string 
       .sort((a, b) => normalizeTS(b.createdAt) - normalizeTS(a.createdAt));
   }, [orders, q, date]);
 
-  const onEdit = (id: string, patch: Partial<Order>) =>
-    setEditing((e) => ({ ...e, [id]: { ...e[id], ...patch } }));
-
-  const save = async (o: Order) => {
-    const patch = editing[o.id];
-    if (!patch) return;
-    setSavingId(o.id);
-    try {
-      const updates: Record<string, any> = {};
-      if (typeof patch.note !== "undefined")
-        updates[`${RTDB_PATHS.lunch_orders}/${o.id}/note`] = patch.note || null;
-      if (typeof patch.recess !== "undefined")
-        updates[`${RTDB_PATHS.lunch_orders}/${o.id}/recess`] = patch.recess || "segundo";
-      if (typeof patch.studentName !== "undefined")
-        updates[`${RTDB_PATHS.lunch_orders}/${o.id}/studentName`] =
-          patch.studentName?.trim() || null;
-
-      await RTDBHelper.updateData(updates);
-      setEditing((e) => {
-        const { [o.id]: _, ...rest } = e;
-        return rest;
-      });
-    } catch {
-      // noop: podrías mostrar un toast si ya usas shadcn en esta vista
-      alert("No se pudo guardar el cambio");
-    } finally {
-      setSavingId(null);
-    }
-  };
-
   return (
     <div
       style={{
@@ -131,9 +95,10 @@ export default function FamilyOrderHistory({ clientCode }: { clientCode: string 
         background: "#fff",
       }}
     >
+      {/* Filtros */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
         <input
-          placeholder="Buscar en historial (producto, alumno, código…) "
+          placeholder="Buscar (producto, código, cliente...)"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           style={{ flex: 1, border: "1px solid #ddd", borderRadius: 8, padding: "8px 10px" }}
@@ -151,92 +116,68 @@ export default function FamilyOrderHistory({ clientCode }: { clientCode: string 
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
           {filtered.map((o) => {
-            const e = editing[o.id] || {};
+            const created = new Date(normalizeTS(o.createdAt));
             return (
               <div
                 key={o.id}
                 style={{
                   border: "1px solid #e5e7eb",
                   borderRadius: 10,
-                  padding: 10,
+                  padding: 14,
                   background: "#fafafa",
                 }}
               >
+                {/* Encabezado más grande */}
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginBottom: 6,
+                    marginBottom: 10,
                   }}
                 >
-                  <div style={{ fontWeight: 600 }}>
-                    {o.clientName} — {o.clientCode} &nbsp;|&nbsp; {o.code}
+                  <div style={{ fontWeight: 1000, fontSize: 30 }}>
+                    Pedido: {o.code || o.id.slice(-6).toUpperCase()}
                   </div>
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>
-                    {new Date(normalizeTS(o.createdAt)).toLocaleString("es-PE")}
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "#374151" }}>
+                    {created.toLocaleDateString("es-PE")} — {created.toLocaleTimeString("es-PE")}
                   </div>
                 </div>
 
-                <div style={{ fontSize: 13, marginBottom: 6 }}>
+                {/* Productos */}
+                <div style={{ fontSize: 20, marginBottom: 10 }}>
                   {(o.items || []).map((i, idx) => (
                     <div key={idx}>• {i.qty} × {i.name}</div>
                   ))}
                 </div>
 
-                <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <label style={{ width: 120, color: "#6b7280" }}>Alumno</label>
-                    <input
-                      value={e.studentName ?? o.studentName ?? ""}
-                      onChange={(ev) => onEdit(o.id, { studentName: ev.target.value })}
-                      style={{ flex: 1, border: "1px solid #ddd", borderRadius: 6, padding: "6px 8px" }}
-                    />
+                {/* Observación (solo si existe) */}
+                {o.note ? (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      background: "#f3f4f6",
+                      border: "1px solid #e5e7eb",
+                      marginTop: 6,
+                    }}
+                  >
+                    <strong>Observación:</strong> {o.note}
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <label style={{ width: 120, color: "#6b7280" }}>Recreo</label>
-                    <select
-                      value={e.recess ?? o.recess ?? "segundo"}
-                      onChange={(ev) => onEdit(o.id, { recess: ev.target.value as any })}
-                      style={{ border: "1px solid #ddd", borderRadius: 6, padding: "6px 8px" }}
-                    >
-                      <option value="primero">primero</option>
-                      <option value="segundo">segundo</option>
-                    </select>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <label style={{ width: 120, color: "#6b7280" }}>Observación</label>
-                    <input
-                      value={e.note ?? o.note ?? ""}
-                      onChange={(ev) => onEdit(o.id, { note: ev.target.value })}
-                      style={{ flex: 1, border: "1px solid #ddd", borderRadius: 6, padding: "6px 8px" }}
-                    />
-                  </div>
-                </div>
+                ) : null}
 
+                {/* Total */}
                 <div
                   style={{
                     display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    justifyContent: "flex-end",
                     marginTop: 8,
+                    fontWeight: 700,
+                    fontSize: 15,
                   }}
                 >
-                  <div style={{ fontWeight: 700 }}>Total: {PEN(o.total)}</div>
-                  <button
-                    onClick={() => save(o)}
-                    disabled={savingId === o.id}
-                    style={{
-                      border: "1px solid #10b981",
-                      background: savingId === o.id ? "#a7f3d0" : "#10b981",
-                      color: "white",
-                      borderRadius: 8,
-                      padding: "6px 10px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {savingId === o.id ? "Guardando…" : "Guardar cambios"}
-                  </button>
+                  Total: {PEN(o.total)}
                 </div>
               </div>
             );

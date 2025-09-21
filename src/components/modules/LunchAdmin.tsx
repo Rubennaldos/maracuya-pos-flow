@@ -34,14 +34,14 @@ import type {
 
 import ProductsPanel from "@/components/modules/lunch/products/ProductsPanel";
 
-interface Props {
+type LunchAdminProps = {
   onBack?: () => void;
-}
+};
 
 const PEN = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
 
-export default function LunchAdmin({ onBack }: Props = {}) {
+export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const { user } = useSession();
 
   const [settings, setSettings] = useState<SettingsT>({
@@ -623,7 +623,6 @@ export default function LunchAdmin({ onBack }: Props = {}) {
 
 /* ---------- util local ---------- */
 function slugId(label: string) {
-  // versión compatible: elimina acentos usando el rango Unicode de diacríticos
   const s = label
     .toLowerCase()
     .normalize("NFD")
