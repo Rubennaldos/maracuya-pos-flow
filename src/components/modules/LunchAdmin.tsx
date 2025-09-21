@@ -26,66 +26,27 @@ import {
   Clock,
 } from "lucide-react";
 
-/* ================== Tipos ================== */
-type SettingsT = {
-  isOpen?: boolean;
-  showPrices?: boolean;       // 👈 usado por familias
-  cutoffTime?: string;        // 👈 usado por familias (ej: "11:00")
-  allowSameDay?: boolean;
-  orderWindow?: { start?: string; end?: string };
-};
+import type {
+  SettingsT,
+  CategoryT,
+  MenuT,
+  OrderT,
+} from "@/components/modules/lunch/types";
 
-type CategoryT = { id: string; name: string; order?: number };
-type ProductT = {
-  id: string;
-  name: string;
-  price: number;
-  categoryId: string;
-  description?: string;
-  image?: string;
-  active?: boolean;
-};
+// Panel de productos separado
+import ProductsPanel from "@/components/modules/lunch/products/ProductsPanel";
 
-type MenuT = {
-  categories?: Record<string, CategoryT>;
-  products?: Record<string, ProductT>;
-};
-
-type OrderT = {
-  id: string;
-  code: string;
-  clientId: string;
-  clientName: string;
-  items: Array<{ id: string; name: string; price: number; qty: number }>;
-  note?: string;
-  total: number;
-  status: "pending" | "preparing" | "delivered" | "canceled" | "confirmed" | "ready";
-  createdAt: string;
-  deliveryAt?: string;
-};
-
-/* ================== Utils ================== */
-const PEN = (n: number) =>
-  new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
-
-function slugId(label: string) {
-  const s = label
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return `${s || "id"}-${Math.random().toString(36).slice(2, 6)}`;
-}
-
-/* ================== Componente ================== */
 interface Props {
   onBack?: () => void;
 }
+
+const PEN = (n: number) =>
+  new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
+
 export default function LunchAdmin({ onBack }: Props = {}) {
   const { user } = useSession();
 
-  /* ---------- Estado ---------- */
+  // ---------- Estado principal ----------
   const [settings, setSettings] = useState<SettingsT>({
     isOpen: true,
     showPrices: true,
@@ -93,42 +54,38 @@ export default function LunchAdmin({ onBack }: Props = {}) {
     allowSameDay: true,
     orderWindow: { start: "", end: "" },
   });
+
   const [menu, setMenu] = useState<MenuT>({});
   const [ordersToday, setOrdersToday] = useState<OrderT[]>([]);
-
-  // Categorías
-  const [catName, setCatName] = useState("");
-  const [catEditing, setCatEditing] = useState<CategoryT | null>(null);
-
-  // Productos
-  const [prodEditing, setProdEditing] = useState<ProductT | null>(null);
-  const [prodForm, setProdForm] = useState<Partial<ProductT>>({ active: true });
-
-  // Importación rápida
-  const [bulk, setBulk] = useState("");
-
   const [tab, setTab] = useState<"settings" | "cats" | "products" | "orders">("settings");
   const [loading, setLoading] = useState(false);
 
-  /* ---------- Cargar datos ---------- */
+  // ---------- Estado Categorías ----------
+  const [catName, setCatName] = useState("");
+  const [catEditing, setCatEditing] = useState<CategoryT | null>(null);
+
+  // ---------- Carga inicial ----------
   useEffect(() => {
     if (!user || user.role !== "admin") return;
 
     const loadAll = async () => {
       try {
         const s = await RTDBHelper.getData<SettingsT>(RTDB_PATHS.lunch_settings);
-        if (s) setSettings({
-          isOpen: s.isOpen ?? true,
-          showPrices: s.showPrices ?? true,
-          cutoffTime: s.cutoffTime || "11:00",
-          allowSameDay: s.allowSameDay ?? true,
-          orderWindow: s.orderWindow || { start: "", end: "" },
-        });
-
+        if (s) {
+          setSettings({
+            isOpen: s.isOpen ?? true,
+            showPrices: s.showPrices ?? true,
+            cutoffTime: s.cutoffTime || "11:00",
+            allowSameDay: s.allowSameDay ?? true,
+            orderWindow: s.orderWindow || { start: "", end: "" },
+          });
+        }
         const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
         if (m) setMenu(m);
 
-        const allOrders = await RTDBHelper.getData<Record<string, OrderT>>(RTDB_PATHS.lunch_orders);
+        const allOrders = await RTDBHelper.getData<Record<string, OrderT>>(
+          RTDB_PATHS.lunch_orders
+        );
         if (allOrders) {
           const today = new Date().toISOString().slice(0, 10);
           setOrdersToday(
@@ -136,37 +93,37 @@ export default function LunchAdmin({ onBack }: Props = {}) {
           );
         }
       } catch {
-        toast({ title: "Error", description: "No se pudieron cargar datos", variant: "destructive" });
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los datos.",
+          variant: "destructive",
+        });
       }
     };
+
     loadAll();
   }, [user]);
 
-  /* ---------- Derivados ---------- */
+  // ---------- Derivados ----------
   const categories = useMemo(() => {
     const c = menu.categories || {};
     return Object.values(c).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [menu]);
 
-  const products = useMemo(() => {
-    const p = menu.products || {};
-    return Object.values(p).sort((a, b) => a.name.localeCompare(b.name));
-  }, [menu]);
-
-  /* ================== Acciones: Configuración ================== */
+  // ================== Acciones: Configuración ==================
   const saveSettings = async () => {
     setLoading(true);
     try {
       await RTDBHelper.setData(RTDB_PATHS.lunch_settings, settings);
       toast({ title: "Configuración guardada" });
     } catch {
-      toast({ title: "No se pudo guardar configuración", variant: "destructive" });
+      toast({ title: "No se pudo guardar la configuración", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  /* ================== Acciones: Categorías ================== */
+  // ================== Acciones: Categorías ==================
   const resetCatForm = () => {
     setCatName("");
     setCatEditing(null);
@@ -188,10 +145,13 @@ export default function LunchAdmin({ onBack }: Props = {}) {
       } else {
         const id = slugId(name);
         const order = (categories[categories.length - 1]?.order ?? 0) + 1;
-        await RTDBHelper.setData(`${RTDB_PATHS.lunch_menu}/categories/${id}`, { id, name, order });
+        await RTDBHelper.setData(`${RTDB_PATHS.lunch_menu}/categories/${id}`, {
+          id,
+          name,
+          order,
+        });
         toast({ title: "Categoría creada" });
       }
-      // reload
       const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
       if (m) setMenu(m);
       resetCatForm();
@@ -206,12 +166,12 @@ export default function LunchAdmin({ onBack }: Props = {}) {
     setCatEditing(c);
     setCatName(c.name);
   };
+
   const deleteCategory = async (c: CategoryT) => {
     if (!confirm(`Eliminar categoría "${c.name}"?`)) return;
     setLoading(true);
     try {
       await RTDBHelper.removeData(`${RTDB_PATHS.lunch_menu}/categories/${c.id}`);
-      // Nota: los productos quedan con categoryId huérfano; podrás cambiarlos luego.
       const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
       if (m) setMenu(m);
       toast({ title: "Categoría eliminada" });
@@ -237,138 +197,21 @@ export default function LunchAdmin({ onBack }: Props = {}) {
     if (m) setMenu(m);
   };
 
-  /* ================== Acciones: Productos ================== */
-  const resetProdForm = () => {
-    setProdEditing(null);
-    setProdForm({ active: true });
-  };
-
-  const editProduct = (p: ProductT) => {
-    setProdEditing(p);
-    setProdForm(p);
-  };
-
-  const saveProduct = async () => {
-    const name = (prodForm.name || "").trim();
-    const price = Number(prodForm.price);
-    const categoryId = (prodForm.categoryId || "").trim();
-    if (!name) return toast({ title: "El producto necesita nombre", variant: "destructive" });
-    if (!isFinite(price) || price < 0)
-      return toast({ title: "Precio inválido", variant: "destructive" });
-    if (!categoryId || !menu.categories?.[categoryId])
-      return toast({ title: "Elige una categoría válida", variant: "destructive" });
-
-    const payload: ProductT = {
-      id: prodEditing?.id || "",
-      name,
-      price,
-      categoryId,
-      description: prodForm.description?.trim(),
-      image: prodForm.image?.trim(),
-      active: prodForm.active !== false,
-    };
-
-    setLoading(true);
-    try {
-      if (prodEditing) {
-        const updates: Record<string, any> = {};
-        for (const [k, v] of Object.entries(payload)) {
-          if (k === "id") continue;
-          updates[`${RTDB_PATHS.lunch_menu}/products/${prodEditing.id}/${k}`] = v;
-        }
-        await RTDBHelper.updateData(updates);
-        toast({ title: "Producto actualizado" });
-      } else {
-        const newId = await RTDBHelper.pushData(`${RTDB_PATHS.lunch_menu}/products`, {
-          ...payload,
-          active: true,
-        });
-        await RTDBHelper.updateData({
-          [`${RTDB_PATHS.lunch_menu}/products/${newId}/id`]: newId,
-        });
-        toast({ title: "Producto creado" });
-      }
-      const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
-      if (m) setMenu(m);
-      resetProdForm();
-    } catch {
-      toast({ title: "No se pudo guardar el producto", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteProduct = async (p: ProductT) => {
-    if (!confirm(`Eliminar producto "${p.name}"?`)) return;
-    setLoading(true);
-    try {
-      await RTDBHelper.removeData(`${RTDB_PATHS.lunch_menu}/products/${p.id}`);
-      const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
-      if (m) setMenu(m);
-      toast({ title: "Producto eliminado" });
-    } catch {
-      toast({ title: "No se pudo eliminar", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleActive = async (p: ProductT) => {
-    await RTDBHelper.updateData({
-      [`${RTDB_PATHS.lunch_menu}/products/${p.id}/active`]: !(p.active !== false),
-    });
-    const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
-    if (m) setMenu(m);
-  };
-
-  const bulkImport = async () => {
-    const lines = bulk
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
-    if (!lines.length) return toast({ title: "Pega al menos una línea", variant: "destructive" });
-
-    const updates: Record<string, any> = {};
-    for (const line of lines) {
-      const [nRaw, pRaw, cRaw] = line.split(/[;,]\s*/);
-      const name = (nRaw || "").trim();
-      const price = Number(pRaw);
-      const catName = (cRaw || "").trim();
-      if (!name || !isFinite(price)) continue;
-      const cat =
-        categories.find((c) => c.name.toLowerCase() === catName.toLowerCase()) || categories[0];
-      if (!cat) continue;
-      const id = (crypto as any).randomUUID?.() || Math.random().toString(36).slice(2);
-      updates[`${RTDB_PATHS.lunch_menu}/products/${id}`] = {
-        id,
-        name,
-        price,
-        categoryId: cat.id,
-        active: true,
-      };
-    }
-    try {
-      await RTDBHelper.updateData(updates);
-      const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
-      if (m) setMenu(m);
-      setBulk("");
-      toast({ title: "Productos importados" });
-    } catch {
-      toast({ title: "No se pudo importar", variant: "destructive" });
-    }
-  };
-
-  /* ================== Pedidos ================== */
+  // ================== Pedidos ==================
   const markDelivered = async (o: OrderT) => {
     try {
       await RTDBHelper.updateData({
         [`${RTDB_PATHS.lunch_orders}/${o.id}/status`]: "delivered",
         [`${RTDB_PATHS.lunch_orders}/${o.id}/deliveryAt`]: new Date().toISOString(),
       });
-      const allOrders = await RTDBHelper.getData<Record<string, OrderT>>(RTDB_PATHS.lunch_orders);
+      const allOrders = await RTDBHelper.getData<Record<string, OrderT>>(
+        RTDB_PATHS.lunch_orders
+      );
       if (allOrders) {
         const today = new Date().toISOString().slice(0, 10);
-        setOrdersToday(Object.values(allOrders).filter((x) => (x.createdAt || "").startsWith(today)));
+        setOrdersToday(
+          Object.values(allOrders).filter((x) => (x.createdAt || "").startsWith(today))
+        );
       }
       toast({ title: "Pedido marcado como entregado" });
     } catch {
@@ -415,7 +258,7 @@ export default function LunchAdmin({ onBack }: Props = {}) {
     w.print();
   };
 
-  /* ================== Guard Admin ================== */
+  // ---------- Guard de admin ----------
   if (!user || user.role !== "admin") {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
@@ -429,49 +272,30 @@ export default function LunchAdmin({ onBack }: Props = {}) {
     );
   }
 
-  /* ================== UI ================== */
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
       <div className="max-w-7xl mx-auto space-y-6">
         <Card>
           <CardHeader className="flex items-center justify-between">
-            <div>
+            <div className="flex items-center gap-3">
+              {onBack && (
+                <Button
+                  variant="ghost"
+                  onClick={onBack}
+                  className="flex items-center gap-2 px-2"
+                  title="Volver al dashboard"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span className="hidden sm:inline">Volver</span>
+                </Button>
+              )}
               <CardTitle className="text-2xl font-bold">Administración de Almuerzos</CardTitle>
-              <p className="text-muted-foreground">Configura el portal, categorías y productos.</p>
             </div>
-            {onBack && (
-              <Button variant="ghost" onClick={onBack} className="flex items-center gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                Volver
-              </Button>
-            )}
+            <p className="text-muted-foreground hidden sm:block">
+              Configura el portal, categorías y productos.
+            </p>
           </CardHeader>
         </Card>
-
-        // dentro de src/components/modules/LunchAdmin.tsx, en el return(), arriba del Tabs
-
-<Card>
-  <CardHeader className="flex items-center justify-between">
-    <div className="flex items-center gap-3">
-      {onBack && (
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          className="flex items-center gap-2 px-2"
-          title="Volver al dashboard"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Volver</span>
-        </Button>
-      )}
-      <CardTitle className="text-2xl font-bold">Administración de Almuerzos</CardTitle>
-    </div>
-    <p className="text-muted-foreground hidden sm:block">
-      Configura el portal, categorías y productos.
-    </p>
-  </CardHeader>
-</Card>
-
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="space-y-6">
           <TabsList className="grid grid-cols-4">
@@ -504,7 +328,6 @@ export default function LunchAdmin({ onBack }: Props = {}) {
                     />
                     <Label>Portal abierto</Label>
                   </div>
-
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={settings.showPrices ?? true}
@@ -512,14 +335,15 @@ export default function LunchAdmin({ onBack }: Props = {}) {
                     />
                     <Label>Mostrar precios a familias</Label>
                   </div>
-
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label>Hora límite</Label>
                       <Input
                         type="time"
                         value={settings.cutoffTime || "11:00"}
-                        onChange={(e) => setSettings({ ...settings, cutoffTime: e.target.value })}
+                        onChange={(e) =>
+                          setSettings({ ...settings, cutoffTime: e.target.value })
+                        }
                       />
                     </div>
                     <div>
@@ -527,7 +351,9 @@ export default function LunchAdmin({ onBack }: Props = {}) {
                       <div className="flex items-center gap-2 h-9">
                         <Switch
                           checked={settings.allowSameDay ?? true}
-                          onCheckedChange={(v) => setSettings({ ...settings, allowSameDay: v })}
+                          onCheckedChange={(v) =>
+                            setSettings({ ...settings, allowSameDay: v })
+                          }
                         />
                       </div>
                     </div>
@@ -607,26 +433,41 @@ export default function LunchAdmin({ onBack }: Props = {}) {
                     <p className="text-muted-foreground">No hay categorías.</p>
                   )}
                   {categories.map((c, i) => (
-                    <div key={c.id} className="flex items-center justify-between border rounded p-2">
+                    <div
+                      key={c.id}
+                      className="flex items-center justify-between border rounded p-2"
+                    >
                       <div>
                         <div className="font-medium">{c.name}</div>
-                        <div className="text-xs text-muted-foreground">Orden: {c.order ?? 0}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Orden: {c.order ?? 0}
+                        </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => moveCategory(c, -1)} disabled={i === 0}>
+                        <Button
+                          variant="outline"
+                          onClick={() => moveCategory(c, -1)}
+                          disabled={i === 0}
+                          title="Subir"
+                        >
                           ↑
                         </Button>
                         <Button
                           variant="outline"
                           onClick={() => moveCategory(c, +1)}
                           disabled={i === categories.length - 1}
+                          title="Bajar"
                         >
                           ↓
                         </Button>
-                        <Button variant="outline" onClick={() => editCategory(c)}>
+                        <Button variant="outline" onClick={() => editCategory(c)} title="Editar">
                           <Edit className="h-3 w-3" />
                         </Button>
-                        <Button variant="destructive" onClick={() => deleteCategory(c)}>
+                        <Button
+                          variant="destructive"
+                          onClick={() => deleteCategory(c)}
+                          title="Eliminar"
+                        >
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -637,152 +478,9 @@ export default function LunchAdmin({ onBack }: Props = {}) {
             </div>
           </TabsContent>
 
-          {/* ================= Productos ================= */}
+          {/* ================= Productos (panel separado) ================= */}
           <TabsContent value="products">
-            <div className="grid xl:grid-cols-3 gap-6">
-              <Card className="xl:col-span-1">
-                <CardHeader>
-                  <CardTitle>{prodEditing ? "Editar producto" : "Nuevo producto"}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <Label>Nombre</Label>
-                    <Input
-                      value={prodForm.name || ""}
-                      onChange={(e) => setProdForm({ ...prodForm, name: e.target.value })}
-                      placeholder="Arroz con pollo"
-                    />
-                  </div>
-                  <div>
-                    <Label>Precio (PEN)</Label>
-                    <Input
-                      inputMode="decimal"
-                      value={prodForm.price ?? ""}
-                      onChange={(e) =>
-                        setProdForm({ ...prodForm, price: Number(e.target.value.replace(",", ".")) })
-                      }
-                      placeholder="8.50"
-                    />
-                  </div>
-                  <div>
-                    <Label>Categoría</Label>
-                    <select
-                      className="border rounded h-9 px-2 w-full"
-                      value={prodForm.categoryId || ""}
-                      onChange={(e) => setProdForm({ ...prodForm, categoryId: e.target.value })}
-                    >
-                      <option value="">Seleccione…</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <Label>Descripción (opcional)</Label>
-                    <Textarea
-                      value={prodForm.description || ""}
-                      onChange={(e) => setProdForm({ ...prodForm, description: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Imagen (URL pública opcional)</Label>
-                    <Input
-                      value={prodForm.image || ""}
-                      onChange={(e) => setProdForm({ ...prodForm, image: e.target.value })}
-                      placeholder="https://…"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={prodForm.active !== false}
-                      onCheckedChange={(v) => setProdForm({ ...prodForm, active: v })}
-                    />
-                    <Label>Activo</Label>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={saveProduct} disabled={loading}>
-                      <Save className="h-4 w-4 mr-2" />
-                      {prodEditing ? "Guardar cambios" : "Crear producto"}
-                    </Button>
-                    {prodEditing && (
-                      <Button variant="outline" onClick={resetProdForm}>
-                        Cancelar
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="xl:col-span-2">
-                <CardHeader>
-                  <CardTitle>Productos</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {products.length === 0 && (
-                    <p className="text-muted-foreground">No hay productos.</p>
-                  )}
-                  {products.map((p) => (
-                    <div
-                      key={p.id}
-                      className="grid grid-cols-12 gap-2 items-center border rounded p-2"
-                    >
-                      <div className="col-span-5">
-                        <div className="font-medium">{p.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {menu.categories?.[p.categoryId]?.name || "—"}
-                        </div>
-                      </div>
-                      <div className="col-span-2">{PEN(p.price)}</div>
-                      <div className="col-span-2">
-                        <span
-                          className={`text-xs px-2 py-1 rounded ${
-                            p.active !== false
-                              ? "bg-green-100 text-green-700"
-                              : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {p.active !== false ? "Activo" : "Inactivo"}
-                        </span>
-                      </div>
-                      <div className="col-span-3 flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => toggleActive(p)}>
-                          {p.active !== false ? "Desactivar" : "Activar"}
-                        </Button>
-                        <Button variant="outline" onClick={() => editProduct(p)}>
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button variant="destructive" onClick={() => deleteProduct(p)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card className="xl:col-span-3">
-                <CardHeader>
-                  <CardTitle>Importar rápido (pegar)</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Formato por línea: <code>nombre;precio;categoría</code> — ej:
-                    <code> Arroz con pollo;8.5;Almuerzos</code>
-                  </p>
-                  <Textarea
-                    value={bulk}
-                    onChange={(e) => setBulk(e.target.value)}
-                    className="h-32 font-mono"
-                    placeholder={`Arroz con pollo;8.5;Almuerzos\nJugo natural;3;Bebidas`}
-                  />
-                  <Button onClick={bulkImport} disabled={!bulk.trim()}>
-                    Importar productos
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+            <ProductsPanel menu={menu} onMenuChange={setMenu} />
           </TabsContent>
 
           {/* ================= Pedidos del día ================= */}
@@ -866,4 +564,15 @@ export default function LunchAdmin({ onBack }: Props = {}) {
       </div>
     </div>
   );
+}
+
+/* ---------- util local ---------- */
+function slugId(label: string) {
+  const s = label
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${s || "id"}-${Math.random().toString(36).slice(2, 6)}`;
 }

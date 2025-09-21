@@ -13,6 +13,7 @@ const firebaseConfig = {
       ? `https://${import.meta.env.VITE_FB_DB_NAME}.firebaseio.com`
       : "https://pv-maracuya-villa-gratia-4b044-default-rtdb.firebaseio.com",
   projectId: import.meta.env.VITE_FB_PROJECT_ID ?? "pv-maracuya-villa-gratia-4b044",
+  // No usamos Firebase Storage
   storageBucket:
     import.meta.env.VITE_FB_PROJECT_ID
       ? `${import.meta.env.VITE_FB_PROJECT_ID}.firebasestorage.app`
@@ -23,8 +24,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const rtdb: Database = getDatabase(app);
-export const auth = getAuth(app); // 👈 importante
+export const auth = getAuth(app); // 👈 importante para EmailLogin y guardias
 
+// Rutas de la base de datos
 export const RTDB_PATHS = {
   users: "users",
   products: "products",
@@ -42,7 +44,11 @@ export const RTDB_PATHS = {
   config: "config",
   correlatives: "correlatives",
   logs: "logs",
+
+  // 👇 Almuerzos
   lunch_menu: "lunch_menu",
   lunch_orders: "lunch_orders",
   lunch_settings: "lunch_settings",
+  // 👇 Plantillas/favoritos de combos
+  lunch_combo_templates: "lunch_combo_templates",
 } as const;
