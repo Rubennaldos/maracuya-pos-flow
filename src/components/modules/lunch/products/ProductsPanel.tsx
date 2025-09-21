@@ -1,4 +1,3 @@
-// src/components/modules/lunch/products/ProductsPanel.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -10,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Save, Edit, Trash2, Star, Loader2, Check } from "lucide-react";
-import type { MenuT, ProductT, Course, ComboTemplate } from "../types";
+import type { MenuT, ProductT, ComboTemplate } from "../types";
 
 /* ========= Util: Moneda ========= */
 const PEN = (n: number) =>
@@ -37,6 +36,10 @@ async function fileToWebPDataURL(file: File, max = 900, quality = 0.85): Promise
     }, "image/webp", quality)
   );
 }
+
+/** Quita todas las claves con valor `undefined` (para RTDB). */
+const sanitize = <T extends Record<string, any>>(obj: T): T =>
+  Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
 
 type Props = {
   menu: MenuT;
@@ -119,22 +122,24 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
       toast({ title: "Faltan campos por completar", variant: "destructive" });
       return;
     }
-    const payload: ProductT = {
+
+    // construimos el payload SIN `undefined`
+    const base = sanitize({
       id: editing?.id || "",
       name: (form.name || "").trim(),
       price: Number(form.price),
       categoryId: (form.categoryId || "").trim(),
-      description: form.description?.trim(),
-      image: form.image?.trim(), // dataURL (no se muestra como texto)
+      description: form.description?.trim() || null, // null si vacío
+      image: form.image?.trim() || "", // string vacío si no hay
       active: form.active !== false,
-      course: (form.course as Course) || undefined,
-    };
+      // OJO: sin 'course' porque quitamos la clasificación en VARIADOS
+    });
 
     setLoading(true);
     try {
       if (editing) {
         const updates: Record<string, any> = {};
-        for (const [k, v] of Object.entries(payload)) {
+        for (const [k, v] of Object.entries(base)) {
           if (k === "id") continue;
           updates[`${RTDB_PATHS.lunch_menu}/products/${editing.id}/${k}`] = v;
         }
@@ -142,7 +147,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
         toast({ title: "Producto actualizado con éxito" });
       } else {
         const newId = await RTDBHelper.pushData(`${RTDB_PATHS.lunch_menu}/products`, {
-          ...payload,
+          ...base,
           active: true,
         });
         await RTDBHelper.updateData({
@@ -153,7 +158,8 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
       const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
       if (m) onMenuChange(m);
       resetForm(); // limpiar todo
-    } catch {
+    } catch (e) {
+      console.error(e);
       toast({ title: "No se pudo guardar", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -300,10 +306,10 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
         name,
         price: Number(alm.price),
         categoryId: catId,
-        description,
+        description,                 // string (nunca undefined)
         active: true,
         isCombo: true,
-        image: alm.image || null,
+        image: alm.image || "",
         components: {
           entradaId: null,
           segundoId: null,
@@ -331,7 +337,8 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
         templateId: "",
       });
       setAlmErrors({});
-    } catch {
+    } catch (e) {
+      console.error(e);
       toast({ title: "No se pudo guardar", variant: "destructive" });
     }
   };
@@ -444,9 +451,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                   ref={priceRef}
                   inputMode="decimal"
                   value={form.price ?? ""}
-                  onChange={(e) =>
-                    setForm({ ...form, price: Number(e.target.value.replace(",", ".")) })
-                  }
+                  onChange={(e) => setForm({ ...form, price: Number(e.target.value.replace(",", ".")) })}
                   className={errors.price ? "border-destructive" : ""}
                   placeholder="8.50"
                 />
@@ -468,29 +473,10 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                     </option>
                   ))}
                 </select>
-                {errors.categoryId && (
-                  <p className="text-xs text-destructive mt-1">{errors.categoryId}</p>
-                )}
+                {errors.categoryId && <p className="text-xs text-destructive mt-1">{errors.categoryId}</p>}
               </div>
 
-              <div>
-                <Label>Clasificación (opcional)</Label>
-                <select
-                  className="border rounded h-9 px-2 w-full"
-                  value={form.course || ""}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      course: (e.target.value || undefined) as Course | undefined,
-                    })
-                  }
-                >
-                  <option value="">—</option>
-                  <option value="entrada">Entrada</option>
-                  <option value="segundo">Segundo</option>
-                  <option value="postre">Postre</option>
-                </select>
-              </div>
+              {/* 👇 Clasificación ELIMINADA en VARIADOS */}
 
               <div>
                 <Label>Descripción (opcional)</Label>
@@ -513,15 +499,10 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                   {imgBusy && <Loader2 className="h-4 w-4 animate-spin" />}
                   {!imgBusy && form.image && <Check className="h-4 w-4 text-green-600" />}
                 </div>
-                {/* preview sin mostrar el dataURL de texto */}
                 {form.image && (
                   <div className="mt-2 flex items-center gap-2">
                     <img src={form.image} alt="preview" className="h-14 w-14 rounded object-cover border" />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setForm((f) => ({ ...f, image: "" }))}
-                    >
+                    <Button type="button" variant="outline" onClick={() => setForm((f) => ({ ...f, image: "" }))}>
                       Quitar imagen
                     </Button>
                   </div>
@@ -529,10 +510,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
               </div>
 
               <div className="flex items-center gap-2">
-                <Switch
-                  checked={form.active !== false}
-                  onCheckedChange={(v) => setForm({ ...form, active: v })}
-                />
+                <Switch checked={form.active !== false} onCheckedChange={(v) => setForm({ ...form, active: v })} />
                 <Label>Activo</Label>
               </div>
 
@@ -556,11 +534,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
               <CardTitle>Productos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Input
-                placeholder="Buscar por nombre o categoría…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
+              <Input placeholder="Buscar por nombre o categoría…" value={q} onChange={(e) => setQ(e.target.value)} />
               {filtered.length === 0 && <p className="text-muted-foreground">No hay productos.</p>}
               {filtered.map((p) => (
                 <div key={p.id} className="grid grid-cols-12 gap-2 items-center border rounded p-2">
@@ -568,7 +542,6 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                     <div className="font-medium">{p.name}</div>
                     <div className="text-xs text-muted-foreground">
                       {menu.categories?.[p.categoryId]?.name || "—"}
-                      {p.course ? ` • ${p.course}` : ""}
                       {p.isCombo ? " • Combo" : ""}
                     </div>
                   </div>
@@ -630,10 +603,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
             <CardContent className="space-y-3">
               <div>
                 <Label>Título para mostrar (ej: Lunes 22 — Menú del día)</Label>
-                <Input
-                  value={alm.title}
-                  onChange={(e) => setAlm((a) => ({ ...a, title: e.target.value }))}
-                />
+                <Input value={alm.title} onChange={(e) => setAlm((a) => ({ ...a, title: e.target.value }))} />
               </div>
 
               <div className="grid md:grid-cols-3 gap-3">
@@ -654,9 +624,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                     className={almErrors.segundo ? "border-destructive" : ""}
                     placeholder="Arroz con pollo"
                   />
-                  {almErrors.segundo && (
-                    <p className="text-xs text-destructive mt-1">{almErrors.segundo}</p>
-                  )}
+                  {almErrors.segundo && <p className="text-xs text-destructive mt-1">{almErrors.segundo}</p>}
                 </div>
                 <div>
                   <Label>Postre</Label>
@@ -682,9 +650,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                       </option>
                     ))}
                   </select>
-                  {almErrors.categoryId && (
-                    <p className="text-xs text-destructive mt-1">{almErrors.categoryId}</p>
-                  )}
+                  {almErrors.categoryId && <p className="text-xs text-destructive mt-1">{almErrors.categoryId}</p>}
                 </div>
                 <div>
                   <Label>Precio (PEN)</Label>
@@ -696,9 +662,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                     className={almErrors.price ? "border-destructive" : ""}
                     placeholder="10.00"
                   />
-                  {almErrors.price && (
-                    <p className="text-xs text-destructive mt-1">{almErrors.price}</p>
-                  )}
+                  {almErrors.price && <p className="text-xs text-destructive mt-1">{almErrors.price}</p>}
                 </div>
                 <div>
                   <Label>Bebida</Label>
@@ -740,11 +704,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                 <Button variant="outline" onClick={saveFav} title="Guardar como favorito">
                   <Star className="h-4 w-4 mr-2" /> Guardar favorito
                 </Button>
-                <select
-                  className="border rounded h-9 px-2"
-                  value={alm.templateId || ""}
-                  onChange={(e) => loadFav(e.target.value)}
-                >
+                <select className="border rounded h-9 px-2" value={alm.templateId || ""} onChange={(e) => loadFav(e.target.value)}>
                   <option value="">— Cargar favorito —</option>
                   {templates.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -767,9 +727,7 @@ export default function ProductsPanel({ menu, onMenuChange }: Props) {
                 <div key={p.id} className="grid grid-cols-12 gap-2 items-center border rounded p-2">
                   <div className="col-span-6">
                     <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {menu.categories?.[p.categoryId]?.name || "—"}
-                    </div>
+                    <div className="text-xs text-muted-foreground">{menu.categories?.[p.categoryId]?.name || "—"}</div>
                   </div>
                   <div className="col-span-2">{PEN(p.price)}</div>
                   <div className="col-span-4 flex gap-2 justify-end">
