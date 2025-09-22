@@ -17,6 +17,10 @@ type Product = {
   categoryId: string;
   active?: boolean;
   isCombo?: boolean;
+  /** NUEVO: orden persistido desde el panel (preferente) */
+  position?: number | string;
+  /** Compatibilidad si tenías 'order' antes */
+  order?: number | string;
 };
 
 type MenuData = {
@@ -46,6 +50,20 @@ function inWindow(win?: { start?: string; end?: string }) {
   const pad = (x: number) => String(x).padStart(2, "0");
   const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
   return hhmm >= win.start && hhmm <= win.end;
+}
+
+/** Comparador: primero por 'position' (o 'order'), luego por nombre.
+ *  Robusto si vienen como string desde Firebase.
+ */
+function cmpByPositionThenName(a: Product, b: Product) {
+  const toNum = (v: unknown): number =>
+    isFinite(Number(v)) ? Number(v) : Number.POSITIVE_INFINITY;
+
+  const pa = toNum(a.position ?? a.order);
+  const pb = toNum(b.position ?? b.order);
+
+  if (pa !== pb) return pa - pb;
+  return (a.name || "").localeCompare(b.name || "");
 }
 
 export default function FamilyMenu({ client, onLogout }: Props) {
@@ -165,8 +183,9 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       const key = p.categoryId || "otros";
       (out[key] ||= []).push(p);
     }
+    // ORDEN CORREGIDO: dentro de cada categoría por position/order y luego nombre
     for (const key of Object.keys(out)) {
-      out[key].sort((a, b) => a.name.localeCompare(b.name));
+      out[key].sort(cmpByPositionThenName);
     }
     return out;
   }, [menu]);
@@ -203,7 +222,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
   const clearCart = () => setCart({});
 
-  /* ===== Mostrar modal de confirmación (en lugar de prompt) ===== */
+  /* ===== Mostrar modal de confirmación ===== */
   const openConfirm = () => {
     setMessage(null);
 
@@ -253,7 +272,6 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         name: it.name,
         qty: it.qty,
         price: it.price,
-        // opcional: isCombo si viene
         ...(it.isCombo ? { isCombo: true } : {}),
       }));
 
@@ -275,7 +293,6 @@ export default function FamilyMenu({ client, onLogout }: Props) {
       const orderId = await RTDBHelper.pushData(RTDB_PATHS.lunch_orders, payload);
       await RTDBHelper.updateData({
         [`${RTDB_PATHS.lunch_orders}/${orderId}/id`]: orderId,
-        // índice
         [`lunch_orders_by_client/${client.code}/${orderId}`]: true,
       });
 
@@ -567,7 +584,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         )}
       </div>
 
-      {/* ===== Modal personalizado de confirmación (centro app) ===== */}
+      {/* ===== Modal de confirmación ===== */}
       {showConfirm && (
         <div
           role="dialog"

@@ -95,28 +95,39 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
   // ======= AGRUPADO por categoría (solo productos activos) =======
   const groupsComputed = useMemo<Group[]>(() => {
-    const active = filteredBase.filter((p) => p.active !== false);
+    // Evitamos productos corruptos (sin id o sin nombre) para que no aparezca "—" y "Sin categoría"
+    const active = filteredBase.filter(
+      (p) =>
+        p.active !== false &&
+        p.id &&
+        typeof p.id === "string" &&
+        (p.name || "").trim().length > 0
+    );
+
     const catIndex: Record<string, { name: string; order: number }> = {};
     categories.forEach((c) => (catIndex[c.id] = { name: c.name, order: c.order ?? 0 }));
 
     const byCat: Record<string, ProductT[]> = {};
     for (const p of active) {
       const cid = p.categoryId || "__none__";
-      if (!byCat[cid]) byCat[cid] = [];
-      byCat[cid].push(p);
+      (byCat[cid] ||= []).push(p);
     }
+
+    const getPos = (x: any) =>
+      isFinite(Number(x?.position)) ? Number(x.position)
+      : isFinite(Number((x as any)?.order)) ? Number((x as any).order)
+      : Number.POSITIVE_INFINITY;
 
     const result: Group[] = Object.entries(byCat).map(([catId, items]) => {
       const meta = catIndex[catId];
-      // Orden por 'position' y luego nombre
-      const ordered = items
-        .slice()
-        .sort((a, b) => {
-          const pa = typeof (a as any).position === "number" ? (a as any).position : Number.POSITIVE_INFINITY;
-          const pb = typeof (b as any).position === "number" ? (b as any).position : Number.POSITIVE_INFINITY;
-          if (pa !== pb) return pa - pb;
-          return (a.name || "").localeCompare(b.name || "");
-        });
+      // Orden por 'position' (o 'order') y luego nombre
+      const ordered = items.slice().sort((a, b) => {
+        const pa = getPos(a);
+        const pb = getPos(b);
+        if (pa !== pb) return pa - pb;
+        return (a.name || "").localeCompare(b.name || "");
+      });
+
       return {
         catId,
         catName: meta ? meta.name : "Sin categoría",
@@ -124,7 +135,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       };
     });
 
-    // Ordenamos grupos por orden de categoría; los sin categoría al final
+    // Orden de grupos por categoría; los sin categoría al final
     result.sort((A, B) => {
       const aO = catIndex[A.catId]?.order ?? 9_999;
       const bO = catIndex[B.catId]?.order ?? 9_999;
@@ -137,10 +148,31 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
   // Copia local para drag&drop
   const [localGroups, setLocalGroups] = useState<Group[]>([]);
-  useEffect(() => setLocalGroups(groupsComputed), [groupsComputed]);
+  // Estado de cambios y guardado
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+
+  useEffect(() => {
+    setLocalGroups(groupsComputed);
+    setDirty(false);     // resetea cambios locales al refrescar desde servidor
+    setJustSaved(false); // ocultar check
+  }, [groupsComputed]);
 
   // --- Drag & Drop (solo dentro de la misma categoría) ---
   const dragInfo = useRef<{ groupIdx: number; itemIdx: number } | null>(null);
+
+  const sameOrder = (A: Group[], B: Group[]) => {
+    if (A.length !== B.length) return false;
+    for (let i = 0; i < A.length; i++) {
+      if (A[i].catId !== B[i].catId) return false;
+      const idsA = A[i].items.map((p) => p.id);
+      const idsB = B[i].items.map((p) => p.id);
+      if (idsA.length !== idsB.length) return false;
+      for (let j = 0; j < idsA.length; j++) if (idsA[j] !== idsB[j]) return false;
+    }
+    return true;
+  };
 
   const onDragStart = (groupIdx: number, itemIdx: number) => (ev: React.DragEvent) => {
     dragInfo.current = { groupIdx, itemIdx };
@@ -160,6 +192,10 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       const g = next[groupIdx];
       const [moved] = g.items.splice(d.itemIdx, 1);
       g.items.splice(itemIdx, 0, moved);
+
+      // detectar si cambió vs. el orden original de servidor
+      setDirty(!sameOrder(next, groupsComputed));
+      setJustSaved(false);
       return next;
     });
     dragInfo.current = null;
@@ -169,20 +205,27 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   };
 
   const saveOrder = async () => {
+    if (!dirty || saving) return;
+    setSaving(true);
     try {
       const updates: Record<string, any> = {};
       localGroups.forEach((g) => {
         g.items.forEach((p, idx) => {
-          updates[`${RTDB_PATHS.lunch_menu}/products/${p.id}/position`] = idx;
+          // Guardamos con espaciado (idx+1)*10 para facilitar futuras inserciones intermedias
+          updates[`${RTDB_PATHS.lunch_menu}/products/${p.id}/position`] = (idx + 1) * 10;
         });
       });
       await RTDBHelper.updateData(updates);
-      toast({ title: "Orden guardado" });
+      toast({ title: "Orden guardado y aplicado" });
       const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
       if (m) onMenuChange(m);
+      setDirty(false);
+      setJustSaved(true);
     } catch (e) {
       console.error(e);
       toast({ title: "No se pudo guardar el orden", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -580,12 +623,30 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
         <Input
           placeholder="Buscar por nombre o categoría…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setJustSaved(false);
+          }}
           className="max-w-[520px]"
         />
-        <Button onClick={saveOrder} disabled={localGroups.length === 0}>
-          Guardar orden
-        </Button>
+
+        <div className="flex items-center gap-2">
+          {dirty && <span className="text-sm text-muted-foreground">Cambios sin guardar</span>}
+          {justSaved && !dirty && (
+            <span className="text-sm text-green-600 flex items-center gap-1">
+              <Check className="h-4 w-4" /> Cambios aplicados
+            </span>
+          )}
+          <Button onClick={saveOrder} disabled={!dirty || saving}>
+            {saving ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Guardando…
+              </span>
+            ) : (
+              "Guardar orden"
+            )}
+          </Button>
+        </div>
       </div>
 
       {localGroups.length === 0 && (
@@ -928,4 +989,3 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     </div>
   );
 }
-    
