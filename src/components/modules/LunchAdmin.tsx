@@ -22,6 +22,7 @@ import {
   ArrowLeft,
   CheckCircle,
   Clock,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 
 import type {
@@ -58,6 +59,34 @@ type AdminSettings = SettingsT & {
   whatsapp?: { enabled?: boolean; phone?: string };
 };
 
+/* ====================== util fechas ======================= */
+function toYMD(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+}
+function endOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+}
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0).getTime();
+}
+function endOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+}
+function startOfYear(d: Date) {
+  return new Date(d.getFullYear(), 0, 1, 0, 0, 0, 0).getTime();
+}
+function endOfYear(d: Date) {
+  return new Date(d.getFullYear(), 11, 31, 23, 59, 59, 999).getTime();
+}
+
+type OrdersQuick = "day" | "month" | "year" | "range";
+
 export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const { user } = useSession();
 
@@ -77,9 +106,16 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   });
 
   const [menu, setMenu] = useState<MenuT>({});
-  const [ordersToday, setOrdersToday] = useState<OrderT[]>([]);
+  const [ordersToday, setOrdersToday] = useState<OrderT[]>([]); // 👉 arreglo mostrado (según filtro)
+  const [allOrders, setAllOrders] = useState<OrderT[]>([]);     // 👉 cache completo
   const [tab, setTab] = useState<"settings" | "cats" | "products" | "orders">("settings");
   const [loading, setLoading] = useState(false);
+
+  // ---------- Filtros de pedidos ----------
+  const today = new Date();
+  const [quick, setQuick] = useState<OrdersQuick>("day");
+  const [dateFrom, setDateFrom] = useState<string>(toYMD(today));
+  const [dateTo, setDateTo] = useState<string>(toYMD(today));
 
   // ---------- Estado Categorías ----------
   const [catName, setCatName] = useState("");
@@ -113,24 +149,15 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
         const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
         if (m) setMenu(m);
 
-        const allOrders = await RTDBHelper.getData<Record<string, OrderT>>(
+        // Traemos TODOS los pedidos (mantenemos en cache local)
+        const allOrdersObj = await RTDBHelper.getData<Record<string, OrderT>>(
           RTDB_PATHS.lunch_orders
         );
-        if (allOrders) {
-          const now = new Date();
-          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-          const end = start + 24 * 60 * 60 * 1000 - 1;
+        const arr = allOrdersObj ? Object.values(allOrdersObj) : [];
+        setAllOrders(arr);
 
-          setOrdersToday(
-            Object.values(allOrders).filter((o) => {
-              const t =
-                typeof o.createdAt === "number"
-                  ? o.createdAt
-                  : Date.parse(String(o.createdAt || 0));
-              return t >= start && t <= end;
-            })
-          );
-        }
+        // Por defecto: Hoy
+        applyOrdersFilter(arr, "day", toYMD(new Date()), toYMD(new Date()));
       } catch {
         toast({
           title: "Error",
@@ -148,6 +175,58 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
     const c = menu.categories || {};
     return Object.values(c).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [menu]);
+
+  // ================== Filtro de pedidos (aplicar) ==================
+  function applyOrdersFilter(
+    source: OrderT[] = allOrders,
+    mode: OrdersQuick = quick,
+    fromStr: string = dateFrom,
+    toStr: string = dateTo
+  ) {
+    let start = 0;
+    let end = Number.MAX_SAFE_INTEGER;
+
+    try {
+      if (mode === "day") {
+        const d = new Date(fromStr);
+        start = startOfDay(d);
+        end = endOfDay(d);
+      } else if (mode === "month") {
+        const d = new Date(fromStr);
+        start = startOfMonth(d);
+        end = endOfMonth(d);
+      } else if (mode === "year") {
+        const d = new Date(fromStr);
+        start = startOfYear(d);
+        end = endOfYear(d);
+      } else {
+        // range
+        const d1 = new Date(fromStr);
+        const d2 = new Date(toStr);
+        start = startOfDay(d1);
+        end = endOfDay(d2);
+      }
+    } catch {
+      // si algo sale mal, caemos a hoy
+      const d = new Date();
+      start = startOfDay(d);
+      end = endOfDay(d);
+    }
+
+    const filtered = source.filter((o) => {
+      const t = typeof o.createdAt === "number" ? o.createdAt : Date.parse(String(o.createdAt || 0));
+      return t >= start && t <= end;
+    });
+
+    // Ordenar del más reciente al más antiguo
+    filtered.sort((a, b) => {
+      const ta = typeof a.createdAt === "number" ? a.createdAt : Date.parse(String(a.createdAt || 0));
+      const tb = typeof b.createdAt === "number" ? b.createdAt : Date.parse(String(b.createdAt || 0));
+      return tb - ta;
+    });
+
+    setOrdersToday(filtered);
+  }
 
   // ================== Acciones: Configuración ==================
   const saveSettings = async () => {
@@ -261,24 +340,15 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
         [`${RTDB_PATHS.lunch_orders}/${o.id}/status`]: "delivered",
         [`${RTDB_PATHS.lunch_orders}/${o.id}/deliveryAt`]: new Date().toISOString(),
       });
-      const allOrders = await RTDBHelper.getData<Record<string, OrderT>>(
+
+      // Refrescamos cache local y reaplicamos filtro actual
+      const allOrdersObj = await RTDBHelper.getData<Record<string, OrderT>>(
         RTDB_PATHS.lunch_orders
       );
-      if (allOrders) {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        const end = start + 24 * 60 * 60 * 1000 - 1;
+      const arr = allOrdersObj ? Object.values(allOrdersObj) : [];
+      setAllOrders(arr);
+      applyOrdersFilter(arr); // usa quick + dateFrom/dateTo actuales
 
-        setOrdersToday(
-          Object.values(allOrders).filter((x) => {
-            const t =
-              typeof x.createdAt === "number"
-                ? x.createdAt
-                : Date.parse(String(x.createdAt || 0));
-            return t >= start && t <= end;
-          })
-        );
-      }
       toast({ title: "Pedido marcado como entregado" });
     } catch {
       toast({ title: "No se pudo actualizar el pedido", variant: "destructive" });
@@ -289,7 +359,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
     const w = window.open("", "_blank");
     if (!w) return;
     const html = `
-      <html><head><title>Pedidos del día</title>
+      <html><head><title>Pedidos</title>
       <style>
         body{font-family:Arial, sans-serif; margin:16px}
         .h{ text-align:center; border-bottom:2px solid #333; padding-bottom:8px; margin-bottom:16px;}
@@ -588,23 +658,121 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
             <ProductsPanel menu={menu} onMenuChange={setMenu} />
           </TabsContent>
 
-          {/* ================= Pedidos del día ================= */}
+          {/* ================= Pedidos (con filtro de fechas) ================= */}
           <TabsContent value="orders">
             <Card>
               <CardHeader className="flex items-center justify-between">
-                <CardTitle>
-                  Pedidos del día — {new Date().toLocaleDateString("es-PE")}
-                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  <CardTitle>Pedidos</CardTitle>
+                </div>
                 <Button variant="outline" onClick={printOrders}>
                   <FileText className="h-4 w-4 mr-2" />
                   Imprimir comanda
                 </Button>
               </CardHeader>
 
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
+                {/* ---- Panel de filtros ---- */}
+                <div className="border rounded-md p-3 grid gap-3">
+                  <div className="grid md:grid-cols-5 gap-3">
+                    <div className="md:col-span-2">
+                      <Label>Vista rápida</Label>
+                      <div className="flex gap-2 mt-1">
+                        <Button
+                          variant={quick === "day" ? "default" : "outline"}
+                          onClick={() => {
+                            const d = toYMD(new Date());
+                            setQuick("day");
+                            setDateFrom(d);
+                            setDateTo(d);
+                            applyOrdersFilter(allOrders, "day", d, d);
+                          }}
+                          size="sm"
+                        >
+                          Hoy
+                        </Button>
+                        <Button
+                          variant={quick === "month" ? "default" : "outline"}
+                          onClick={() => {
+                            const d = toYMD(new Date());
+                            setQuick("month");
+                            setDateFrom(d);
+                            applyOrdersFilter(allOrders, "month", d, d);
+                          }}
+                          size="sm"
+                        >
+                          Este mes
+                        </Button>
+                        <Button
+                          variant={quick === "year" ? "default" : "outline"}
+                          onClick={() => {
+                            const d = toYMD(new Date());
+                            setQuick("year");
+                            setDateFrom(d);
+                            applyOrdersFilter(allOrders, "year", d, d);
+                          }}
+                          size="sm"
+                        >
+                          Este año
+                        </Button>
+                        <Button
+                          variant={quick === "range" ? "default" : "outline"}
+                          onClick={() => setQuick("range")}
+                          size="sm"
+                        >
+                          Rango
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-3 grid grid-cols-2 gap-3 items-end">
+                      <div>
+                        <Label>{quick === "range" ? "Desde" : "Fecha base"}</Label>
+                        <Input
+                          type="date"
+                          value={dateFrom}
+                          onChange={(e) => setDateFrom(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label>{quick === "range" ? "Hasta" : "—"}</Label>
+                        <Input
+                          type="date"
+                          value={dateTo}
+                          onChange={(e) => setDateTo(e.target.value)}
+                          disabled={quick !== "range"}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => applyOrdersFilter(allOrders, quick, dateFrom, dateTo)}
+                      disabled={!allOrders.length}
+                    >
+                      Aplicar filtro
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const d = toYMD(new Date());
+                        setQuick("day");
+                        setDateFrom(d);
+                        setDateTo(d);
+                        applyOrdersFilter(allOrders, "day", d, d);
+                      }}
+                    >
+                      Limpiar (Hoy)
+                    </Button>
+                  </div>
+                </div>
+
+                {/* ---- Lista de pedidos ---- */}
                 {ordersToday.length === 0 && (
                   <p className="text-center text-muted-foreground py-8">
-                    No hay pedidos registrados hoy.
+                    No hay pedidos registrados en el rango seleccionado.
                   </p>
                 )}
 
