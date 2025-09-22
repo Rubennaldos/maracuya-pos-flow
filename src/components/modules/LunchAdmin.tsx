@@ -1,4 +1,3 @@
-// src/components/modules/LunchAdmin.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -46,19 +45,35 @@ function normalizePhone(raw?: string): string {
   return (raw || "").replace(/\D+/g, "");
 }
 
+/* ============================================================
+   FIX TIPOS: extendemos SettingsT localmente
+   para permitir version/updateSeq/updatedAt/forceMajor/whatsapp
+   sin depender de cambios en types.ts
+   ============================================================ */
+type AdminSettings = SettingsT & {
+  version?: string;
+  updateSeq?: number;
+  updatedAt?: number;
+  forceMajor?: boolean;
+  whatsapp?: { enabled?: boolean; phone?: string };
+};
+
 export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const { user } = useSession();
 
-  const [settings, setSettings] = useState<SettingsT & {
-    whatsapp?: { enabled?: boolean; phone?: string };
-  }>({
+  // Usamos AdminSettings en el estado para evitar los errores de TS
+  const [settings, setSettings] = useState<AdminSettings>({
     isOpen: true,
     showPrices: true,
     cutoffTime: "11:00",
     allowSameDay: true,
     orderWindow: { start: "", end: "" },
-    // NUEVO: WhatsApp
     whatsapp: { enabled: false, phone: "" },
+    // opcionales inicializados para que el shape exista
+    version: undefined,
+    updateSeq: undefined,
+    updatedAt: undefined,
+    forceMajor: undefined,
   });
 
   const [menu, setMenu] = useState<MenuT>({});
@@ -76,16 +91,19 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
 
     const loadAll = async () => {
       try {
-        const s = await RTDBHelper.getData<SettingsT & { whatsapp?: { enabled?: boolean; phone?: string } }>(
-          RTDB_PATHS.lunch_settings
-        );
+        const s = await RTDBHelper.getData<AdminSettings>(RTDB_PATHS.lunch_settings);
         if (s) {
           setSettings({
             isOpen: s.isOpen ?? true,
-            showPrices: (s as any).showPrices ?? true,
-            cutoffTime: (s as any).cutoffTime || "11:00",
+            showPrices: s.showPrices ?? true,
+            cutoffTime: s.cutoffTime || "11:00",
             allowSameDay: s.allowSameDay ?? true,
             orderWindow: s.orderWindow || { start: "", end: "" },
+            // preservamos campos opcionales si existen
+            version: s.version,
+            updateSeq: s.updateSeq,
+            updatedAt: s.updatedAt,
+            forceMajor: s.forceMajor,
             whatsapp: {
               enabled: !!s.whatsapp?.enabled,
               phone: normalizePhone(s.whatsapp?.phone || ""),
@@ -135,14 +153,18 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const saveSettings = async () => {
     setLoading(true);
     try {
-      // normaliza teléfono antes de guardar
       const phone = normalizePhone(settings.whatsapp?.phone);
-      const toSave: any = {
+      const toSave: AdminSettings = {
         isOpen: settings.isOpen ?? true,
-        showPrices: (settings as any).showPrices ?? true,
-        cutoffTime: (settings as any).cutoffTime || "11:00",
+        showPrices: settings.showPrices ?? true,
+        cutoffTime: settings.cutoffTime || "11:00",
         allowSameDay: settings.allowSameDay ?? true,
         orderWindow: settings.orderWindow || { start: "", end: "" },
+        // mantenemos estos campos si ya existen (no los calculamos aquí)
+        version: settings.version,
+        updateSeq: settings.updateSeq,
+        updatedAt: settings.updatedAt,
+        forceMajor: settings.forceMajor,
         whatsapp: {
           enabled: !!settings.whatsapp?.enabled,
           phone: phone || "",
@@ -376,8 +398,8 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                   </div>
                   <div className="flex items-center gap-2">
                     <Switch
-                      checked={(settings as any).showPrices ?? true}
-                      onCheckedChange={(v) => setSettings({ ...settings, showPrices: v } as any)}
+                      checked={settings.showPrices ?? true}
+                      onCheckedChange={(v) => setSettings({ ...settings, showPrices: v })}
                     />
                     <Label>Mostrar precios a familias</Label>
                   </div>
@@ -386,9 +408,9 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                       <Label>Hora límite</Label>
                       <Input
                         type="time"
-                        value={(settings as any).cutoffTime || "11:00"}
+                        value={settings.cutoffTime || "11:00"}
                         onChange={(e) =>
-                          setSettings({ ...settings, cutoffTime: e.target.value } as any)
+                          setSettings({ ...settings, cutoffTime: e.target.value })
                         }
                       />
                     </div>

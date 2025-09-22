@@ -1,4 +1,3 @@
-// src/components/modules/lunch/FamilyMenu.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -23,6 +22,8 @@ type Product = {
   order?: number | string;
 };
 
+
+
 type MenuData = {
   categories?: Record<string, Category>;
   products?: Record<string, Product>;
@@ -32,6 +33,13 @@ type Settings = {
   isOpen?: boolean;
   orderWindow?: { start?: string; end?: string };
   allowSameDay?: boolean;
+  
+
+  /** NUEVO: metadatos de versión/actualización */
+  version?: string;      // "x.y.z"
+  updateSeq?: number;    // correlativo incremental
+  updatedAt?: number;    // timestamp ms
+
   /** NUEVO: configuración de WhatsApp para enviar notificación al confirmar */
   whatsapp?: {
     enabled?: boolean;  // si true, abre WhatsApp con el mensaje
@@ -418,6 +426,16 @@ export default function FamilyMenu({ client, onLogout }: Props) {
           )}
         </div>
       </div>
+
+      {/* ====== NUEVO: Barra de versión / Act# ====== */}
+      {settings?.version && (
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>
+          Menú versión <strong>{settings.version}</strong> • Act# {settings.updateSeq ?? 0}
+          {typeof settings.updatedAt === "number"
+            ? ` • ${new Date(settings.updatedAt).toLocaleString("es-PE")}`
+            : ""}
+        </div>
+      )}
 
       {/* Historial del cliente */}
       {showHistory && (

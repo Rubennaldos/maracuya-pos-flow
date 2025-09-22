@@ -1,4 +1,5 @@
 // src/components/modules/lunch/products/ProductsPanel.tsx
+import type React from "react"; // <-- NECESARIO para usar React.DragEvent en tipos
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -95,7 +96,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
   // ======= AGRUPADO por categoría (solo productos activos) =======
   const groupsComputed = useMemo<Group[]>(() => {
-    // Evitamos productos corruptos (sin id o sin nombre) para que no aparezca "—" y "Sin categoría"
     const active = filteredBase.filter(
       (p) =>
         p.active !== false &&
@@ -120,7 +120,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
     const result: Group[] = Object.entries(byCat).map(([catId, items]) => {
       const meta = catIndex[catId];
-      // Orden por 'position' (o 'order') y luego nombre
       const ordered = items.slice().sort((a, b) => {
         const pa = getPos(a);
         const pb = getPos(b);
@@ -135,28 +134,25 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       };
     });
 
-    // Orden de grupos por categoría; los sin categoría al final
     result.sort((A, B) => {
       const aO = catIndex[A.catId]?.order ?? 9_999;
       const bO = catIndex[B.catId]?.order ?? 9_999;
       return aO - bO;
     });
 
-    // ocultar categorías vacías
     return result.filter((g) => g.items.length > 0);
   }, [filteredBase, categories]);
 
   // Copia local para drag&drop
   const [localGroups, setLocalGroups] = useState<Group[]>([]);
-  // Estado de cambios y guardado
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
 
   useEffect(() => {
     setLocalGroups(groupsComputed);
-    setDirty(false);     // resetea cambios locales al refrescar desde servidor
-    setJustSaved(false); // ocultar check
+    setDirty(false);
+    setJustSaved(false);
   }, [groupsComputed]);
 
   // --- Drag & Drop (solo dentro de la misma categoría) ---
@@ -193,7 +189,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       const [moved] = g.items.splice(d.itemIdx, 1);
       g.items.splice(itemIdx, 0, moved);
 
-      // detectar si cambió vs. el orden original de servidor
       setDirty(!sameOrder(next, groupsComputed));
       setJustSaved(false);
       return next;
@@ -211,7 +206,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       const updates: Record<string, any> = {};
       localGroups.forEach((g) => {
         g.items.forEach((p, idx) => {
-          // Guardamos con espaciado (idx+1)*10 para facilitar futuras inserciones intermedias
           updates[`${RTDB_PATHS.lunch_menu}/products/${p.id}/position`] = (idx + 1) * 10;
         });
       });
@@ -271,7 +265,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       description: form.description?.trim() || null,
       image: form.image?.trim() || "",
       active: form.active !== false,
-      isCombo: false, // variado
+      isCombo: false,
     });
 
     setLoading(true);
@@ -448,7 +442,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
     try {
       if (almEditingId) {
-        // actualizar
         await RTDBHelper.updateData({
           [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/name`]: name,
           [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/price`]: Number(alm.price),
@@ -465,7 +458,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
         });
         toast({ title: "Almuerzo actualizado" });
       } else {
-        // crear
         const newId = await RTDBHelper.pushData(`${RTDB_PATHS.lunch_menu}/products`, {
           id: "",
           name,
@@ -491,7 +483,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
       if (m) onMenuChange(m);
 
-      // limpiar
       setAlm({
         title: "",
         entrada: "",
@@ -594,7 +585,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
   const routeEdit = (p: ProductT) => {
     if (p.isCombo) {
-      // editar en MODO ALMUERZO
       const parsed = parseAlmFromDescription(p.description || "");
       setMode("almuerzo");
       setAlm({
@@ -612,7 +602,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       setAlmErrors({});
       return;
     }
-    // editar en VARIADO
     editVar(p);
   };
 
