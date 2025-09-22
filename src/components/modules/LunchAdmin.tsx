@@ -41,15 +41,24 @@ type LunchAdminProps = {
 const PEN = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
 
+/** Normaliza un teléfono para WhatsApp (solo dígitos) */
+function normalizePhone(raw?: string): string {
+  return (raw || "").replace(/\D+/g, "");
+}
+
 export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const { user } = useSession();
 
-  const [settings, setSettings] = useState<SettingsT>({
+  const [settings, setSettings] = useState<SettingsT & {
+    whatsapp?: { enabled?: boolean; phone?: string };
+  }>({
     isOpen: true,
     showPrices: true,
     cutoffTime: "11:00",
     allowSameDay: true,
     orderWindow: { start: "", end: "" },
+    // NUEVO: WhatsApp
+    whatsapp: { enabled: false, phone: "" },
   });
 
   const [menu, setMenu] = useState<MenuT>({});
@@ -67,14 +76,20 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
 
     const loadAll = async () => {
       try {
-        const s = await RTDBHelper.getData<SettingsT>(RTDB_PATHS.lunch_settings);
+        const s = await RTDBHelper.getData<SettingsT & { whatsapp?: { enabled?: boolean; phone?: string } }>(
+          RTDB_PATHS.lunch_settings
+        );
         if (s) {
           setSettings({
             isOpen: s.isOpen ?? true,
-            showPrices: s.showPrices ?? true,
-            cutoffTime: s.cutoffTime || "11:00",
+            showPrices: (s as any).showPrices ?? true,
+            cutoffTime: (s as any).cutoffTime || "11:00",
             allowSameDay: s.allowSameDay ?? true,
             orderWindow: s.orderWindow || { start: "", end: "" },
+            whatsapp: {
+              enabled: !!s.whatsapp?.enabled,
+              phone: normalizePhone(s.whatsapp?.phone || ""),
+            },
           });
         }
         const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
@@ -120,7 +135,21 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const saveSettings = async () => {
     setLoading(true);
     try {
-      await RTDBHelper.setData(RTDB_PATHS.lunch_settings, settings);
+      // normaliza teléfono antes de guardar
+      const phone = normalizePhone(settings.whatsapp?.phone);
+      const toSave: any = {
+        isOpen: settings.isOpen ?? true,
+        showPrices: (settings as any).showPrices ?? true,
+        cutoffTime: (settings as any).cutoffTime || "11:00",
+        allowSameDay: settings.allowSameDay ?? true,
+        orderWindow: settings.orderWindow || { start: "", end: "" },
+        whatsapp: {
+          enabled: !!settings.whatsapp?.enabled,
+          phone: phone || "",
+        },
+      };
+      await RTDBHelper.setData(RTDB_PATHS.lunch_settings, toSave);
+      setSettings((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, phone } }));
       toast({ title: "Configuración guardada" });
     } catch {
       toast({ title: "No se pudo guardar la configuración", variant: "destructive" });
@@ -347,8 +376,8 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                   </div>
                   <div className="flex items-center gap-2">
                     <Switch
-                      checked={settings.showPrices ?? true}
-                      onCheckedChange={(v) => setSettings({ ...settings, showPrices: v })}
+                      checked={(settings as any).showPrices ?? true}
+                      onCheckedChange={(v) => setSettings({ ...settings, showPrices: v } as any)}
                     />
                     <Label>Mostrar precios a familias</Label>
                   </div>
@@ -357,9 +386,9 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                       <Label>Hora límite</Label>
                       <Input
                         type="time"
-                        value={settings.cutoffTime || "11:00"}
+                        value={(settings as any).cutoffTime || "11:00"}
                         onChange={(e) =>
-                          setSettings({ ...settings, cutoffTime: e.target.value })
+                          setSettings({ ...settings, cutoffTime: e.target.value } as any)
                         }
                       />
                     </div>
@@ -403,6 +432,43 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                         })
                       }
                     />
+                  </div>
+                </div>
+
+                {/* ========= NUEVO: Sección WhatsApp ========= */}
+                <div className="grid md:grid-cols-3 gap-4 border-t pt-4">
+                  <div className="flex items-center gap-2 col-span-1">
+                    <Switch
+                      checked={!!settings.whatsapp?.enabled}
+                      onCheckedChange={(v) =>
+                        setSettings({
+                          ...settings,
+                          whatsapp: { ...(settings.whatsapp || {}), enabled: v },
+                        })
+                      }
+                    />
+                    <Label>Enviar confirmación a WhatsApp</Label>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Número de WhatsApp (con código de país, solo dígitos)</Label>
+                    <Input
+                      inputMode="numeric"
+                      placeholder="Ej. 51987654321"
+                      value={settings.whatsapp?.phone || ""}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          whatsapp: {
+                            ...(settings.whatsapp || {}),
+                            phone: normalizePhone(e.target.value),
+                          },
+                        })
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Ejemplo Perú: <code>51</code> + número — <strong>51987654321</strong>.
+                      Se abrirá WhatsApp Web/Móvil con el resumen del pedido.
+                    </p>
                   </div>
                 </div>
 

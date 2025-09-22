@@ -32,6 +32,11 @@ type Settings = {
   isOpen?: boolean;
   orderWindow?: { start?: string; end?: string };
   allowSameDay?: boolean;
+  /** NUEVO: configuración de WhatsApp para enviar notificación al confirmar */
+  whatsapp?: {
+    enabled?: boolean;  // si true, abre WhatsApp con el mensaje
+    phone?: string;     // número con código de país, SOLO dígitos. Ej: "51987654321"
+  };
 };
 
 type CartItem = Product & { qty: number; subtotal: number };
@@ -64,6 +69,47 @@ function cmpByPositionThenName(a: Product, b: Product) {
 
   if (pa !== pb) return pa - pb;
   return (a.name || "").localeCompare(b.name || "");
+}
+
+/* ========== NUEVO: Utilidades para WhatsApp ========== */
+function buildWhatsAppText(params: {
+  orderCode: number | string;
+  studentName: string;
+  clientCode: string;
+  recess: "primero" | "segundo";
+  items: { name: string; qty: number; price: number }[];
+  total: number;
+  note?: string | null;
+}) {
+  const lines: string[] = [
+    `*Nuevo pedido de almuerzo*`,
+    `N°: *${params.orderCode}*`,
+    `Alumno: ${params.studentName} — Código: ${params.clientCode}`,
+    `Recreo: ${params.recess === "primero" ? "Primero" : "Segundo"}`,
+    ``,
+    `*Productos:*`,
+    ...params.items.map(
+      (it) => `• ${it.qty} × ${it.name} — S/ ${Number(it.price).toFixed(2)}`
+    ),
+    ``,
+    `*Total:* S/ ${Number(params.total).toFixed(2)}`,
+  ];
+
+  if ((params.note || "").trim()) {
+    lines.push("", `*Observación:* ${params.note!.trim()}`);
+  }
+
+  return lines.join("\n");
+}
+
+function sendWhatsAppIfEnabled(settings: Settings | null | undefined, text: string) {
+  const enabled = !!settings?.whatsapp?.enabled;
+  let phone = (settings?.whatsapp?.phone || "").replace(/\D+/g, ""); // solo dígitos
+  if (!enabled || !phone) return;
+
+  // wa.me redirige a WhatsApp móvil o WhatsApp Web
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 export default function FamilyMenu({ client, onLogout }: Props) {
@@ -295,6 +341,18 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         [`${RTDB_PATHS.lunch_orders}/${orderId}/id`]: orderId,
         [`lunch_orders_by_client/${client.code}/${orderId}`]: true,
       });
+
+      /* ====== NUEVO: Enviar WhatsApp si está habilitado ====== */
+      const waText = buildWhatsAppText({
+        orderCode,
+        studentName: alumno,
+        clientCode: client.code,
+        recess: confirmRecess,
+        items: items,
+        total,
+        note: confirmNote || null,
+      });
+      sendWhatsAppIfEnabled(settings, waText);
 
       clearCart();
       setShowConfirm(false);
