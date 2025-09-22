@@ -1,5 +1,4 @@
 // src/components/modules/lunch/products/ProductsPanel.tsx
-import type React from "react"; // <-- NECESARIO para usar React.DragEvent en tipos
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -10,8 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Edit, Trash2, Star, Loader2, Check, GripVertical } from "lucide-react";
+import { Save, Edit, Trash2, Star, Loader2, Check, GripVertical, Plus, X } from "lucide-react";
 import type { MenuT, ProductT, ComboTemplate } from "../types";
+
+/* ========= Tipado extendido para addons ========= */
+type Addon = { id: string; name: string; price: number; active?: boolean };
+
+type ProductWithAddons = ProductT & {
+  addons?: Addon[];
+};
 
 /* ========= Util: Moneda ========= */
 const PEN = (n: number) =>
@@ -48,7 +54,7 @@ export type ProductsPanelProps = {
   onMenuChange: (next: MenuT) => void;
 };
 
-type Group = { catId: string; catName: string; items: ProductT[] };
+type Group = { catId: string; catName: string; items: ProductWithAddons[] };
 
 export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps) {
   /* ================== Derivados ================== */
@@ -57,9 +63,9 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     return Object.values(c).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [menu]);
 
-  const products = useMemo(() => {
+  const products = useMemo<ProductWithAddons[]>(() => {
     const p = menu.products || {};
-    return Object.values(p);
+    return Object.values(p) as ProductWithAddons[];
   }, [menu]);
 
   /* ================== Modo ================== */
@@ -67,8 +73,15 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   const [mode, setMode] = useState<Mode>("variado");
 
   /* ================== VARIADO ================== */
-  const [editing, setEditing] = useState<ProductT | null>(null);
-  const [form, setForm] = useState<Partial<ProductT>>({ active: true });
+  const [editing, setEditing] = useState<ProductWithAddons | null>(null);
+
+  // 🔧 precio como string para permitir 11.50 mientras tipeas
+  const [priceStr, setPriceStr] = useState<string>("");
+
+  // addons en el formulario
+  const [addons, setAddons] = useState<Addon[]>([]);
+
+  const [form, setForm] = useState<Partial<ProductWithAddons>>({ active: true });
   const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
   const [bulk, setBulk] = useState("");
@@ -107,7 +120,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     const catIndex: Record<string, { name: string; order: number }> = {};
     categories.forEach((c) => (catIndex[c.id] = { name: c.name, order: c.order ?? 0 }));
 
-    const byCat: Record<string, ProductT[]> = {};
+    const byCat: Record<string, ProductWithAddons[]> = {};
     for (const p of active) {
       const cid = p.categoryId || "__none__";
       (byCat[cid] ||= []).push(p);
@@ -155,9 +168,8 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     setJustSaved(false);
   }, [groupsComputed]);
 
-  // --- Drag & Drop (solo dentro de la misma categoría) ---
+  // --- Drag & Drop ---
   const dragInfo = useRef<{ groupIdx: number; itemIdx: number } | null>(null);
-
   const sameOrder = (A: Group[], B: Group[]) => {
     if (A.length !== B.length) return false;
     for (let i = 0; i < A.length; i++) {
@@ -174,11 +186,11 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     dragInfo.current = { groupIdx, itemIdx };
     ev.dataTransfer.effectAllowed = "move";
   };
-  const onDragOver = (groupIdx: number, _itemIdx: number) => (ev: React.DragEvent) => {
+  const onDragOver = (groupIdx: number) => (ev: React.DragEvent) => {
     ev.preventDefault();
     const d = dragInfo.current;
     if (!d) return;
-    if (d.groupIdx !== groupIdx) return; // no cruzamos categorías
+    if (d.groupIdx !== groupIdx) return;
   };
   const onDrop = (groupIdx: number, itemIdx: number) => () => {
     const d = dragInfo.current;
@@ -188,16 +200,13 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       const g = next[groupIdx];
       const [moved] = g.items.splice(d.itemIdx, 1);
       g.items.splice(itemIdx, 0, moved);
-
       setDirty(!sameOrder(next, groupsComputed));
       setJustSaved(false);
       return next;
     });
     dragInfo.current = null;
   };
-  const onDragEnd = () => {
-    dragInfo.current = null;
-  };
+  const onDragEnd = () => (dragInfo.current = null);
 
   const saveOrder = async () => {
     if (!dirty || saving) return;
@@ -227,6 +236,8 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   const resetForm = () => {
     setEditing(null);
     setForm({ active: true });
+    setAddons([]);
+    setPriceStr("");
     setErrors({});
     if (fileInputRef.current) fileInputRef.current.value = "";
     nameRef.current?.focus();
@@ -235,12 +246,25 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   const validateVar = () => {
     const errs: Record<string, string> = {};
     const name = (form.name || "").trim();
-    const price = Number(form.price);
+    const priceNum = Number((priceStr || "").replace(",", "."));
     const catId = (form.categoryId || "").trim();
 
     if (!name) errs.name = "El nombre es obligatorio";
-    if (!isFinite(price) || price < 0) errs.price = "Precio inválido";
+    if (!isFinite(priceNum) || priceNum < 0) errs.price = "Precio inválido";
     if (!catId || !menu.categories?.[catId]) errs.categoryId = "Seleccione una categoría";
+
+    // validar addons
+    for (const a of addons) {
+      const p = Number(a.price);
+      if (!a.name?.trim()) {
+        errs.addons = "Los agregados deben tener nombre.";
+        break;
+      }
+      if (!isFinite(p) || p < 0) {
+        errs.addons = "Precio de agregado inválido.";
+        break;
+      }
+    }
 
     setErrors(errs);
 
@@ -260,12 +284,13 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     const base = sanitize({
       id: editing?.id || "",
       name: (form.name || "").trim(),
-      price: Number(form.price),
+      price: Number((priceStr || "").replace(",", ".")),
       categoryId: (form.categoryId || "").trim(),
       description: form.description?.trim() || null,
       image: form.image?.trim() || "",
       active: form.active !== false,
       isCombo: false,
+      addons: addons.length ? addons : undefined,
     });
 
     setLoading(true);
@@ -299,15 +324,19 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     }
   };
 
-  const editVar = (p: ProductT) => {
+  const editVar = (p: ProductWithAddons) => {
     setEditing(p);
     setForm(p);
+    setAddons(p.addons?.slice() || []);
+    setPriceStr(
+      typeof p.price === "number" && Number.isFinite(p.price) ? String(p.price) : String(p.price ?? "")
+    );
     setErrors({});
     setMode("variado");
     nameRef.current?.focus();
   };
 
-  const toggleActive = async (p: ProductT) => {
+  const toggleActive = async (p: ProductWithAddons) => {
     await RTDBHelper.updateData({
       [`${RTDB_PATHS.lunch_menu}/products/${p.id}/active`]: !(p.active !== false),
     });
@@ -315,7 +344,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     if (m) onMenuChange(m);
   };
 
-  const remove = async (p: ProductT) => {
+  const remove = async (p: ProductWithAddons) => {
     if (!confirm(`Eliminar "${p.name}"?`)) return;
     await RTDBHelper.removeData(`${RTDB_PATHS.lunch_menu}/products/${p.id}`);
     const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
@@ -334,7 +363,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     for (const line of lines) {
       const [nRaw, pRaw, cRaw] = line.split(/[;,]\s*/);
       const name = (nRaw || "").trim();
-      const price = Number(pRaw);
+      const price = Number((pRaw || "").replace(",", "."));
       const catName = (cRaw || "").trim();
       if (!name || !isFinite(price)) continue;
 
@@ -379,12 +408,15 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   };
 
   /* ================== ALMUERZO ================== */
+  // 🔧 precio como string
+  const [almPriceStr, setAlmPriceStr] = useState<string>("");
+
   const [alm, setAlm] = useState<{
     title: string;
     entrada?: string;
     segundo?: string;
     postre?: string;
-    price?: number;
+    price?: number; // solo para lectura desde DB
     categoryId?: string;
     bebidaLabel: string;
     image?: string;
@@ -411,9 +443,9 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
   const validateAlm = () => {
     const errs: Record<string, string> = {};
-    const price = Number(alm.price);
+    const priceNum = Number((almPriceStr || "").replace(",", "."));
     if (!(alm.segundo || "").trim()) errs.segundo = "El segundo es obligatorio";
-    if (!isFinite(price) || price <= 0) errs.price = "Precio inválido";
+    if (!isFinite(priceNum) || priceNum <= 0) errs.price = "Precio inválido";
     if (!alm.categoryId || !menu.categories?.[alm.categoryId]) errs.categoryId = "Seleccione categoría";
     setAlmErrors(errs);
     if (errs.segundo) almSegundoRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -439,12 +471,13 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     const catId = alm.categoryId!;
     const name = (alm.title || "").trim() || `Almuerzo del día: ${alm.segundo}`;
     const description = buildAlmDescription();
+    const pNum = Number((almPriceStr || "").replace(",", "."));
 
     try {
       if (almEditingId) {
         await RTDBHelper.updateData({
           [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/name`]: name,
-          [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/price`]: Number(alm.price),
+          [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/price`]: pNum,
           [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/categoryId`]: catId,
           [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/description`]: description,
           [`${RTDB_PATHS.lunch_menu}/products/${almEditingId}/image`]: alm.image || "",
@@ -461,7 +494,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
         const newId = await RTDBHelper.pushData(`${RTDB_PATHS.lunch_menu}/products`, {
           id: "",
           name,
-          price: Number(alm.price),
+          price: pNum,
           categoryId: catId,
           description,
           active: true,
@@ -494,6 +527,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
         image: "",
         templateId: "",
       });
+      setAlmPriceStr("");
       setAlmErrors({});
       setAlmEditingId(null);
     } catch (e) {
@@ -509,7 +543,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       toast({ title: "Falta el segundo", variant: "destructive" });
       return;
     }
-    const price = Number(alm.price) || 0;
+    const price = Number((almPriceStr || "").replace(",", ".")) || 0;
     const id = await RTDBHelper.pushData(RTDB_PATHS.lunch_combo_templates, {
       id: "",
       name: `Almuerzo: ${alm.segundo}`,
@@ -548,6 +582,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       categoryId: t.categoryId || a.categoryId,
       image: t.image || "",
     }));
+    setAlmPriceStr(t.price != null ? String(t.price) : "");
   };
 
   // Imagen ALMUERZO
@@ -583,7 +618,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     return out;
   }
 
-  const routeEdit = (p: ProductT) => {
+  const routeEdit = (p: ProductWithAddons) => {
     if (p.isCombo) {
       const parsed = parseAlmFromDescription(p.description || "");
       setMode("almuerzo");
@@ -598,6 +633,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
         image: p.image || "",
         templateId: "",
       });
+      setAlmPriceStr(p.price != null ? String(p.price) : "");
       setAlmEditingId(p.id!);
       setAlmErrors({});
       return;
@@ -606,6 +642,88 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   };
 
   /* ================== UI ================== */
+
+  const AddonsEditor = () => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Agregados (opcional)</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            setAddons((arr) => [
+              ...arr,
+              { id: Math.random().toString(36).slice(2, 8), name: "", price: 0, active: true },
+            ])
+          }
+        >
+          <Plus className="h-3 w-3 mr-1" /> Añadir agregado
+        </Button>
+      </div>
+
+      {addons.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          Puedes crear opciones como “Huevo frito (S/ 1.50)”, “Palta (S/ 1.00)”, etc.
+        </p>
+      )}
+
+      {addons.map((a, idx) => (
+        <div key={a.id} className="grid grid-cols-12 gap-2 items-center">
+          <Input
+            className="col-span-6"
+            placeholder="Nombre (ej. Huevo frito)"
+            value={a.name}
+            onChange={(e) =>
+              setAddons((arr) => {
+                const next = arr.slice();
+                next[idx] = { ...next[idx], name: e.target.value };
+                return next;
+              })
+            }
+          />
+          <Input
+            className="col-span-3"
+            placeholder="Precio (ej. 1.50)"
+            value={String(a.price ?? "")}
+            onChange={(e) =>
+              setAddons((arr) => {
+                const next = arr.slice();
+                const v = e.target.value.replace(",", ".");
+                next[idx] = { ...next[idx], price: v === "" ? ("" as any) : Number(v) };
+                return next;
+              })
+            }
+            inputMode="decimal"
+          />
+          <div className="col-span-2 flex items-center gap-2">
+            <Switch
+              checked={a.active !== false}
+              onCheckedChange={(v) =>
+                setAddons((arr) => {
+                  const next = arr.slice();
+                  next[idx] = { ...next[idx], active: v };
+                  return next;
+                })
+              }
+            />
+            <Label>Activo</Label>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            className="col-span-1"
+            onClick={() => setAddons((arr) => arr.filter((x) => x.id !== a.id))}
+            title="Quitar"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+      {errors.addons && <p className="text-xs text-destructive">{errors.addons}</p>}
+    </div>
+  );
+
   const GroupedList = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -654,7 +772,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
                 className="flex items-center gap-3 border rounded px-3 py-2 bg-card"
                 draggable
                 onDragStart={onDragStart(gi, pi)}
-                onDragOver={onDragOver(gi, pi)}
+                onDragOver={onDragOver(gi)}
                 onDrop={onDrop(gi, pi)}
                 onDragEnd={onDragEnd}
               >
@@ -667,10 +785,11 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
                   <div className="text-xs text-muted-foreground">
                     {menu.categories?.[p.categoryId!]?.name || "—"}
                     {p.isCombo ? " • Combo" : ""}
+                    {p.addons?.length ? ` • ${p.addons.length} agregados` : ""}
                   </div>
                 </div>
 
-                <div className="w-24 text-right">{PEN(p.price)}</div>
+                <div className="w-24 text-right">{PEN(Number(p.price))}</div>
 
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={() => toggleActive(p)}>
@@ -733,8 +852,8 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
                 <Input
                   ref={priceRef}
                   inputMode="decimal"
-                  value={form.price ?? ""}
-                  onChange={(e) => setForm({ ...form, price: Number(e.target.value.replace(",", ".")) })}
+                  value={priceStr}
+                  onChange={(e) => setPriceStr(e.target.value)} // ← no convertimos aquí
                   className={errors.price ? "border-destructive" : ""}
                   placeholder="8.50"
                 />
@@ -766,6 +885,9 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
               </div>
+
+              {/* ===== Agregados ===== */}
+              <AddonsEditor />
 
               <div>
                 <Label>Imagen (JPG/PNG — se convierte a WebP)</Label>
@@ -809,7 +931,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
             </CardContent>
           </Card>
 
-          {/* Lista agrupada + drag (con guardar orden) */}
+          {/* Lista agrupada */}
           <Card className="xl:col-span-2">
             <CardHeader>
               <CardTitle>Productos</CardTitle>
@@ -905,8 +1027,8 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
                   <Input
                     ref={almPrecioRef}
                     inputMode="decimal"
-                    value={alm.price ?? ""}
-                    onChange={(e) => setAlm((a) => ({ ...a, price: Number(e.target.value.replace(",", ".")) }))}
+                    value={almPriceStr}
+                    onChange={(e) => setAlmPriceStr(e.target.value)}
                     className={almErrors.price ? "border-destructive" : ""}
                     placeholder="10.00"
                   />
@@ -964,7 +1086,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
             </CardContent>
           </Card>
 
-          {/* Lista agrupada + drag también aquí */}
+          {/* Lista agrupada */}
           <Card>
             <CardHeader>
               <CardTitle>Productos actuales</CardTitle>

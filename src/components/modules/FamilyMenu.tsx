@@ -1,3 +1,4 @@
+// src/components/modules/lunch/FamilyMenu.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -7,6 +8,7 @@ import FamilyOrderHistory from "@/components/modules/lunch/FamilyOrderHistory";
 type Client = { code: string; name?: string };
 
 type Category = { id: string; name: string; order?: number };
+type Addon = { id: string; name: string; price: number; active?: boolean };
 type Product = {
   id: string;
   name: string;
@@ -16,13 +18,10 @@ type Product = {
   categoryId: string;
   active?: boolean;
   isCombo?: boolean;
-  /** NUEVO: orden persistido desde el panel (preferente) */
   position?: number | string;
-  /** Compatibilidad si tenías 'order' antes */
   order?: number | string;
+  addons?: Addon[];
 };
-
-
 
 type MenuData = {
   categories?: Record<string, Category>;
@@ -33,21 +32,24 @@ type Settings = {
   isOpen?: boolean;
   orderWindow?: { start?: string; end?: string };
   allowSameDay?: boolean;
-  
 
-  /** NUEVO: metadatos de versión/actualización */
-  version?: string;      // "x.y.z"
-  updateSeq?: number;    // correlativo incremental
-  updatedAt?: number;    // timestamp ms
+  /** metadatos de versión/actualización */
+  version?: string;
+  updateSeq?: number;
+  updatedAt?: number;
 
-  /** NUEVO: configuración de WhatsApp para enviar notificación al confirmar */
+  /** WhatsApp */
   whatsapp?: {
-    enabled?: boolean;  // si true, abre WhatsApp con el mensaje
-    phone?: string;     // número con código de país, SOLO dígitos. Ej: "51987654321"
+    enabled?: boolean;
+    phone?: string;
   };
 };
 
-type CartItem = Product & { qty: number; subtotal: number };
+type CartItem = Product & {
+  qty: number;
+  subtotal: number;
+  selectedAddons?: Addon[];
+};
 
 type Props = {
   client: Client;
@@ -65,27 +67,22 @@ function inWindow(win?: { start?: string; end?: string }) {
   return hhmm >= win.start && hhmm <= win.end;
 }
 
-/** Comparador: primero por 'position' (o 'order'), luego por nombre.
- *  Robusto si vienen como string desde Firebase.
- */
 function cmpByPositionThenName(a: Product, b: Product) {
   const toNum = (v: unknown): number =>
     isFinite(Number(v)) ? Number(v) : Number.POSITIVE_INFINITY;
-
   const pa = toNum(a.position ?? a.order);
   const pb = toNum(b.position ?? b.order);
-
   if (pa !== pb) return pa - pb;
   return (a.name || "").localeCompare(b.name || "");
 }
 
-/* ========== NUEVO: Utilidades para WhatsApp ========== */
+/* WhatsApp helpers */
 function buildWhatsAppText(params: {
   orderCode: number | string;
   studentName: string;
   clientCode: string;
   recess: "primero" | "segundo";
-  items: { name: string; qty: number; price: number }[];
+  items: { name: string; qty: number; price: number; addons?: Addon[] }[];
   total: number;
   note?: string | null;
 }) {
@@ -96,26 +93,23 @@ function buildWhatsAppText(params: {
     `Recreo: ${params.recess === "primero" ? "Primero" : "Segundo"}`,
     ``,
     `*Productos:*`,
-    ...params.items.map(
-      (it) => `• ${it.qty} × ${it.name} — S/ ${Number(it.price).toFixed(2)}`
-    ),
+    ...params.items.map((it) => {
+      const base = `• ${it.qty} × ${it.name} — S/ ${Number(it.price).toFixed(2)}`;
+      const ad = (it.addons || [])
+        .map((a) => `    ◦ + ${a.name}  S/ ${Number(a.price).toFixed(2)}`)
+        .join("\n");
+      return ad ? `${base}\n${ad}` : base;
+    }),
     ``,
     `*Total:* S/ ${Number(params.total).toFixed(2)}`,
   ];
-
-  if ((params.note || "").trim()) {
-    lines.push("", `*Observación:* ${params.note!.trim()}`);
-  }
-
+  if ((params.note || "").trim()) lines.push("", `*Observación:* ${params.note!.trim()}`);
   return lines.join("\n");
 }
-
 function sendWhatsAppIfEnabled(settings: Settings | null | undefined, text: string) {
   const enabled = !!settings?.whatsapp?.enabled;
-  let phone = (settings?.whatsapp?.phone || "").replace(/\D+/g, ""); // solo dígitos
+  let phone = (settings?.whatsapp?.phone || "").replace(/\D+/g, "");
   if (!enabled || !phone) return;
-
-  // wa.me redirige a WhatsApp móvil o WhatsApp Web
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   window.open(url, "_blank", "noopener,noreferrer");
 }
@@ -128,22 +122,17 @@ export default function FamilyMenu({ client, onLogout }: Props) {
   const [posting, setPosting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // Nombre resuelto (desde props o RTDB)
   const [resolvedName, setResolvedName] = useState<string>("");
-
-  // Historial
   const [showHistory, setShowHistory] = useState(false);
 
-  // Confirm modal state
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmStudent, setConfirmStudent] = useState<string>("");
   const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("segundo");
   const [confirmNote, setConfirmNote] = useState<string>("");
 
-  /* ==== Resolver nombre del cliente ==== */
+  /* ==== Resolver nombre ==== */
   useEffect(() => {
     let mounted = true;
-
     async function tryGet(path: string) {
       try {
         const snap = await RTDBHelper.getData<any>(path);
@@ -152,35 +141,23 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         return null;
       }
     }
-
     (async () => {
-      // 1) Si vino en props, úsalo
       if (client.name && client.name.trim()) {
         if (mounted) setResolvedName(client.name.trim());
         return;
       }
-
-      // 2) Intentar varios paths posibles en RTDB
       const candidates: string[] = [];
       if ((RTDB_PATHS as any)?.clients) {
         candidates.push(`${(RTDB_PATHS as any).clients}/${client.code}`);
       }
-      candidates.push(
-        `/clients/${client.code}`,
-        `/students/${client.code}`,
-        `/alumnos/${client.code}`,
-        `/people/${client.code}`
-      );
-
+      candidates.push(`/clients/${client.code}`, `/students/${client.code}`, `/alumnos/${client.code}`, `/people/${client.code}`);
       for (const p of candidates) {
         const row = await tryGet(p);
-        // tu estructura muestra names + lastNames, intentamos componer
         const name = row?.name || row?.fullName || row?.fullname;
         if (mounted && name) {
           setResolvedName(String(name));
           return;
         }
-        // algunos nodos usan 'names' + 'lastNames'
         if (row?.names || row?.lastNames) {
           const n = (row.names || "").toString().trim();
           const ln = (row.lastNames || "").toString().trim();
@@ -191,43 +168,27 @@ export default function FamilyMenu({ client, onLogout }: Props) {
           }
         }
       }
-
-      // 3) Último intento: índice plano opcional
       const idx = await tryGet(`clients_by_code/${client.code}`);
       if (mounted && idx?.name) {
         setResolvedName(String(idx.name));
         return;
       }
-
-      // 4) Fallback
       if (mounted) setResolvedName("Estudiante");
     })();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [client.code, client.name]);
 
   /* ==== Escuchar configuración y menú ==== */
   useEffect(() => {
-    const off1 = RTDBHelper.listenToData<Settings>(RTDB_PATHS.lunch_settings, (d) =>
-      setSettings(d || null)
-    );
-    const off2 = RTDBHelper.listenToData<MenuData>(RTDB_PATHS.lunch_menu, (d) => {
-      setMenu(d || null);
-    });
-    return () => {
-      off1?.();
-      off2?.();
-    };
+    const off1 = RTDBHelper.listenToData<Settings>(RTDB_PATHS.lunch_settings, (d) => setSettings(d || null));
+    const off2 = RTDBHelper.listenToData<MenuData>(RTDB_PATHS.lunch_menu, (d) => setMenu(d || null));
+    return () => { off1?.(); off2?.(); };
   }, []);
 
-  /* ==== Derivados de menú ==== */
+  /* ==== Derivados ==== */
   const categories = useMemo<Category[]>(() => {
     const m = menu?.categories || {};
-    return Object.values(m)
-      .filter(Boolean)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    return Object.values(m).filter(Boolean).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [menu]);
 
   const productsByCat = useMemo<Record<string, Product[]>>(() => {
@@ -235,12 +196,9 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     const all = Object.values(menu?.products || {}).filter((p) => p?.active !== false);
     for (const p of all) {
       const key = p.categoryId || "otros";
-      (out[key] ||= []).push(p);
+      (out[key] ||= []).push(p as Product);
     }
-    // ORDEN CORREGIDO: dentro de cada categoría por position/order y luego nombre
-    for (const key of Object.keys(out)) {
-      out[key].sort(cmpByPositionThenName);
-    }
+    for (const key of Object.keys(out)) out[key].sort(cmpByPositionThenName);
     return out;
   }, [menu]);
 
@@ -253,12 +211,23 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     [cart]
   );
 
-  const addToCart = (p: Product | CartItem) => {
+  /* ==== Agregar con agregados ==== */
+  const addToCart = (base: Product, selectedAddons?: Addon[]) => {
+    const addSum = (selectedAddons || []).reduce((acc, a) => acc + (Number(a.price) || 0), 0);
+    const unit = (base.price || 0) + addSum;
     setCart((prev) => {
-      const curr = prev[p.id];
+      const curr = prev[base.id];
       const qty = (curr?.qty ?? 0) + 1;
-      const subtotal = qty * (p.price ?? 0);
-      return { ...prev, [p.id]: { ...(p as Product), qty, subtotal } };
+      const subtotal = qty * unit;
+      return {
+        ...prev,
+        [base.id]: {
+          ...(base as Product),
+          qty,
+          subtotal,
+          selectedAddons: (curr?.selectedAddons || selectedAddons || []).slice(),
+        },
+      };
     });
   };
 
@@ -266,12 +235,15 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     setCart((prev) => {
       const curr = prev[id];
       if (!curr) return prev;
+      const unit =
+        (curr.price || 0) +
+        (curr.selectedAddons || []).reduce((s, a) => s + (Number(a.price) || 0), 0);
       const qty = curr.qty - 1;
       if (qty <= 0) {
         const { [id]: _, ...rest } = prev;
         return rest;
       }
-      return { ...prev, [id]: { ...curr, qty, subtotal: qty * curr.price } };
+      return { ...prev, [id]: { ...curr, qty, subtotal: qty * unit } };
     });
 
   const clearCart = () => setCart({});
@@ -279,21 +251,9 @@ export default function FamilyMenu({ client, onLogout }: Props) {
   /* ===== Mostrar modal de confirmación ===== */
   const openConfirm = () => {
     setMessage(null);
-
-    if (settings?.isOpen === false) {
-      setMessage("El pedido no está disponible en este momento.");
-      return;
-    }
-    if (!inWindow(settings?.orderWindow)) {
-      setMessage("Fuera del horario permitido para pedidos.");
-      return;
-    }
-    if (!Object.keys(cart).length) {
-      setMessage("Agregue al menos un producto.");
-      return;
-    }
-
-    // prefills
+    if (settings?.isOpen === false) { setMessage("El pedido no está disponible en este momento."); return; }
+    if (!inWindow(settings?.orderWindow)) { setMessage("Fuera del horario permitido para pedidos."); return; }
+    if (!Object.keys(cart).length) { setMessage("Agregue al menos un producto."); return; }
     setConfirmStudent(resolvedName || client.name || "Estudiante");
     setConfirmRecess("segundo");
     setConfirmNote("");
@@ -303,32 +263,24 @@ export default function FamilyMenu({ client, onLogout }: Props) {
   /* ===== Confirmar y guardar en RTDB ===== */
   const confirmAndPlace = async () => {
     setMessage(null);
-
-    // Validaciones modal
     const alumno = (confirmStudent || "").trim();
-    if (!alumno) {
-      setMessage("Debe indicar el nombre del alumno.");
-      return;
-    }
-
+    if (!alumno) { setMessage("Debe indicar el nombre del alumno."); return; }
     const hasCombo = Object.values(cart).some((it) => !!it.isCombo);
     if (hasCombo && confirmRecess === "primero") {
       setMessage("El almuerzo no puede entregarse en el 1er recreo. Elige segundo recreo.");
       return;
     }
-
     setPosting(true);
     try {
       const orderCode = await RTDBHelper.getNextCorrelative("lunch");
-
       const items = Object.values(cart).map((it) => ({
         id: it.id,
         name: it.name,
         qty: it.qty,
         price: it.price,
         ...(it.isCombo ? { isCombo: true } : {}),
+        ...(it.selectedAddons?.length ? { addons: it.selectedAddons } : {}),
       }));
-
       const payload = {
         id: "",
         code: orderCode,
@@ -343,20 +295,18 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         recess: confirmRecess,
         studentName: alumno,
       };
-
       const orderId = await RTDBHelper.pushData(RTDB_PATHS.lunch_orders, payload);
       await RTDBHelper.updateData({
         [`${RTDB_PATHS.lunch_orders}/${orderId}/id`]: orderId,
         [`lunch_orders_by_client/${client.code}/${orderId}`]: true,
       });
 
-      /* ====== NUEVO: Enviar WhatsApp si está habilitado ====== */
       const waText = buildWhatsAppText({
         orderCode,
         studentName: alumno,
         clientCode: client.code,
         recess: confirmRecess,
-        items: items,
+        items,
         total,
         note: confirmNote || null,
       });
@@ -373,9 +323,115 @@ export default function FamilyMenu({ client, onLogout }: Props) {
     }
   };
 
+  /* ===== Tarjeta de producto con agregados ===== */
+  const ProductCard: React.FC<{ p: Product }> = ({ p }) => {
+    const [checked, setChecked] = useState<Record<string, boolean>>({});
+    const selectable = (p.addons || []).filter((a) => a.active !== false);
+
+    const selected = selectable.filter((a) => checked[a.id]);
+    const addSum = selected.reduce((acc, a) => acc + (Number(a.price) || 0), 0);
+    const displayTotal = (p.price || 0) + addSum;
+
+    return (
+      <article
+        key={p.id}
+        style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          overflow: "hidden",
+          background: "white",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {p.image ? (
+          <img
+            src={p.image}
+            alt={p.name}
+            style={{ width: "100%", height: 180, objectFit: "cover" }}
+            loading="lazy"
+          />
+        ) : (
+          <div
+            style={{
+              height: 180,
+              background: "#f3f4f6",
+              display: "grid",
+              placeItems: "center",
+              color: "#6b7280",
+              fontSize: 12,
+            }}
+          >
+            Sin imagen
+          </div>
+        )}
+
+        <div style={{ padding: 12, display: "grid", gap: 6 }}>
+          <strong>{p.name}</strong>
+          {p.description && (
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>{p.description}</p>
+          )}
+
+          {!!selectable.length && (
+            <div style={{ borderTop: "1px dashed #e5e7eb", paddingTop: 6 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Agregados</div>
+              <div style={{ display: "grid", gap: 4 }}>
+                {selectable.map((a) => (
+                  <label key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <input
+                        type="checkbox"
+                        checked={!!checked[a.id]}
+                        onChange={(e) =>
+                          setChecked((m) => ({ ...m, [a.id]: e.target.checked }))
+                        }
+                      />
+                      {a.name}
+                    </span>
+                    <span style={{ color: "#065f46", fontWeight: 600 }}>
+                      {PEN(Number(a.price) || 0)}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end" }}>
+            <span style={{ fontWeight: 600 }}>
+              {addSum ? (
+                <>
+                  <span style={{ textDecoration: "line-through", color: "#6b7280", marginRight: 6 }}>
+                    {PEN(p.price)}
+                  </span>
+                  {PEN(displayTotal)}
+                </>
+              ) : (
+                PEN(p.price)
+              )}
+            </span>
+            <button
+              onClick={() => addToCart(p, selected)}
+              style={{
+                border: "1px solid #10b981",
+                background: "#10b981",
+                color: "white",
+                borderRadius: 10,
+                padding: "6px 10px",
+                cursor: "pointer",
+              }}
+            >
+              Agregar
+            </button>
+          </div>
+        </div>
+      </article>
+    );
+  };
+
   return (
     <section>
-      {/* ====== Saludo ÚNICO ====== */}
+      {/* Saludo */}
       <div
         style={{
           display: "flex",
@@ -427,7 +483,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         </div>
       </div>
 
-      {/* ====== NUEVO: Barra de versión / Act# ====== */}
+      {/* Versión */}
       {settings?.version && (
         <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>
           Menú versión <strong>{settings.version}</strong> • Act# {settings.updateSeq ?? 0}
@@ -437,7 +493,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         </div>
       )}
 
-      {/* Historial del cliente */}
+      {/* Historial */}
       {showHistory && (
         <div style={{ marginBottom: 14 }}>
           <FamilyOrderHistory clientCode={client.code} />
@@ -489,61 +545,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         }}
       >
         {(productsByCat[activeCat || ""] || []).map((p) => (
-          <article
-            key={p.id}
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: 12,
-              overflow: "hidden",
-              background: "white",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {p.image ? (
-              <img
-                src={p.image}
-                alt={p.name}
-                style={{ width: "100%", height: 180, objectFit: "cover" }}
-                loading="lazy"
-              />
-            ) : (
-              <div
-                style={{
-                  height: 180,
-                  background: "#f3f4f6",
-                  display: "grid",
-                  placeItems: "center",
-                  color: "#6b7280",
-                  fontSize: 12,
-                }}
-              >
-                Sin imagen
-              </div>
-            )}
-            <div style={{ padding: 12, display: "grid", gap: 6 }}>
-              <strong>{p.name}</strong>
-              {p.description && (
-                <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>{p.description}</p>
-              )}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end" }}>
-                <span style={{ fontWeight: 600 }}>{PEN(p.price)}</span>
-                <button
-                  onClick={() => addToCart(p)}
-                  style={{
-                    border: "1px solid #10b981",
-                    background: "#10b981",
-                    color: "white",
-                    borderRadius: 10,
-                    padding: "6px 10px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Agregar
-                </button>
-              </div>
-            </div>
-          </article>
+          <ProductCard key={p.id} p={p} />
         ))}
       </div>
 
@@ -575,8 +577,13 @@ export default function FamilyMenu({ client, onLogout }: Props) {
               >
                 <div>
                   <div style={{ fontWeight: 600 }}>{it.name}</div>
+                  {!!it.selectedAddons?.length && (
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>
+                      {it.selectedAddons.map((a) => `+ ${a.name} (${PEN(a.price)})`).join(" · ")}
+                    </div>
+                  )}
                   <div style={{ fontSize: 12, color: "#6b7280" }}>
-                    {it.qty} × {PEN(it.price)}
+                    {it.qty} × {PEN(it.price + (it.selectedAddons || []).reduce((s, a) => s + (a.price || 0), 0))}
                   </div>
                 </div>
                 <div style={{ fontWeight: 600 }}>{PEN(it.subtotal)}</div>
@@ -595,7 +602,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
                     −
                   </button>
                   <button
-                    onClick={() => addToCart(it)}
+                    onClick={() => addToCart(it, it.selectedAddons)}
                     title="Agregar uno"
                     style={{
                       border: "1px solid #ddd",
@@ -660,7 +667,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
         )}
       </div>
 
-      {/* ===== Modal de confirmación ===== */}
+      {/* Modal confirmación */}
       {showConfirm && (
         <div
           role="dialog"
@@ -674,10 +681,7 @@ export default function FamilyMenu({ client, onLogout }: Props) {
             zIndex: 2000,
             padding: 16,
           }}
-          onClick={() => {
-            // clic fuera = cerrar
-            setShowConfirm(false);
-          }}
+          onClick={() => setShowConfirm(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -701,11 +705,18 @@ export default function FamilyMenu({ client, onLogout }: Props) {
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Productos</div>
                 <div style={{ maxHeight: 140, overflow: "auto", paddingRight: 6 }}>
                   {Object.values(cart).map((it) => (
-                    <div key={it.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px dashed #eee" }}>
-                      <div style={{ color: "#374151" }}>
-                        {it.qty} × {it.name}
+                    <div key={it.id} style={{ padding: "4px 0", borderBottom: "1px dashed #eee" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <div style={{ color: "#374151" }}>
+                          {it.qty} × {it.name}
+                        </div>
+                        <div style={{ fontWeight: 600 }}>{PEN(it.subtotal)}</div>
                       </div>
-                      <div style={{ fontWeight: 600 }}>{PEN(it.subtotal)}</div>
+                      {!!it.selectedAddons?.length && (
+                        <div style={{ marginTop: 2, paddingLeft: 8, fontSize: 12, color: "#6b7280" }}>
+                          {it.selectedAddons.map((a) => `+ ${a.name} (${PEN(a.price)})`).join(" · ")}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

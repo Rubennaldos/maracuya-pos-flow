@@ -51,4 +51,7 @@ export const RTDB_PATHS = {
   lunch_settings: "lunch_settings",
   // 👇 Plantillas/favoritos de combos
   lunch_combo_templates: "lunch_combo_templates",
+
+  // 👇 NUEVO: Promociones del módulo de almuerzos
+  lunch_promos: "lunch_promos",
 } as const;
