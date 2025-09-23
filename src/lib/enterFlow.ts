@@ -31,7 +31,7 @@ export interface Client {
   fullName: string;
   hasAccount: boolean;
   grade?: string;
-  level?: 'primaria' | 'secundaria';
+  level?: 'primaria' | 'secundaria' | 'Kinder';
   isActive: boolean;
 }
 

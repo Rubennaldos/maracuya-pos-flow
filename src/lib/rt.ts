@@ -36,7 +36,10 @@ export class RTDBHelper {
   }
 
   // Push data con id automático; si el payload NO trae id, lo añade
-  static async pushData<T extends Record<string, any> = any>(path: string, data: T): Promise<string> {
+  static async pushData<T extends Record<string, any> = any>(
+    path: string,
+    data: T
+  ): Promise<string> {
     try {
       const newRef = push(ref(rtdb, path));
       const key = newRef.key!;
@@ -71,7 +74,10 @@ export class RTDBHelper {
   }
 
   // Listener (devuelve función para desuscribir)
-  static listenToData<T = any>(path: string, callback: (data: T | null) => void): () => void {
+  static listenToData<T = any>(
+    path: string,
+    callback: (data: T | null) => void
+  ): () => void {
     const dbRef = ref(rtdb, path);
     const unsubscribe = onValue(dbRef, (snapshot: DataSnapshot) => {
       const data = snapshot.exists() ? (snapshot.val() as T) : null;
@@ -94,14 +100,54 @@ export class RTDBHelper {
     }
   }
 
-  // Siguiente correlativo con prefijo por tipo
-  static async getNextCorrelative(type: "sale" | "lunch" | "historical"): Promise<string> {
-    const correlatePath = `${RTDB_PATHS.correlatives}/${type}`;
-    const nextNumber = await this.runTransaction<number>(correlatePath, (currentValue) => {
-      return (currentValue || 0) + 1;
+  /**
+   * Siguiente correlativo con prefijo por tipo (ATÓMICO).
+   * Retrocompatible:
+   *  - Si en /correlatives/{type} tienes un número, lo usa como contador.
+   *  - Si tienes {prefix,next,pad}, respeta tu configuración.
+   */
+  static async getNextCorrelative(
+    type: "sale" | "lunch" | "historical"
+  ): Promise<string> {
+    const path = `${RTDB_PATHS.correlatives}/${type}`;
+
+    const tx = await runTransaction(ref(rtdb, path), (current: any) => {
+      // Formato nuevo recomendado: {prefix,next,pad}
+      if (current && typeof current === "object") {
+        const next = Number(current.next || 1);
+        return {
+          ...current,
+          next: next + 1,
+          updatedAt: Date.now(),
+        };
+      }
+      // Retrocompat: si sólo hay un número, úsalo e inicializa objeto
+      const n = Number(current || 0) + 1;
+      const defaultPrefix =
+        type === "sale" ? "B001" : type === "lunch" ? "A001" : "VH001";
+      return { prefix: defaultPrefix, next: n + 1, pad: 5, updatedAt: Date.now() };
     });
+
+    if (!tx.committed || !tx.snapshot.exists()) {
+      throw new Error("No se pudo obtener correlativo");
+    }
+
+    const val = tx.snapshot.val() as any;
+
+    // Si el valor que quedó es objeto, usamos su {prefix,next,pad}
+    if (val && typeof val === "object") {
+      const prefix =
+        val.prefix ||
+        (type === "sale" ? "B001" : type === "lunch" ? "A001" : "VH001");
+      const pad = Number.isFinite(val.pad) ? Number(val.pad) : 5;
+      const used = Number(val.next || 1) - 1; // el que acabamos de reservar
+      return `${prefix}-${String(used).padStart(pad, "0")}`;
+    }
+
+    // Fallback (no debería suceder con la lógica anterior)
     const prefix = type === "sale" ? "B001" : type === "lunch" ? "A001" : "VH001";
-    return `${prefix}-${String(nextNumber).padStart(5, "0")}`;
+    const used = Number(val || 1);
+    return `${prefix}-${String(used).padStart(5, "0")}`;
   }
 
   // Config por defecto si no existe
@@ -193,7 +239,10 @@ export class RTDBHelper {
    *  - Borra entradas en /accounts_receivable/{clientId}/entries/{saleId|autoId} que apunten a esa venta
    *  - Borra espejo plano legado /accounts_receivable/{saleId}
    */
-  static async deleteSaleCascade(saleId: string, deletedBy: string = "system"): Promise<void> {
+  static async deleteSaleCascade(
+    saleId: string,
+    deletedBy: string = "system"
+  ): Promise<void> {
     const salePath = `${RTDB_PATHS.sales}/${saleId}`;
     const sale = await this.getData<any>(salePath);
 
@@ -238,14 +287,18 @@ export class RTDBHelper {
       await removeEntriesForClient(clientId);
     } else {
       // Fallback: escanear todo AR para encontrar referencias (seguro y simple)
-      const arRoot = await this.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
+      const arRoot = await this.getData<Record<string, any>>(
+        RTDB_PATHS.accounts_receivable
+      );
       if (arRoot) {
         for (const [cid, node] of Object.entries(arRoot)) {
           const entries = (node as any)?.entries;
           if (!entries) continue;
           for (const [entryKey, entryVal] of Object.entries<any>(entries)) {
             if (entryKey === saleId || entryVal?.saleId === saleId) {
-              updates[`${RTDB_PATHS.accounts_receivable}/${cid}/entries/${entryKey}`] = null;
+              updates[
+                `${RTDB_PATHS.accounts_receivable}/${cid}/entries/${entryKey}`
+              ] = null;
               clientId = cid;
             }
           }
@@ -270,7 +323,10 @@ export class RTDBHelper {
    * 🗂 Si usas aún /historical_sales, también puedes moverlas a papelera.
    * (Ojo: tus ventas históricas actuales se guardan en /sales con type:"historical")
    */
-  static async deleteHistoricalSale(saleId: string, deletedBy: string = "system"): Promise<void> {
+  static async deleteHistoricalSale(
+    saleId: string,
+    deletedBy: string = "system"
+  ): Promise<void> {
     const salePath = `${RTDB_PATHS.historical_sales}/${saleId}`;
     const sale = await this.getData<any>(salePath);
 

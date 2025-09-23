@@ -4,7 +4,7 @@ export interface Client {
   code?: string;
   grade?: string;
   classroom?: string;
-  level?: "primaria" | "secundaria";
+  level?: "primaria" | "secundaria" | "Kinder";
   isTeacher?: boolean;
   isStaff?: boolean;
   phone1?: string;
