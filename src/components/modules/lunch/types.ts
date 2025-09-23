@@ -7,15 +7,15 @@ export type SettingsT = {
   allowSameDay?: boolean;
   orderWindow?: { start?: string; end?: string };
 
-  // ===== NUEVO: metadatos de versión / actualización (opcional) =====
-  version?: string;      // ej. "1.2.3"
-  updateSeq?: number;    // correlativo incremental
-  updatedAt?: number;    // timestamp en ms
+  // Metadatos opcionales (para control de despliegues/cambios)
+  version?: string;
+  updateSeq?: number;
+  updatedAt?: number;
 
-  // ===== NUEVO: WhatsApp para notificación al confirmar pedido =====
+  // WhatsApp al confirmar pedido
   whatsapp?: {
-    enabled?: boolean;   // si true, abrir WhatsApp con el resumen
-    phone?: string;      // solo dígitos, ej: "51987654321"
+    enabled?: boolean;
+    phone?: string; // solo dígitos, ej: "51987654321"
   };
 };
 
@@ -23,21 +23,28 @@ export type CategoryT = { id: string; name: string; order?: number };
 
 export type Course = "entrada" | "segundo" | "postre";
 
+/** Agregado (opcional) de un producto */
+export type AddonT = {
+  id?: string;        // generado en cliente/RTDB
+  name: string;
+  price: number;      // se normaliza a número al guardar
+  active?: boolean;   // true por defecto
+};
+
 export type ProductT = {
   id: string;
   name: string;
   price: number;
   categoryId: string;
   description?: string;
-  image?: string; // data URL webp opcional
-  active?: boolean;
+  image?: string;      // data URL (webp) opcional
+  active?: boolean;    // true por defecto
 
   // Ordenamiento
-  /** Preferente: posición persistida (puede venir como string desde RTDB) */
-  position?: number | string;
-  /** Compatibilidad antiga si usabas 'order' en productos */
-  order?: number | string;
+  position?: number | string; // preferido (persistido)
+  order?: number | string;    // compatibilidad antigua
 
+  // Campos de “menú del día” (combo)
   course?: Course;
   isCombo?: boolean;
   components?: {
@@ -46,6 +53,9 @@ export type ProductT = {
     postreId?: string | null;
     bebidaLabel?: string | null;
   };
+
+  // Agregados opcionales
+  addons?: AddonT[];
 };
 
 export type MenuT = {
@@ -56,7 +66,7 @@ export type MenuT = {
 export type Recess = "primero" | "segundo";
 
 export type OrderItem = {
-  id?: string;          // id del producto (opcional)
+  id?: string;
   name: string;
   price: number;
   qty: number;
@@ -65,14 +75,20 @@ export type OrderItem = {
 
 export type OrderT = {
   id: string;
-  code: string;         // correlativo legible (A001-00001)
-  clientCode: string;   // id/código del padre
+  code: string;        // ej: A001-00001
+  clientCode: string;  // id/código del padre
   clientName: string;
   items: OrderItem[];
   note?: string;
   total: number;
-  status: "pending" | "preparing" | "delivered" | "canceled" | "confirmed" | "ready";
-  createdAt: number;    // 👈 SIEMPRE número (ms)
+  status:
+    | "pending"
+    | "preparing"
+    | "delivered"
+    | "canceled"
+    | "confirmed"
+    | "ready";
+  createdAt: number;   // timestamp ms
   deliveryAt?: string;
 
   // extras del portal
@@ -93,7 +109,6 @@ export type ComboTemplate = {
   image?: string | null; // data URL webp
 };
 
-/* ===== NUEVO: tipo para Promociones del módulo de almuerzos ===== */
 export type PromoT = {
   id: string;
   name: string;
@@ -101,7 +116,7 @@ export type PromoT = {
   price: number;
   image?: string;
   active?: boolean;
-  // opcional: vigencia
-  startAt?: number; // timestamp ms
-  endAt?: number;   // timestamp ms
+  // Vigencia opcional
+  startAt?: number; // ms
+  endAt?: number;   // ms
 };

@@ -12,11 +12,12 @@ import { Switch } from "@/components/ui/switch";
 import { Save, Edit, Trash2, Star, Loader2, Check, GripVertical, Plus, X } from "lucide-react";
 import type { MenuT, ProductT, ComboTemplate } from "../types";
 
-/* ========= Tipado extendido para addons ========= */
-type Addon = { id: string; name: string; price: number; active?: boolean };
+/* ========= Tipado local para agregados (price como string en el form) ========= */
+type AddonForm = { id: string; name: string; priceStr: string; active?: boolean };
 
-type ProductWithAddons = ProductT & {
-  addons?: Addon[];
+/** Adaptador local para soportar productos con/ sin addons tipados */
+type ProductWithAddons = Omit<ProductT, "addons"> & {
+  addons?: Array<{ id?: string; name: string; price: number; active?: boolean }> | any;
 };
 
 /* ========= Util: Moneda ========= */
@@ -65,7 +66,19 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
   const products = useMemo<ProductWithAddons[]>(() => {
     const p = menu.products || {};
-    return Object.values(p) as ProductWithAddons[];
+    // mapeo seguro a ProductWithAddons (por si addons viene como string[])
+    return Object.values(p).map((prod) => {
+      const anyProd = prod as ProductWithAddons;
+      if (Array.isArray(anyProd.addons) && anyProd.addons.length && typeof anyProd.addons[0] === "string") {
+        anyProd.addons = (anyProd.addons as string[]).map((s, i) => ({
+          id: Math.random().toString(36).slice(2) + i,
+          name: s,
+          price: 0,
+          active: true,
+        }));
+      }
+      return anyProd;
+    });
   }, [menu]);
 
   /* ================== Modo ================== */
@@ -75,11 +88,11 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   /* ================== VARIADO ================== */
   const [editing, setEditing] = useState<ProductWithAddons | null>(null);
 
-  // 🔧 precio como string para permitir 11.50 mientras tipeas
+  // precio principal como string (para evitar jump)
   const [priceStr, setPriceStr] = useState<string>("");
 
-  // addons en el formulario
-  const [addons, setAddons] = useState<Addon[]>([]);
+  // addons en el formulario (con priceStr)
+  const [addons, setAddons] = useState<AddonForm[]>([]);
 
   const [form, setForm] = useState<Partial<ProductWithAddons>>({ active: true });
   const [loading, setLoading] = useState(false);
@@ -255,13 +268,15 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
     // validar addons
     for (const a of addons) {
-      const p = Number(a.price);
-      if (!a.name?.trim()) {
-        errs.addons = "Los agregados deben tener nombre.";
-        break;
-      }
-      if (!isFinite(p) || p < 0) {
-        errs.addons = "Precio de agregado inválido.";
+      const nameOk = !!a.name?.trim();
+      const raw = String(a.priceStr || "").trim();
+      const num = Number(raw.replace(",", "."));
+      const priceOk = raw !== "" && Number.isFinite(num) && num >= 0;
+
+      if (!nameOk || !priceOk) {
+        errs.addons = !nameOk
+          ? "Los agregados deben tener nombre."
+          : "Precio de agregado inválido.";
         break;
       }
     }
@@ -281,6 +296,17 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       return;
     }
 
+    // normalizamos addons -> número
+    const addonsClean =
+      addons.length
+        ? addons.map((a) => ({
+            id: a.id,
+            name: a.name.trim(),
+            active: a.active !== false,
+            price: Number(String(a.priceStr ?? "0").replace(",", ".")) || 0,
+          }))
+        : undefined;
+
     const base = sanitize({
       id: editing?.id || "",
       name: (form.name || "").trim(),
@@ -290,7 +316,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       image: form.image?.trim() || "",
       active: form.active !== false,
       isCombo: false,
-      addons: addons.length ? addons : undefined,
+      addons: addonsClean,
     });
 
     setLoading(true);
@@ -327,7 +353,14 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   const editVar = (p: ProductWithAddons) => {
     setEditing(p);
     setForm(p);
-    setAddons(p.addons?.slice() || []);
+    // Convertimos los addons del producto a la forma del form (priceStr)
+    const mapped: AddonForm[] = (p.addons || []).map((a: any) => ({
+      id: a.id || Math.random().toString(36).slice(2, 8),
+      name: a.name || "",
+      priceStr: a.price != null ? String(a.price) : "",
+      active: a.active !== false,
+    }));
+    setAddons(mapped);
     setPriceStr(
       typeof p.price === "number" && Number.isFinite(p.price) ? String(p.price) : String(p.price ?? "")
     );
@@ -408,7 +441,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   };
 
   /* ================== ALMUERZO ================== */
-  // 🔧 precio como string
   const [almPriceStr, setAlmPriceStr] = useState<string>("");
 
   const [alm, setAlm] = useState<{
@@ -416,7 +448,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     entrada?: string;
     segundo?: string;
     postre?: string;
-    price?: number; // solo para lectura desde DB
+    price?: number; // solo lectura desde DB
     categoryId?: string;
     bebidaLabel: string;
     image?: string;
@@ -654,7 +686,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
           onClick={() =>
             setAddons((arr) => [
               ...arr,
-              { id: Math.random().toString(36).slice(2, 8), name: "", price: 0, active: true },
+              { id: Math.random().toString(36).slice(2, 8), name: "", priceStr: "", active: true },
             ])
           }
         >
@@ -685,16 +717,15 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
           <Input
             className="col-span-3"
             placeholder="Precio (ej. 1.50)"
-            value={String(a.price ?? "")}
+            inputMode="decimal"
+            value={a.priceStr}
             onChange={(e) =>
               setAddons((arr) => {
                 const next = arr.slice();
-                const v = e.target.value.replace(",", ".");
-                next[idx] = { ...next[idx], price: v === "" ? ("" as any) : Number(v) };
+                next[idx] = { ...next[idx], priceStr: e.target.value };
                 return next;
               })
             }
-            inputMode="decimal"
           />
           <div className="col-span-2 flex items-center gap-2">
             <Switch
@@ -853,7 +884,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
                   ref={priceRef}
                   inputMode="decimal"
                   value={priceStr}
-                  onChange={(e) => setPriceStr(e.target.value)} // ← no convertimos aquí
+                  onChange={(e) => setPriceStr(e.target.value)}
                   className={errors.price ? "border-destructive" : ""}
                   placeholder="8.50"
                 />
