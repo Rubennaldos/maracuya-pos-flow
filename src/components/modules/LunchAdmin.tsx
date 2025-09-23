@@ -7,36 +7,18 @@ import { toast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Package, Settings, Save, Trash2, Edit, ArrowLeft, FileText } from "lucide-react";
 
-import {
-  Package,
-  Settings,
-  FileText,
-  Save,
-  Trash2,
-  Edit,
-  ArrowLeft,
-  CheckCircle,
-  Clock,
-  Calendar as CalendarIcon,
-} from "lucide-react";
-
-import type {
-  SettingsT,
-  CategoryT,
-  MenuT,
-  OrderT,
-} from "@/components/modules/lunch/types";
+import type { SettingsT, CategoryT, MenuT, OrderT } from "@/components/modules/lunch/types";
 
 import ProductsPanel from "@/components/modules/lunch/products/ProductsPanel";
+import OrdersPanel from "@/components/modules/lunch/orders/OrdersPanel";
 
-type LunchAdminProps = {
-  onBack?: () => void;
-};
+/* ===================== util ===================== */
+type LunchAdminProps = { onBack?: () => void };
 
 const PEN = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
@@ -47,9 +29,8 @@ function normalizePhone(raw?: string): string {
 }
 
 /* ============================================================
-   FIX TIPOS: extendemos SettingsT localmente
-   para permitir version/updateSeq/updatedAt/forceMajor/whatsapp
-   sin depender de cambios en types.ts
+   FIX TIPOS: extendemos SettingsT localmente para permitir
+   version/updateSeq/updatedAt/forceMajor/whatsapp
    ============================================================ */
 type AdminSettings = SettingsT & {
   version?: string;
@@ -59,38 +40,10 @@ type AdminSettings = SettingsT & {
   whatsapp?: { enabled?: boolean; phone?: string };
 };
 
-/* ====================== util fechas ======================= */
-function toYMD(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
-}
-function endOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
-}
-function startOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0).getTime();
-}
-function endOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
-}
-function startOfYear(d: Date) {
-  return new Date(d.getFullYear(), 0, 1, 0, 0, 0, 0).getTime();
-}
-function endOfYear(d: Date) {
-  return new Date(d.getFullYear(), 11, 31, 23, 59, 59, 999).getTime();
-}
-
-type OrdersQuick = "day" | "month" | "year" | "range";
-
 export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const { user } = useSession();
 
-  // Usamos AdminSettings en el estado para evitar los errores de TS
+  // Estado principal
   const [settings, setSettings] = useState<AdminSettings>({
     isOpen: true,
     showPrices: true,
@@ -98,24 +51,12 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
     allowSameDay: true,
     orderWindow: { start: "", end: "" },
     whatsapp: { enabled: false, phone: "" },
-    // opcionales inicializados para que el shape exista
-    version: undefined,
-    updateSeq: undefined,
-    updatedAt: undefined,
-    forceMajor: undefined,
   });
 
   const [menu, setMenu] = useState<MenuT>({});
-  const [ordersToday, setOrdersToday] = useState<OrderT[]>([]); // 👉 arreglo mostrado (según filtro)
-  const [allOrders, setAllOrders] = useState<OrderT[]>([]);     // 👉 cache completo
+  const [ordersCount, setOrdersCount] = useState<number>(0); // para mostrar en la pestaña
   const [tab, setTab] = useState<"settings" | "cats" | "products" | "orders">("settings");
   const [loading, setLoading] = useState(false);
-
-  // ---------- Filtros de pedidos ----------
-  const today = new Date();
-  const [quick, setQuick] = useState<OrdersQuick>("day");
-  const [dateFrom, setDateFrom] = useState<string>(toYMD(today));
-  const [dateTo, setDateTo] = useState<string>(toYMD(today));
 
   // ---------- Estado Categorías ----------
   const [catName, setCatName] = useState("");
@@ -135,7 +76,6 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
             cutoffTime: s.cutoffTime || "11:00",
             allowSameDay: s.allowSameDay ?? true,
             orderWindow: s.orderWindow || { start: "", end: "" },
-            // preservamos campos opcionales si existen
             version: s.version,
             updateSeq: s.updateSeq,
             updatedAt: s.updatedAt,
@@ -146,18 +86,15 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
             },
           });
         }
+
         const m = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
         if (m) setMenu(m);
 
-        // Traemos TODOS los pedidos (mantenemos en cache local)
-        const allOrdersObj = await RTDBHelper.getData<Record<string, OrderT>>(
+        // Solo para el badge de la pestaña (cantidad de pedidos de hoy)
+        const allOrders = await RTDBHelper.getData<Record<string, OrderT>>(
           RTDB_PATHS.lunch_orders
         );
-        const arr = allOrdersObj ? Object.values(allOrdersObj) : [];
-        setAllOrders(arr);
-
-        // Por defecto: Hoy
-        applyOrdersFilter(arr, "day", toYMD(new Date()), toYMD(new Date()));
+        if (allOrders) setOrdersCount(Object.keys(allOrders).length);
       } catch {
         toast({
           title: "Error",
@@ -176,58 +113,6 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
     return Object.values(c).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [menu]);
 
-  // ================== Filtro de pedidos (aplicar) ==================
-  function applyOrdersFilter(
-    source: OrderT[] = allOrders,
-    mode: OrdersQuick = quick,
-    fromStr: string = dateFrom,
-    toStr: string = dateTo
-  ) {
-    let start = 0;
-    let end = Number.MAX_SAFE_INTEGER;
-
-    try {
-      if (mode === "day") {
-        const d = new Date(fromStr);
-        start = startOfDay(d);
-        end = endOfDay(d);
-      } else if (mode === "month") {
-        const d = new Date(fromStr);
-        start = startOfMonth(d);
-        end = endOfMonth(d);
-      } else if (mode === "year") {
-        const d = new Date(fromStr);
-        start = startOfYear(d);
-        end = endOfYear(d);
-      } else {
-        // range
-        const d1 = new Date(fromStr);
-        const d2 = new Date(toStr);
-        start = startOfDay(d1);
-        end = endOfDay(d2);
-      }
-    } catch {
-      // si algo sale mal, caemos a hoy
-      const d = new Date();
-      start = startOfDay(d);
-      end = endOfDay(d);
-    }
-
-    const filtered = source.filter((o) => {
-      const t = typeof o.createdAt === "number" ? o.createdAt : Date.parse(String(o.createdAt || 0));
-      return t >= start && t <= end;
-    });
-
-    // Ordenar del más reciente al más antiguo
-    filtered.sort((a, b) => {
-      const ta = typeof a.createdAt === "number" ? a.createdAt : Date.parse(String(a.createdAt || 0));
-      const tb = typeof b.createdAt === "number" ? b.createdAt : Date.parse(String(b.createdAt || 0));
-      return tb - ta;
-    });
-
-    setOrdersToday(filtered);
-  }
-
   // ================== Acciones: Configuración ==================
   const saveSettings = async () => {
     setLoading(true);
@@ -239,15 +124,11 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
         cutoffTime: settings.cutoffTime || "11:00",
         allowSameDay: settings.allowSameDay ?? true,
         orderWindow: settings.orderWindow || { start: "", end: "" },
-        // mantenemos estos campos si ya existen (no los calculamos aquí)
         version: settings.version,
         updateSeq: settings.updateSeq,
         updatedAt: settings.updatedAt,
         forceMajor: settings.forceMajor,
-        whatsapp: {
-          enabled: !!settings.whatsapp?.enabled,
-          phone: phone || "",
-        },
+        whatsapp: { enabled: !!settings.whatsapp?.enabled, phone: phone || "" },
       };
       await RTDBHelper.setData(RTDB_PATHS.lunch_settings, toSave);
       setSettings((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, phone } }));
@@ -333,69 +214,6 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
     if (m) setMenu(m);
   };
 
-  // ================== Pedidos ==================
-  const markDelivered = async (o: OrderT) => {
-    try {
-      await RTDBHelper.updateData({
-        [`${RTDB_PATHS.lunch_orders}/${o.id}/status`]: "delivered",
-        [`${RTDB_PATHS.lunch_orders}/${o.id}/deliveryAt`]: new Date().toISOString(),
-      });
-
-      // Refrescamos cache local y reaplicamos filtro actual
-      const allOrdersObj = await RTDBHelper.getData<Record<string, OrderT>>(
-        RTDB_PATHS.lunch_orders
-      );
-      const arr = allOrdersObj ? Object.values(allOrdersObj) : [];
-      setAllOrders(arr);
-      applyOrdersFilter(arr); // usa quick + dateFrom/dateTo actuales
-
-      toast({ title: "Pedido marcado como entregado" });
-    } catch {
-      toast({ title: "No se pudo actualizar el pedido", variant: "destructive" });
-    }
-  };
-
-  const printOrders = () => {
-    const w = window.open("", "_blank");
-    if (!w) return;
-    const html = `
-      <html><head><title>Pedidos</title>
-      <style>
-        body{font-family:Arial, sans-serif; margin:16px}
-        .h{ text-align:center; border-bottom:2px solid #333; padding-bottom:8px; margin-bottom:16px;}
-        .o{ border:1px solid #ddd; border-radius:8px; padding:12px; margin-bottom:10px}
-        .row{display:flex; justify-content:space-between; align-items:center}
-        .s{font-size:12px; padding:2px 8px; border-radius:12px; background:#eee}
-        .it{margin-left:12px}
-      </style></head><body>
-      <div class="h">
-        <h2>COMANDA DE ALMUERZOS</h2>
-        <div>${new Date().toLocaleString("es-PE")}</div>
-      </div>
-      ${ordersToday
-        .map(
-          (o) => `
-        <div class="o">
-          <div class="row">
-            <div><strong>${o.clientName}</strong> — <em>${o.code}</em></div>
-            <div class="s">${o.status}</div>
-          </div>
-          <div><em>Productos:</em>${
-            o.items?.map((i) => `<div class="it">• ${i.qty} x ${i.name}</div>`).join("") || ""
-          }</div>
-          ${(o as any).studentName ? `<div><em>Alumno:</em> ${(o as any).studentName}</div>` : ""}
-          ${(o as any).recess ? `<div><em>Recreo:</em> ${(o as any).recess}</div>` : ""}
-          ${o.note ? `<div><em>Obs:</em> ${o.note}</div>` : ""}
-          <div style="text-align:right"><strong>Total:</strong> ${PEN(o.total)}</div>
-        </div>`
-        )
-        .join("")}
-      </body></html>`;
-    w.document.write(html);
-    w.document.close();
-    w.print();
-  };
-
   // ---------- Guard de admin ----------
   if (!user || user.role !== "admin") {
     return (
@@ -447,7 +265,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
               <Package className="h-4 w-4" /> Productos
             </TabsTrigger>
             <TabsTrigger value="orders" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Pedidos del día ({ordersToday.length})
+              <FileText className="h-4 w-4" /> Pedidos ({ordersCount})
             </TabsTrigger>
           </TabsList>
 
@@ -479,9 +297,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                       <Input
                         type="time"
                         value={settings.cutoffTime || "11:00"}
-                        onChange={(e) =>
-                          setSettings({ ...settings, cutoffTime: e.target.value })
-                        }
+                        onChange={(e) => setSettings({ ...settings, cutoffTime: e.target.value })}
                       />
                     </div>
                     <div>
@@ -489,9 +305,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                       <div className="flex items-center gap-2 h-9">
                         <Switch
                           checked={settings.allowSameDay ?? true}
-                          onCheckedChange={(v) =>
-                            setSettings({ ...settings, allowSameDay: v })
-                          }
+                          onCheckedChange={(v) => setSettings({ ...settings, allowSameDay: v })}
                         />
                       </div>
                     </div>
@@ -527,7 +341,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                   </div>
                 </div>
 
-                {/* ========= NUEVO: Sección WhatsApp ========= */}
+                {/* WhatsApp */}
                 <div className="grid md:grid-cols-3 gap-4 border-t pt-4">
                   <div className="flex items-center gap-2 col-span-1">
                     <Switch
@@ -559,7 +373,6 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                       Ejemplo Perú: <code>51</code> + número — <strong>51987654321</strong>.
-                      Se abrirá WhatsApp Web/Móvil con el resumen del pedido.
                     </p>
                   </div>
                 </div>
@@ -658,218 +471,9 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
             <ProductsPanel menu={menu} onMenuChange={setMenu} />
           </TabsContent>
 
-          {/* ================= Pedidos (con filtro de fechas) ================= */}
+          {/* ================= Pedidos (separado) ================= */}
           <TabsContent value="orders">
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CalendarIcon className="h-4 w-4" />
-                  <CardTitle>Pedidos</CardTitle>
-                </div>
-                <Button variant="outline" onClick={printOrders}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Imprimir comanda
-                </Button>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                {/* ---- Panel de filtros ---- */}
-                <div className="border rounded-md p-3 grid gap-3">
-                  <div className="grid md:grid-cols-5 gap-3">
-                    <div className="md:col-span-2">
-                      <Label>Vista rápida</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Button
-                          variant={quick === "day" ? "default" : "outline"}
-                          onClick={() => {
-                            const d = toYMD(new Date());
-                            setQuick("day");
-                            setDateFrom(d);
-                            setDateTo(d);
-                            applyOrdersFilter(allOrders, "day", d, d);
-                          }}
-                          size="sm"
-                        >
-                          Hoy
-                        </Button>
-                        <Button
-                          variant={quick === "month" ? "default" : "outline"}
-                          onClick={() => {
-                            const d = toYMD(new Date());
-                            setQuick("month");
-                            setDateFrom(d);
-                            applyOrdersFilter(allOrders, "month", d, d);
-                          }}
-                          size="sm"
-                        >
-                          Este mes
-                        </Button>
-                        <Button
-                          variant={quick === "year" ? "default" : "outline"}
-                          onClick={() => {
-                            const d = toYMD(new Date());
-                            setQuick("year");
-                            setDateFrom(d);
-                            applyOrdersFilter(allOrders, "year", d, d);
-                          }}
-                          size="sm"
-                        >
-                          Este año
-                        </Button>
-                        <Button
-                          variant={quick === "range" ? "default" : "outline"}
-                          onClick={() => setQuick("range")}
-                          size="sm"
-                        >
-                          Rango
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="md:col-span-3 grid grid-cols-2 gap-3 items-end">
-                      <div>
-                        <Label>{quick === "range" ? "Desde" : "Fecha base"}</Label>
-                        <Input
-                          type="date"
-                          value={dateFrom}
-                          onChange={(e) => setDateFrom(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label>{quick === "range" ? "Hasta" : "—"}</Label>
-                        <Input
-                          type="date"
-                          value={dateTo}
-                          onChange={(e) => setDateTo(e.target.value)}
-                          disabled={quick !== "range"}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => applyOrdersFilter(allOrders, quick, dateFrom, dateTo)}
-                      disabled={!allOrders.length}
-                    >
-                      Aplicar filtro
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const d = toYMD(new Date());
-                        setQuick("day");
-                        setDateFrom(d);
-                        setDateTo(d);
-                        applyOrdersFilter(allOrders, "day", d, d);
-                      }}
-                    >
-                      Limpiar (Hoy)
-                    </Button>
-                  </div>
-                </div>
-
-                {/* ---- Lista de pedidos ---- */}
-                {ordersToday.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8">
-                    No hay pedidos registrados en el rango seleccionado.
-                  </p>
-                )}
-
-                {ordersToday.map((o) => (
-                  <Card key={o.id} className="border-l-4 border-l-primary">
-                    <CardContent className="p-4 space-y-2">
-                      {/* ===== Encabezado ===== */}
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-semibold text-lg">
-                            {o.clientName || (o as any).studentName || "Estudiante"}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Código: {(o as any).clientCode ?? o.code ?? "—"}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={
-                              o.status === "delivered"
-                                ? "default"
-                                : o.status === "preparing" || o.status === "ready"
-                                ? "secondary"
-                                : "outline"
-                            }
-                          >
-                            {o.status}
-                          </Badge>
-
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {
-                              (() => {
-                                const ts =
-                                  typeof o.createdAt === "number"
-                                    ? o.createdAt
-                                    : Date.parse(String(o.createdAt || ""));
-                                return new Date(Number.isFinite(ts) ? ts : Date.now()).toLocaleTimeString(
-                                  "es-PE",
-                                  { hour: "2-digit", minute: "2-digit" }
-                                );
-                              })()
-                            }
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ===== Detalle de productos ===== */}
-                      <div className="text-sm">
-                        <div className="font-medium">Productos:</div>
-                        {o.items?.map((i, k) => (
-                          <div key={k} className="ml-4 text-muted-foreground">
-                            • {i.qty} x {i.name}
-                          </div>
-                        ))}
-                      </div>
-
-                      {(o as any).studentName && (
-                        <div className="text-sm">
-                          <div className="font-medium">Alumno:</div>
-                          <div className="ml-4 text-muted-foreground">
-                            {(o as any).studentName}
-                          </div>
-                        </div>
-                      )}
-
-                      {(o as any).recess && (
-                        <div className="text-sm">
-                          <div className="font-medium">Recreo:</div>
-                          <div className="ml-4 text-muted-foreground">
-                            {(o as any).recess}
-                          </div>
-                        </div>
-                      )}
-
-                      {o.note && (
-                        <div className="text-sm">
-                          <div className="font-medium">Observaciones:</div>
-                          <div className="ml-4 text-muted-foreground">{o.note}</div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between pt-1">
-                        <div className="font-bold">Total: {PEN(o.total)}</div>
-                        {o.status !== "delivered" && o.status !== "canceled" && (
-                          <Button size="sm" onClick={() => markDelivered(o)}>
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Marcar entregado
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </CardContent>
-            </Card>
+            <OrdersPanel />
           </TabsContent>
         </Tabs>
       </div>
