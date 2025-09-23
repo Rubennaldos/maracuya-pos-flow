@@ -294,16 +294,21 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
       return;
     }
 
-    // normalizamos addons -> número
+    // normalizamos addons -> número y SIN undefined en RTDB
     const addonsClean =
       addons.length
-        ? addons.map((a) => ({
-            id: a.id,
-            name: a.name.trim(),
-            active: a.active !== false,
-            price: Number(String(a.priceStr ?? "0").replace(",", ".")) || 0,
-          }))
-        : undefined;
+        ? addons.map((a) => {
+            const price = Number(String(a.priceStr ?? "0").replace(",", ".")) || 0;
+            const out: any = {
+              name: a.name.trim(),
+              active: a.active !== false,
+              price,
+            };
+            // Solo incluir id si existe (evita undefined)
+            if (a.id != null && a.id !== "") out.id = a.id;
+            return out;
+          })
+        : null; // mejor null que undefined
 
     const base = sanitize({
       id: editing?.id || "",

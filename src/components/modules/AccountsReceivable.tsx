@@ -1,4 +1,4 @@
-// AccountsReceivable.tsx (corregido completo con PDF: subtotales + paginación)
+// AccountsReceivable.tsx (corregido: CxC marca paid por entryId + sin warnings de Dialog)
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,23 +11,23 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle,
-  CheckCircle, Clock, CreditCard, FileText, Receipt, Download,
+  CheckCircle, Clock, FileText, Receipt, Download,
   Calendar as CalendarIcon
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, parse, parseISO, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable"; // <- import correcto
+import autoTable from "jspdf-autotable";
 
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 
-/* ===== Helpers para mostrar nombre de vendedor legible ===== */
+/* ===== Helpers ===== */
 const looksLikeUid = (s: any) =>
   typeof s === "string" && /^[A-Za-z0-9_-]{22,36}$/.test(s);
 
@@ -46,7 +46,6 @@ async function resolveVendorName(vendorField: string): Promise<string> {
   return "Usuario";
 }
 
-/* ===== Helper de fechas seguro (evita corrimiento por UTC) ===== */
 const toLocalDateSafe = (d: string | Date): Date => {
   if (d instanceof Date) return d;
   if (!d) return new Date();
@@ -72,7 +71,8 @@ const loadDebtors = async () => {
       name: string;
       totalDebt: number;
       invoices: {
-        id: string;
+        entryId: string;         // 🔑 clave real del entry en RTDB
+        correlative: string;     // lo que se muestra al usuario
         amount: number;
         date: string;
         dateSort: number;
@@ -104,21 +104,22 @@ const loadDebtors = async () => {
       const cData = clientData as any;
       if (cData && typeof cData === "object" && cData.entries) {
         const entries: Record<string, any> = cData.entries;
-        Object.values(entries).forEach((entry: any) => {
-          if (entry?.status === "pending") {
-            const d = ensureDebtor(clientId, entry.clientName);
-            const amount = Number(entry.amount || 0);
+        Object.entries(entries).forEach(([entryId, entry]) => {
+          if ((entry as any)?.status === "pending") {
+            const d = ensureDebtor(clientId, (entry as any).clientName);
+            const amount = Number((entry as any).amount || 0);
             d.totalDebt += amount;
 
-            const dObj = toLocalDateSafe(entry.date);
+            const dObj = toLocalDateSafe((entry as any).date);
             d.invoices.push({
-              id: entry.correlative || entry.saleId || "SIN-ID",
+              entryId, // 🔑 importante
+              correlative: (entry as any).correlative || (entry as any).saleId || entryId,
               amount,
               date: format(dObj, "dd/MM/yyyy"),
               dateSort: dObj.getTime(),
-              type: entry.type,
-              products: Array.isArray(entry.items)
-                ? entry.items.map((it: any) => it?.name).filter(Boolean)
+              type: (entry as any).type,
+              products: Array.isArray((entry as any).items)
+                ? (entry as any).items.map((it: any) => it?.name).filter(Boolean)
                 : [],
             });
           }
@@ -139,8 +140,10 @@ const loadDebtors = async () => {
         d.totalDebt += amount;
 
         const dObj = toLocalDateSafe(flat.date);
+        const entryId = flat.saleId || key; // mejor esfuerzo
         d.invoices.push({
-          id: flat.correlative || flat.saleId || key,
+          entryId,
+          correlative: flat.correlative || flat.saleId || key,
           amount,
           date: format(dObj, "dd/MM/yyyy"),
           dateSort: dObj.getTime(),
@@ -174,7 +177,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<string>("efectivo");
   const [paymentDate, setPaymentDate] = useState<Date>(new Date());
-  const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
+  const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]); // guarda entryId
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showSalesDetailDialog, setShowSalesDetailDialog] = useState(false);
@@ -238,13 +241,13 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     } else if (type === "detailed") {
       message += `tienes las siguientes deudas pendientes en Maracuyá Villa Gratia:\n\n`;
       debtor.invoices.forEach((inv: any) => {
-        message += `• ${inv.id} - S/ ${inv.amount.toFixed(2)} (${inv.date})\n`;
+        message += `• ${inv.correlative} - S/ ${inv.amount.toFixed(2)} (${inv.date})\n`;
       });
       message += `\nTotal: S/ ${debtor.totalDebt.toFixed(2)}`;
     } else {
       message += `tienes las siguientes deudas pendientes en Maracuyá Villa Gratia:\n\n`;
       debtor.invoices.forEach((inv: any) => {
-        message += `📄 ${inv.id} - ${inv.date}\n`;
+        message += `📄 ${inv.correlative} - ${inv.date}\n`;
         message += `💰 S/ ${inv.amount.toFixed(2)}\n`;
         message += `🛒 ${inv.products.join(", ")}\n\n`;
       });
@@ -260,7 +263,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     window.open(url, "_blank");
   };
 
-  /* ===== Detalle de ventas: resuelve nombre del vendedor si viene UID ===== */
+  /* ===== Detalle de ventas ===== */
   const loadSalesDetail = async (clientId: string) => {
     try {
       const salesData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.sales);
@@ -348,7 +351,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         { align: "center" }
       );
 
-      // Rango de fechas (opcional)
+      // Rango de fechas
       let cursorY = 55;
       if (dateFrom || dateTo) {
         const fromDate = dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Inicio";
@@ -365,25 +368,19 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         groups.get(key)!.push(item);
       });
 
-      // Orden por fecha ascendente
       const entries = Array.from(groups.entries()).sort(
-        ([a], [b]) =>
-          toLocalDateSafe(a).getTime() - toLocalDateSafe(b).getTime()
+        ([a], [b]) => toLocalDateSafe(a).getTime() - toLocalDateSafe(b).getTime()
       );
 
-      // Color cabecera de tabla
       const headStyles = { fillColor: [34, 197, 94], textColor: 255, fontStyle: "bold" as const };
-
       let grandTotal = 0;
 
       for (const [day, items] of entries) {
-        // Título de día
         doc.setFontSize(12);
         doc.setFont("helvetica", "bold");
         doc.text(day, 20, cursorY);
         cursorY += 4;
 
-        // Filas
         const body = items.map((item: any) => {
           const rowTotal = Number(item.total || 0);
           grandTotal += rowTotal;
@@ -398,7 +395,6 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           ];
         });
 
-        // Tabla del día
         autoTable(doc, {
           head: [["Correlativo", "Fecha", "Vendedor", "Producto", "Cantidad", "Precio", "Total"]],
           body,
@@ -415,7 +411,6 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
         const lastY = (doc as any).lastAutoTable.finalY || cursorY + 10;
 
-        // Subtotal del día
         const daySubtotal = items.reduce((s: number, it: any) => s + Number(it.total || 0), 0);
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
@@ -423,24 +418,20 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           align: "right",
         });
 
-        // Avanza cursor para siguiente bloque
         cursorY = lastY + 14;
 
-        // Si estamos muy abajo, deja que la siguiente tabla pase a nueva página
         if (cursorY > pageH - 30) {
           doc.addPage();
           cursorY = 20;
         }
       }
 
-      // Total general
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.text(`TOTAL GENERAL: S/ ${grandTotal.toFixed(2)}`, pageW - 20, cursorY, {
         align: "right",
       });
 
-      // Pie de página con paginación (segunda pasada)
       const totalPages = doc.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
@@ -457,8 +448,9 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     }
   };
 
+  /* ===== Procesar pago (marca paid por entryId) ===== */
   const processPayment = async () => {
-    if (!selectedDebtor || paymentAmount <= 0) return;
+    if (!selectedDebtor || paymentAmount <= 0 || selectedInvoices.length === 0) return;
 
     try {
       const paymentData = {
@@ -467,26 +459,30 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         amount: paymentAmount,
         method: paymentMethod,
         date: paymentDate.toISOString(),
-        invoices: selectedInvoices,
+        invoices: selectedInvoices, // entryIds
         status: "paid",
         paidAt: new Date().toISOString(),
-        paidBy: "sistema"
+        paidBy: "sistema",
       };
 
       await RTDBHelper.pushData("payments", paymentData);
 
       const updates: Record<string, any> = {};
-      selectedInvoices.forEach(invoiceId => {
-        updates[`${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${invoiceId}/status`] = "paid";
-        updates[`${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${invoiceId}/paidAt`] = new Date().toISOString();
+      selectedInvoices.forEach(entryId => {
+        const base = `${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${entryId}`;
+        updates[`${base}/status`] = "paid";
+        updates[`${base}/paidAt`] = new Date().toISOString();
+        updates[`${base}/method`] = paymentMethod;
       });
       if (Object.keys(updates).length > 0) await RTDBHelper.updateData(updates);
 
       setPaidInvoices(prev => [...prev, paymentData]);
+
       const updatedDebtors = await loadDebtors();
       setDebtors(updatedDebtors);
 
       setShowPaymentDialog(false);
+      setShowCXCDialog(false);
       setPaymentAmount(0);
       setSelectedInvoices([]);
     } catch (error) {
@@ -524,7 +520,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
             <TabsTrigger value="paid">Boletas Pagadas</TabsTrigger>
           </TabsList>
 
-        <TabsContent value="pending" className="space-y-6">
+          <TabsContent value="pending" className="space-y-6">
             {/* Summary */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <Card>
@@ -599,17 +595,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedDebtor(debtor);
-                          setShowPaymentDialog(true);
-                        }}
-                      >
-                        <CreditCard className="w-4 h-4 mr-1" />
-                        Registrar Pago
-                      </Button>
+                      {/* 🔸 Eliminado botón "Registrar Pago" (se usa CXC) */}
 
                       <Button
                         variant="outline"
@@ -663,7 +649,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                         variant="outline"
                         size="sm"
                         onClick={() => {
+                          // Preparar CxC
                           setSelectedDebtor(debtor);
+                          setSelectedInvoices([]);
+                          setPaymentAmount(0);
                           setShowCXCDialog(true);
                         }}
                       >
@@ -730,7 +719,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                       <TableHead>Fecha Pago</TableHead>
                       <TableHead>Monto</TableHead>
                       <TableHead>Método</TableHead>
-                      <TableHead>Facturas</TableHead>
+                      <TableHead>Entries</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -757,102 +746,13 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         </Tabs>
       </div>
 
-      {/* Payment Dialog */}
+      {/* (Opcional) Dialog de pago directo: lo dejo, pero ya no se muestra botón para abrirlo */}
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Registrar Pago - {selectedDebtor?.name}</DialogTitle>
+            <DialogDescription>Registra un pago manual. Recomendado usar CXC.</DialogDescription>
           </DialogHeader>
-
-          {selectedDebtor && (
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Facturas pendientes:</p>
-                <div className="space-y-2">
-                  {selectedDebtor.invoices.map((invoice: any) => (
-                    <div key={invoice.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={invoice.id}
-                        checked={selectedInvoices.includes(invoice.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedInvoices((prev) => [...prev, invoice.id]);
-                          } else {
-                            setSelectedInvoices((prev) => prev.filter((id) => id !== invoice.id));
-                          }
-                        }}
-                      />
-                      <label htmlFor={invoice.id} className="text-sm flex-1">
-                        {invoice.id} - S/ {invoice.amount.toFixed(2)} — {invoice.date}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Monto a Pagar</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Método de Pago</label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="efectivo">Efectivo</SelectItem>
-                    <SelectItem value="transferencia">Transferencia</SelectItem>
-                    <SelectItem value="yape">Yape</SelectItem>
-                    <SelectItem value="plin">Plin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Fecha de Pago</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !paymentDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {paymentDate ? format(paymentDate, "PPP", { locale: es }) : <span>Seleccionar fecha</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={paymentDate}
-                      onSelect={(date) => date && setPaymentDate(date)}
-                      initialFocus
-                      className={cn("p-3 pointer-events-auto")}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="flex space-x-2 pt-4">
-                <Button onClick={processPayment} className="flex-1">
-                  Registrar Pago
-                </Button>
-                <Button variant="outline" onClick={() => setShowPaymentDialog(false)}>
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
 
@@ -883,6 +783,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 </Button>
               </div>
             </DialogTitle>
+            <DialogDescription>Filtra y exporta el detalle de ventas del cliente seleccionado.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -1009,6 +910,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Cuentas por Cobrar - {selectedDebtor?.name}</DialogTitle>
+            <DialogDescription>Selecciona las boletas a cancelar. Se marcarán como pagadas.</DialogDescription>
           </DialogHeader>
 
           {selectedDebtor && (
@@ -1021,23 +923,23 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 {selectedDebtor.invoices
                   .sort((a: any, b: any) => a.dateSort - b.dateSort)
                   .map((invoice: any) => (
-                    <div key={invoice.id} className="flex items-center justify-between p-3 border rounded">
+                    <div key={invoice.entryId} className="flex items-center justify-between p-3 border rounded">
                       <div className="flex items-center space-x-2">
                         <Checkbox
-                          id={`cxc-${invoice.id}`}
-                          checked={selectedInvoices.includes(invoice.id)}
+                          id={`cxc-${invoice.entryId}`}
+                          checked={selectedInvoices.includes(invoice.entryId)}
                           onCheckedChange={(checked) => {
                             if (checked) {
-                              setSelectedInvoices(prev => [...prev, invoice.id]);
+                              setSelectedInvoices(prev => [...prev, invoice.entryId]);
                               setPaymentAmount(prev => prev + invoice.amount);
                             } else {
-                              setSelectedInvoices(prev => prev.filter(id => id !== invoice.id));
+                              setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
                               setPaymentAmount(prev => prev - invoice.amount);
                             }
                           }}
                         />
                         <div>
-                          <p className="font-medium">{invoice.id}</p>
+                          <p className="font-medium">{invoice.correlative}</p>
                           <p className="text-sm text-muted-foreground">{invoice.date}</p>
                         </div>
                       </div>
@@ -1099,10 +1001,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
               <div className="flex space-x-2 pt-4">
                 <Button
-                  onClick={() => {
-                    processPayment();
-                    setShowCXCDialog(false);
-                  }}
+                  onClick={processPayment}
                   className="flex-1"
                   disabled={selectedInvoices.length === 0}
                 >
