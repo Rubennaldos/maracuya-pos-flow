@@ -9,13 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Edit, Trash2, Star, Loader2, Check, GripVertical, Plus, X } from "lucide-react";
+import { Save, Edit, Trash2, Star, Loader2, Check, GripVertical } from "lucide-react";
+import AddonsEditor, { AddonForm } from "./AddonsEditor";
 import type { MenuT, ProductT, ComboTemplate } from "../types";
 
-/* ========= Tipado local para agregados (price como string en el form) ========= */
-type AddonForm = { id: string; name: string; priceStr: string; active?: boolean };
-
-/** Adaptador local para soportar productos con/ sin addons tipados */
+/* ========= Adaptador local para soportar productos con/ sin addons tipados ========= */
 type ProductWithAddons = Omit<ProductT, "addons"> & {
   addons?: Array<{ id?: string; name: string; price: number; active?: boolean }> | any;
 };
@@ -120,7 +118,7 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
     );
   }, [q, products, menu.categories]);
 
-  // ======= AGRUPADO por categoría (solo productos activos) =======
+  // ======= AGRUPADO por categoría (solo productos activos) ======= //
   const groupsComputed = useMemo<Group[]>(() => {
     const active = filteredBase.filter(
       (p) =>
@@ -353,9 +351,10 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
   const editVar = (p: ProductWithAddons) => {
     setEditing(p);
     setForm(p);
-    // Convertimos los addons del producto a la forma del form (priceStr)
+    // Convertimos los addons del producto a la forma del form (priceStr) con cid estable
     const mapped: AddonForm[] = (p.addons || []).map((a: any) => ({
-      id: a.id || Math.random().toString(36).slice(2, 8),
+      cid: (crypto as any).randomUUID?.() || Math.random().toString(36).slice(2),
+      id: a.id,
       name: a.name || "",
       priceStr: a.price != null ? String(a.price) : "",
       active: a.active !== false,
@@ -675,86 +674,6 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
 
   /* ================== UI ================== */
 
-  const AddonsEditor = () => (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <Label>Agregados (opcional)</Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            setAddons((arr) => [
-              ...arr,
-              { id: Math.random().toString(36).slice(2, 8), name: "", priceStr: "", active: true },
-            ])
-          }
-        >
-          <Plus className="h-3 w-3 mr-1" /> Añadir agregado
-        </Button>
-      </div>
-
-      {addons.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          Puedes crear opciones como “Huevo frito (S/ 1.50)”, “Palta (S/ 1.00)”, etc.
-        </p>
-      )}
-
-      {addons.map((a, idx) => (
-        <div key={a.id} className="grid grid-cols-12 gap-2 items-center">
-          <Input
-            className="col-span-6"
-            placeholder="Nombre (ej. Huevo frito)"
-            value={a.name}
-            onChange={(e) =>
-              setAddons((arr) => {
-                const next = arr.slice();
-                next[idx] = { ...next[idx], name: e.target.value };
-                return next;
-              })
-            }
-          />
-          <Input
-            className="col-span-3"
-            placeholder="Precio (ej. 1.50)"
-            inputMode="decimal"
-            value={a.priceStr}
-            onChange={(e) =>
-              setAddons((arr) => {
-                const next = arr.slice();
-                next[idx] = { ...next[idx], priceStr: e.target.value };
-                return next;
-              })
-            }
-          />
-          <div className="col-span-2 flex items-center gap-2">
-            <Switch
-              checked={a.active !== false}
-              onCheckedChange={(v) =>
-                setAddons((arr) => {
-                  const next = arr.slice();
-                  next[idx] = { ...next[idx], active: v };
-                  return next;
-                })
-              }
-            />
-            <Label>Activo</Label>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            className="col-span-1"
-            onClick={() => setAddons((arr) => arr.filter((x) => x.id !== a.id))}
-            title="Quitar"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      ))}
-      {errors.addons && <p className="text-xs text-destructive">{errors.addons}</p>}
-    </div>
-  );
-
   const GroupedList = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -917,8 +836,8 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
                 />
               </div>
 
-              {/* ===== Agregados ===== */}
-              <AddonsEditor />
+              {/* ===== Agregados (archivo separado) ===== */}
+              <AddonsEditor addons={addons} setAddons={setAddons} errorText={errors.addons} />
 
               <div>
                 <Label>Imagen (JPG/PNG — se convierte a WebP)</Label>
@@ -1105,7 +1024,11 @@ export default function ProductsPanel({ menu, onMenuChange }: ProductsPanelProps
                 <Button variant="outline" onClick={saveFav} title="Guardar como favorito">
                   <Star className="h-4 w-4 mr-2" /> Guardar favorito
                 </Button>
-                <select className="border rounded h-9 px-2" value={alm.templateId || ""} onChange={(e) => loadFav(e.target.value)}>
+                <select
+                  className="border rounded h-9 px-2"
+                  value={alm.templateId || ""}
+                  onChange={(e) => loadFav(e.target.value)}
+                >
                   <option value="">— Cargar favorito —</option>
                   {templates.map((t) => (
                     <option key={t.id} value={t.id}>

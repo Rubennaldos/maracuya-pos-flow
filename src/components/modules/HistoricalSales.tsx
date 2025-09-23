@@ -1,3 +1,4 @@
+// src/components/modules/orders/HistoricalSales.tsx
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -179,8 +180,19 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     focusSearch();
   };
 
-  /* -------- navegación con teclado en la búsqueda -------- */
+  /* -------- navegación con teclado en la búsqueda (CORREGIDO) -------- */
   const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const isEnter = e.key === "Enter" || e.key === "+";
+
+    // Si el buscador está vacío y hay items en el carrito, Enter abre modal de cliente
+    if (isEnter && !searchTerm.trim()) {
+      if (cart.length > 0) {
+        e.preventDefault();
+        setClientModalOpen(true);
+      }
+      return;
+    }
+
     if (!filteredProducts.length) return;
 
     const cols = 2; // coincide con md:grid-cols-2
@@ -200,7 +212,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
     else if (e.key === "ArrowUp") { e.preventDefault(); move(-cols); }
     else if (e.key === "ArrowRight") { e.preventDefault(); move(1); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); move(-1); }
-    else if (e.key === "Enter" || e.key === "+") {
+    else if (isEnter) {
       e.preventDefault();
       const p = filteredProducts[activeProductIdx >= 0 ? activeProductIdx : 0];
       if (p) {
