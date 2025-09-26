@@ -4,8 +4,9 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 export default defineConfig(({ mode }) => ({
-  // 👇 base debe ser EXACTA al nombre del repo de Pages
-  base: "/maracuya-pos-flow/",
+  // En prod relativo para funcionar dentro de iframes/subrutas (Lovable, etc.)
+  // En dev absoluto para Vite.
+  base: mode === "production" ? "./" : "/",
 
   server: { host: "::", port: 8080 },
   preview: { port: 8080 },
@@ -15,7 +16,7 @@ export default defineConfig(({ mode }) => ({
     sourcemap: true,
   },
 
-  // 👇 Usa lovable-tagger SOLO en desarrollo
+  // Usa lovable-tagger SOLO en desarrollo
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
 
   resolve: {
