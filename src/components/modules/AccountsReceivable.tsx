@@ -263,39 +263,106 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     window.open(url, "_blank");
   };
 
-  /* ===== Detalle de ventas ===== */
+  /* ===== Detalle de ventas pendientes (solo deudas) ===== */
   const loadSalesDetail = async (clientId: string) => {
     try {
-      const salesData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.sales);
-      const historicalData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.historical_sales);
-      const allSales = { ...salesData, ...historicalData };
-      const clientSales: any[] = [];
+      // Obtener solo las cuentas por cobrar pendientes del cliente
+      const arData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
+      if (!arData) return [];
 
-      Object.entries(allSales || {}).forEach(([saleId, sale]: [string, any]) => {
-        if (sale?.clientId === clientId || sale?.client?.id === clientId) {
-          const items = Array.isArray(sale.items) ? sale.items : [];
-          const sellerRaw =
-            sale.userName || sale.seller || sale.user || sale.cashier || "Sistema";
+      const clientDebtDetails: any[] = [];
 
-          items.forEach((item: any) => {
-            clientSales.push({
-              saleId,
-              correlative: sale.correlative || saleId,
-              date: sale.date || sale.createdAt,
-              sellerRaw,
-              clientName: sale.client?.name || sale.clientName || "Cliente",
-              productName: item.name || "Producto",
-              quantity: item.quantity || 1,
-              price: item.price || 0,
-              total: (item.quantity || 1) * (item.price || 0),
-              paymentMethod: sale.paymentMethod || "efectivo",
-            });
-          });
-        }
-      });
+      // Buscar las deudas pendientes del cliente específico
+      const clientArData = arData[clientId];
+      if (clientArData && clientArData.entries) {
+        // Formato nuevo (agrupado por cliente)
+        Object.entries(clientArData.entries).forEach(([entryId, entry]: [string, any]) => {
+          if (entry?.status === "pending") {
+            const items = Array.isArray(entry.items) ? entry.items : [];
+            const sellerRaw = entry.userName || entry.seller || entry.user || entry.cashier || "Sistema";
+
+            if (items.length > 0) {
+              items.forEach((item: any) => {
+                clientDebtDetails.push({
+                  saleId: entry.saleId || entryId,
+                  correlative: entry.correlative || entry.saleId || entryId,
+                  date: entry.date || entry.createdAt,
+                  sellerRaw,
+                  clientName: entry.clientName || "Cliente",
+                  productName: item.name || "Producto",
+                  quantity: item.quantity || 1,
+                  price: item.price || 0,
+                  total: (item.quantity || 1) * (item.price || 0),
+                  paymentMethod: entry.paymentMethod || "crédito",
+                  status: "pendiente"
+                });
+              });
+            } else {
+              // Si no hay items detallados, mostrar la entrada como un solo item
+              clientDebtDetails.push({
+                saleId: entry.saleId || entryId,
+                correlative: entry.correlative || entry.saleId || entryId,
+                date: entry.date || entry.createdAt,
+                sellerRaw,
+                clientName: entry.clientName || "Cliente",
+                productName: entry.description || "Venta a crédito",
+                quantity: 1,
+                price: entry.amount || 0,
+                total: entry.amount || 0,
+                paymentMethod: entry.paymentMethod || "crédito",
+                status: "pendiente"
+              });
+            }
+          }
+        });
+      } else {
+        // Buscar en formato plano/legado
+        Object.entries(arData).forEach(([key, value]) => {
+          const flat = value as any;
+          const looksEntry =
+            flat && typeof flat === "object" && flat.status && (flat.amount !== undefined) && !flat.entries;
+
+          if (looksEntry && flat.status === "pending" && (flat.clientId === clientId || key.includes(clientId))) {
+            const items = Array.isArray(flat.items) ? flat.items : [];
+            const sellerRaw = flat.userName || flat.seller || flat.user || flat.cashier || "Sistema";
+
+            if (items.length > 0) {
+              items.forEach((item: any) => {
+                clientDebtDetails.push({
+                  saleId: flat.saleId || key,
+                  correlative: flat.correlative || flat.saleId || key,
+                  date: flat.date || flat.createdAt,
+                  sellerRaw,
+                  clientName: flat.clientName || "Cliente",
+                  productName: item.name || "Producto",
+                  quantity: item.quantity || 1,
+                  price: item.price || 0,
+                  total: (item.quantity || 1) * (item.price || 0),
+                  paymentMethod: flat.paymentMethod || "crédito",
+                  status: "pendiente"
+                });
+              });
+            } else {
+              clientDebtDetails.push({
+                saleId: flat.saleId || key,
+                correlative: flat.correlative || flat.saleId || key,
+                date: flat.date || flat.createdAt,
+                sellerRaw,
+                clientName: flat.clientName || "Cliente",
+                productName: flat.description || "Venta a crédito",
+                quantity: 1,
+                price: flat.amount || 0,
+                total: flat.amount || 0,
+                paymentMethod: flat.paymentMethod || "crédito",
+                status: "pendiente"
+              });
+            }
+          }
+        });
+      }
 
       const withSellerName = await Promise.all(
-        clientSales.map(async (r) => ({
+        clientDebtDetails.map(async (r) => ({
           ...r,
           sellerShown: await resolveVendorName(r.sellerRaw),
         }))
@@ -305,7 +372,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         (a, b) => toLocalDateSafe(b.date).getTime() - toLocalDateSafe(a.date).getTime()
       );
     } catch (error) {
-      console.error("Error loading sales detail:", error);
+      console.error("Error loading debt details:", error);
       return [];
     }
   };
