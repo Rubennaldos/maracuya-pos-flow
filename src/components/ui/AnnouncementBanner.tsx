@@ -48,30 +48,30 @@ export function AnnouncementBanner({ announcements, onDismiss }: AnnouncementBan
   };
 
   return (
-    <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
+    <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10 mx-4 md:mx-8 my-6">
       <CardContent className="p-0">
         <div className="relative">
           {/* Imagen de fondo si existe */}
           {currentAnnouncement.image && (
-            <div className="relative h-48 md:h-64 overflow-hidden">
+            <div className="relative h-64 md:h-80 lg:h-96 overflow-hidden rounded-lg">
               <img
                 src={currentAnnouncement.image}
                 alt={currentAnnouncement.title}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-black/40" />
+              <div className="absolute inset-0 bg-black/50" />
             </div>
           )}
           
           {/* Contenido del anuncio */}
-          <div className={`p-6 ${currentAnnouncement.image ? 'absolute inset-0 flex flex-col justify-end text-white' : ''}`}>
-            <div className="space-y-2">
-              <h2 className={`text-xl md:text-2xl font-bold ${currentAnnouncement.image ? 'text-white' : 'text-foreground'}`}>
+          <div className={`${currentAnnouncement.image ? 'absolute inset-0 flex flex-col justify-center items-center text-center text-white p-8' : 'p-8 text-center'}`}>
+            <div className="space-y-4 max-w-4xl">
+              <h1 className={`text-2xl md:text-4xl lg:text-5xl font-bold ${currentAnnouncement.image ? 'text-white drop-shadow-lg' : 'text-foreground'}`}>
                 {currentAnnouncement.title}
-              </h2>
+              </h1>
               
               {currentAnnouncement.message && (
-                <p className={`text-sm md:text-base ${currentAnnouncement.image ? 'text-white/90' : 'text-muted-foreground'}`}>
+                <p className={`text-base md:text-lg lg:text-xl ${currentAnnouncement.image ? 'text-white/95 drop-shadow-md' : 'text-muted-foreground'}`}>
                   {currentAnnouncement.message}
                 </p>
               )}
