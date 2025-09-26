@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 import FamilyOrderHistory from "@/components/modules/lunch/FamilyOrderHistory";
+import { useActiveAnnouncements } from "@/hooks/useActiveAnnouncements";
+import { AnnouncementBanner } from "@/components/ui/AnnouncementBanner";
 
 /* ===== Tipos ===== */
 type Client = { code: string; name?: string };
@@ -124,6 +126,9 @@ export default function FamilyMenu({ client, onLogout }: Props) {
 
   const [resolvedName, setResolvedName] = useState<string>("");
   const [showHistory, setShowHistory] = useState(false);
+
+  // Hook para obtener anuncios activos
+  const { announcements } = useActiveAnnouncements();
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmStudent, setConfirmStudent] = useState<string>("");
@@ -482,6 +487,13 @@ export default function FamilyMenu({ client, onLogout }: Props) {
           )}
         </div>
       </div>
+
+      {/* Anuncios activos */}
+      {announcements.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <AnnouncementBanner announcements={announcements} />
+        </div>
+      )}
 
       {/* Versión */}
       {settings?.version && (

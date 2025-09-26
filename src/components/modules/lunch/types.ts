@@ -120,3 +120,15 @@ export type PromoT = {
   startAt?: number; // ms
   endAt?: number;   // ms
 };
+
+export type AnnouncementT = {
+  id: string;
+  title: string;
+  message?: string;
+  image?: string; // data URL webp
+  startAt: number; // timestamp ms
+  endAt: number;   // timestamp ms
+  active?: boolean;
+  createdAt: number;
+  createdBy?: string; // admin user id
+};
