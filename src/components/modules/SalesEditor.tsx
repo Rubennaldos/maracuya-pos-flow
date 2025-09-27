@@ -96,11 +96,15 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
   const loadClients = async () => {
     try {
       const clientsData = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
+      console.log('Clients data loaded:', clientsData);
       if (clientsData) {
         const clientsList = Object.entries(clientsData)
           .map(([id, client]) => ({ ...client, id }))
           .filter(client => client.active !== false);
+        console.log('Filtered clients list:', clientsList);
         setClients(clientsList);
+      } else {
+        console.log('No clients data found');
       }
     } catch (error) {
       console.error('Error loading clients:', error);
@@ -261,7 +265,14 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
             </div>
             <div>
               <Label>Fecha</Label>
-              <Input value={new Date(editedSale.date).toLocaleString()} disabled />
+              <Input 
+                type="datetime-local"
+                value={new Date(editedSale.date).toISOString().slice(0, 16)}
+                onChange={(e) => setEditedSale(prev => prev ? {
+                  ...prev,
+                  date: new Date(e.target.value).toISOString()
+                } : null)}
+              />
             </div>
           </div>
 
