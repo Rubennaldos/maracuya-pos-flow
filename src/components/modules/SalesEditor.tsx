@@ -124,7 +124,9 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
   if (!editedSale) return null;
 
   const calculateTotal = () => {
-    return editedSale.items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+    return editedSale.items.reduce((sum, item) => 
+      sum + ((item.quantity || 0) * (item.price || 0)), 0
+    );
   };
 
   const updateItemQuantity = (index: number, quantity: number) => {
@@ -133,7 +135,9 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
       if (!prev) return null;
       const newItems = [...prev.items];
       newItems[index] = { ...newItems[index], quantity };
-      const newTotal = newItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+      const newTotal = newItems.reduce((sum, item) => 
+        sum + ((item.quantity || 0) * (item.price || 0)), 0
+      );
       return { ...prev, items: newItems, total: newTotal };
     });
   };
@@ -144,7 +148,9 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
       if (!prev) return null;
       const newItems = [...prev.items];
       newItems[index] = { ...newItems[index], price };
-      const newTotal = newItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+      const newTotal = newItems.reduce((sum, item) => 
+        sum + ((item.quantity || 0) * (item.price || 0)), 0
+      );
       return { ...prev, items: newItems, total: newTotal };
     });
   };
@@ -153,7 +159,9 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
     setEditedSale(prev => {
       if (!prev) return null;
       const newItems = prev.items.filter((_, idx) => idx !== index);
-      const newTotal = newItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+      const newTotal = newItems.reduce((sum, item) => 
+        sum + ((item.quantity || 0) * (item.price || 0)), 0
+      );
       return { ...prev, items: newItems, total: newTotal };
     });
   };
@@ -165,11 +173,13 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
         id: `${Date.now()}-${product.id}`,
         name: product.name,
         quantity: 1,
-        price: product.price,
+        price: product.price || 0,
         isKitchen: product.isKitchen || false
       };
       const newItems = [...prev.items, newItem];
-      const newTotal = newItems.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+      const newTotal = newItems.reduce((sum, item) => 
+        sum + ((item.quantity || 0) * (item.price || 0)), 0
+      );
       return { ...prev, items: newItems, total: newTotal };
     });
     setProductSearchOpen(false);
@@ -372,7 +382,7 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
                                 <span className="text-xs text-muted-foreground">Código: {product.code}</span>
                               )}
                             </div>
-                            <span className="font-semibold">S/ {product.price.toFixed(2)}</span>
+                            <span className="font-semibold">S/ {(product.price || 0).toFixed(2)}</span>
                           </div>
                         </CommandItem>
                       ))}
@@ -418,7 +428,7 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
                   </div>
                   
                   <div className="text-right min-w-[80px]">
-                    <span className="font-semibold">S/ {(item.price * item.quantity).toFixed(2)}</span>
+                    <span className="font-semibold">S/ {((item.price || 0) * (item.quantity || 0)).toFixed(2)}</span>
                   </div>
                   
                   <Button
@@ -447,7 +457,7 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
           {/* Total */}
           <div className="flex justify-between items-center text-xl font-bold">
             <span>Total:</span>
-            <span className="text-primary">S/ {calculateTotal().toFixed(2)}</span>
+            <span className="text-primary">S/ {(calculateTotal() || 0).toFixed(2)}</span>
           </div>
 
           {/* Notes */}
