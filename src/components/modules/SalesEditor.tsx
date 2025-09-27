@@ -267,7 +267,17 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
               <Label>Fecha</Label>
               <Input 
                 type="datetime-local"
-                value={new Date(editedSale.date).toISOString().slice(0, 16)}
+                value={(() => {
+                  try {
+                    const date = new Date(editedSale.date);
+                    if (isNaN(date.getTime())) {
+                      return new Date().toISOString().slice(0, 16);
+                    }
+                    return date.toISOString().slice(0, 16);
+                  } catch {
+                    return new Date().toISOString().slice(0, 16);
+                  }
+                })()}
                 onChange={(e) => setEditedSale(prev => prev ? {
                   ...prev,
                   date: new Date(e.target.value).toISOString()
