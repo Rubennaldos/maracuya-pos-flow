@@ -235,7 +235,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [searchPaidTerm, setSearchPaidTerm] = useState("");
   const [paidSearchFilters, setPaidSearchFilters] = useState({
     client: "",
-    method: "",
+    method: "all",
     dateFrom: null as Date | null,
     dateTo: null as Date | null,
     minAmount: "",
@@ -309,7 +309,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     const matchesClient = payment.clientName.toLowerCase().includes(paidSearchFilters.client.toLowerCase()) ||
                          payment.clientId.toLowerCase().includes(paidSearchFilters.client.toLowerCase());
     
-    const matchesMethod = !paidSearchFilters.method || payment.method === paidSearchFilters.method;
+    const matchesMethod = !paidSearchFilters.method || paidSearchFilters.method === "all" || payment.method === paidSearchFilters.method;
     
     const paymentDate = new Date(payment.paidAt || payment.date);
     const matchesDateFrom = !paidSearchFilters.dateFrom || paymentDate >= paidSearchFilters.dateFrom;
@@ -729,7 +729,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const clearPaidFilters = () => {
     setPaidSearchFilters({
       client: "",
-      method: "",
+      method: "all",
       dateFrom: null,
       dateTo: null,
       minAmount: "",
@@ -960,7 +960,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                         <SelectValue placeholder="Todos los métodos" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Todos los métodos</SelectItem>
+                        <SelectItem value="all">Todos los métodos</SelectItem>
                         <SelectItem value="efectivo">Efectivo</SelectItem>
                         <SelectItem value="transferencia">Transferencia</SelectItem>
                         <SelectItem value="yape">Yape</SelectItem>
