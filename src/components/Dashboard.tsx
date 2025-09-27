@@ -18,6 +18,7 @@ import {
   Trash2,
   UtensilsCrossed,
   Bot, // 👈 NUEVO: icono para el ChatBot
+  MessageCircle, // 👈 NUEVO: icono para WhatsApp Business
 } from "lucide-react";
 
 export type ModuleType =
@@ -32,7 +33,8 @@ export type ModuleType =
   | "unregistered"
   | "deleted"
   | "lunch-admin"
-  | "chatbot"; // 👈 NUEVO: módulo ChatBot
+  | "chatbot"
+  | "whatsapp-business"; // 👈 NUEVO: módulo WhatsApp Business
 
 interface DashboardProps {
   onModuleSelect: (module: ModuleType) => void;
@@ -138,6 +140,16 @@ export const Dashboard = ({ onModuleSelect }: DashboardProps) => {
         "Asistente para clientes, deudores, ventas y productos",
       icon: Bot,
       color: "from-indigo-500 to-sky-400",
+      roles: ["admin", "cajero", "cobranzas"],
+    },
+    // 👇 NUEVO: tarjeta de WhatsApp Business
+    {
+      id: "whatsapp-business" as ModuleType,
+      title: "WhatsApp Business",
+      description:
+        "Gestionar conversaciones y respuestas automáticas",
+      icon: MessageCircle,
+      color: "from-green-500 to-emerald-400",
       roles: ["admin", "cajero", "cobranzas"],
     },
   ];

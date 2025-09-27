@@ -21,6 +21,9 @@ import LunchAdmin from "@/components/modules/LunchAdmin";
 // 👇 IMPORTA el módulo de ChatBot
 import { ChatBot } from "@/components/modules/ChatBot";
 
+// 👇 IMPORTA el módulo de WhatsApp Business
+import { WhatsAppBusiness } from "@/components/modules/WhatsAppBusiness";
+
 export default function Index() {
   const { isAuthenticated } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType | null>(null);
@@ -74,6 +77,9 @@ export default function Index() {
   
   // 👇 NUEVO: módulo de ChatBot
   if (currentModule === "chatbot") return <ChatBot onBack={() => setCurrentModule(null)} />;
+  
+  // 👇 NUEVO: módulo de WhatsApp Business
+  if (currentModule === "whatsapp-business") return <WhatsAppBusiness onBack={() => setCurrentModule(null)} />;
 
 
   return (
