@@ -11,8 +11,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle,
-  CheckCircle, Clock, FileText, Receipt, Download,
-  Calendar as CalendarIcon
+  CheckCircle, Clock, FileText, Receipt, Download, Edit2, Trash2,
+  Calendar as CalendarIcon, Filter
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -57,6 +57,66 @@ const toLocalDateSafe = (d: string | Date): Date => {
   return isValid(iso) ? iso : new Date();
 };
 const fmtDMY = (d: string | Date) => format(toLocalDateSafe(d), "dd/MM/yyyy");
+
+/* ===== Carga de boletas pagadas ===== */
+const loadPaidInvoices = async () => {
+  try {
+    const paidList: any[] = [];
+    
+    // 1. Cargar pagos registrados desde "payments"
+    const paymentsData = await RTDBHelper.getData<Record<string, any>>("payments");
+    if (paymentsData) {
+      Object.entries(paymentsData).forEach(([paymentId, payment]: [string, any]) => {
+        if (payment && payment.status === "paid") {
+          paidList.push({
+            id: paymentId,
+            clientId: payment.clientId,
+            clientName: payment.clientName,
+            amount: payment.amount,
+            method: payment.method,
+            date: payment.date,
+            paidAt: payment.paidAt,
+            invoices: payment.invoices || [],
+            source: "payments"
+          });
+        }
+      });
+    }
+
+    // 2. Cargar entradas marcadas como "paid" desde accounts_receivable
+    const arData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
+    if (arData) {
+      Object.entries(arData).forEach(([clientId, clientData]) => {
+        const cData = clientData as any;
+        if (cData && typeof cData === "object" && cData.entries) {
+          Object.entries(cData.entries).forEach(([entryId, entry]: [string, any]) => {
+            if (entry?.status === "paid") {
+              paidList.push({
+                id: entryId,
+                clientId,
+                clientName: entry.clientName || "Cliente",
+                amount: entry.amount,
+                method: entry.method || "efectivo",
+                date: entry.paidAt || entry.date,
+                paidAt: entry.paidAt,
+                invoices: [entry.correlative || entryId],
+                source: "accounts_receivable"
+              });
+            }
+          });
+        }
+      });
+    }
+
+    // Ordenar por fecha de pago descendente
+    return paidList.sort((a, b) => 
+      new Date(b.paidAt || b.date).getTime() - new Date(a.paidAt || a.date).getTime()
+    );
+  } catch (error) {
+    console.error("Error loading paid invoices:", error);
+    return [];
+  }
+};
 
 /* =========================
    Carga robusta de deudores
@@ -173,7 +233,17 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [paidInvoices, setPaidInvoices] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchPaidTerm, setSearchPaidTerm] = useState("");
+  const [paidSearchFilters, setPaidSearchFilters] = useState({
+    client: "",
+    method: "",
+    dateFrom: null as Date | null,
+    dateTo: null as Date | null,
+    minAmount: "",
+    maxAmount: ""
+  });
   const [selectedDebtor, setSelectedDebtor] = useState<any>(null);
+  const [editingPayment, setEditingPayment] = useState<any>(null);
+  const [showEditPaymentDialog, setShowEditPaymentDialog] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<string>("efectivo");
   const [paymentDate, setPaymentDate] = useState<Date>(new Date());
@@ -193,13 +263,17 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [activeTab, setActiveTab] = useState("pending");
 
   useEffect(() => {
-    const fetchDebtors = async () => {
+    const fetchData = async () => {
       setLoading(true);
-      const data = await loadDebtors();
-      setDebtors(data);
+      const [debtorsData, paidData] = await Promise.all([
+        loadDebtors(),
+        loadPaidInvoices()
+      ]);
+      setDebtors(debtorsData);
+      setPaidInvoices(paidData);
       setLoading(false);
     };
-    fetchDebtors();
+    fetchData();
   }, []);
 
   useEffect(() => {
@@ -229,6 +303,24 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     debtor.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Filtros inteligentes para boletas pagadas
+  const filteredPaidInvoices = paidInvoices.filter((payment) => {
+    const matchesClient = payment.clientName.toLowerCase().includes(paidSearchFilters.client.toLowerCase()) ||
+                         payment.clientId.toLowerCase().includes(paidSearchFilters.client.toLowerCase());
+    
+    const matchesMethod = !paidSearchFilters.method || payment.method === paidSearchFilters.method;
+    
+    const paymentDate = new Date(payment.paidAt || payment.date);
+    const matchesDateFrom = !paidSearchFilters.dateFrom || paymentDate >= paidSearchFilters.dateFrom;
+    const matchesDateTo = !paidSearchFilters.dateTo || paymentDate <= paidSearchFilters.dateTo;
+    
+    const amount = Number(payment.amount || 0);
+    const matchesMinAmount = !paidSearchFilters.minAmount || amount >= Number(paidSearchFilters.minAmount);
+    const matchesMaxAmount = !paidSearchFilters.maxAmount || amount <= Number(paidSearchFilters.maxAmount);
+    
+    return matchesClient && matchesMethod && matchesDateFrom && matchesDateTo && matchesMinAmount && matchesMaxAmount;
+  });
 
   const totalDebt = debtors.reduce((sum, d) => sum + (d.totalDebt || 0), 0);
   const urgentCount = debtors.filter((d) => d.urgentCollection).length;
@@ -543,10 +635,13 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       });
       if (Object.keys(updates).length > 0) await RTDBHelper.updateData(updates);
 
-      setPaidInvoices(prev => [...prev, paymentData]);
-
-      const updatedDebtors = await loadDebtors();
+      // Recargar datos
+      const [updatedDebtors, updatedPaid] = await Promise.all([
+        loadDebtors(),
+        loadPaidInvoices()
+      ]);
       setDebtors(updatedDebtors);
+      setPaidInvoices(updatedPaid);
 
       setShowPaymentDialog(false);
       setShowCXCDialog(false);
@@ -563,6 +658,83 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         d.id === debtorId ? { ...d, urgentCollection: !d.urgentCollection } : d
       )
     );
+  };
+
+  const updatePaymentMethod = async (paymentId: string, newMethod: string) => {
+    try {
+      const payment = paidInvoices.find(p => p.id === paymentId);
+      if (!payment) return;
+
+      if (payment.source === "payments") {
+        await RTDBHelper.updateData({ [`payments/${paymentId}/method`]: newMethod });
+      } else if (payment.source === "accounts_receivable") {
+        await RTDBHelper.updateData({ 
+          [`${RTDB_PATHS.accounts_receivable}/${payment.clientId}/entries/${paymentId}/method`]: newMethod 
+        });
+      }
+
+      const updatedPaid = await loadPaidInvoices();
+      setPaidInvoices(updatedPaid);
+    } catch (error) {
+      console.error("Error updating payment method:", error);
+    }
+  };
+
+  const deletePayment = async (paymentId: string) => {
+    if (!confirm("¿Estás seguro de que deseas eliminar este pago? Esta acción no se puede deshacer.")) {
+      return;
+    }
+
+    try {
+      const payment = paidInvoices.find(p => p.id === paymentId);
+      if (!payment) return;
+
+      if (payment.source === "payments") {
+        await RTDBHelper.removeData(`payments/${paymentId}`);
+        
+        // Marcar las facturas como pendientes nuevamente
+        if (payment.invoices && payment.invoices.length > 0) {
+          const updates: Record<string, any> = {};
+          payment.invoices.forEach((entryId: string) => {
+            const base = `${RTDB_PATHS.accounts_receivable}/${payment.clientId}/entries/${entryId}`;
+            updates[`${base}/status`] = "pending";
+            updates[`${base}/paidAt`] = null;
+            updates[`${base}/method`] = null;
+          });
+          if (Object.keys(updates).length > 0) {
+            await RTDBHelper.updateData(updates);
+          }
+        }
+      } else if (payment.source === "accounts_receivable") {
+        const updates = {
+          [`${RTDB_PATHS.accounts_receivable}/${payment.clientId}/entries/${paymentId}/status`]: "pending",
+          [`${RTDB_PATHS.accounts_receivable}/${payment.clientId}/entries/${paymentId}/paidAt`]: null,
+          [`${RTDB_PATHS.accounts_receivable}/${payment.clientId}/entries/${paymentId}/method`]: null,
+        };
+        await RTDBHelper.updateData(updates);
+      }
+
+      // Recargar datos
+      const [updatedDebtors, updatedPaid] = await Promise.all([
+        loadDebtors(),
+        loadPaidInvoices()
+      ]);
+      setDebtors(updatedDebtors);
+      setPaidInvoices(updatedPaid);
+    } catch (error) {
+      console.error("Error deleting payment:", error);
+    }
+  };
+
+  const clearPaidFilters = () => {
+    setPaidSearchFilters({
+      client: "",
+      method: "",
+      dateFrom: null,
+      dateTo: null,
+      minAmount: "",
+      maxAmount: ""
+    });
   };
 
   return (
@@ -760,23 +932,128 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           </TabsContent>
 
           <TabsContent value="paid" className="space-y-6">
-            {/* Search for paid invoices */}
-            <div className="mb-6">
-              <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  placeholder="Buscar por nombre o código..."
-                  value={searchPaidTerm}
-                  onChange={(e) => setSearchPaidTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            {/* Paid invoices table */}
+            {/* Filtros inteligentes para boletas pagadas */}
             <Card>
               <CardHeader>
-                <CardTitle>Boletas Pagadas</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Filter className="w-5 h-5" />
+                  Filtros de Búsqueda Inteligente
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Cliente</label>
+                    <Input
+                      placeholder="Buscar por nombre o ID..."
+                      value={paidSearchFilters.client}
+                      onChange={(e) => setPaidSearchFilters(prev => ({ ...prev, client: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Método de Pago</label>
+                    <Select 
+                      value={paidSearchFilters.method} 
+                      onValueChange={(value) => setPaidSearchFilters(prev => ({ ...prev, method: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos los métodos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Todos los métodos</SelectItem>
+                        <SelectItem value="efectivo">Efectivo</SelectItem>
+                        <SelectItem value="transferencia">Transferencia</SelectItem>
+                        <SelectItem value="yape">Yape</SelectItem>
+                        <SelectItem value="plin">Plin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={clearPaidFilters} size="sm">
+                      Limpiar Filtros
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Fecha Desde</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !paidSearchFilters.dateFrom && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {paidSearchFilters.dateFrom ? format(paidSearchFilters.dateFrom, "dd/MM/yyyy") : "Desde"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={paidSearchFilters.dateFrom}
+                          onSelect={(date) => setPaidSearchFilters(prev => ({ ...prev, dateFrom: date }))}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Fecha Hasta</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !paidSearchFilters.dateTo && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {paidSearchFilters.dateTo ? format(paidSearchFilters.dateTo, "dd/MM/yyyy") : "Hasta"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={paidSearchFilters.dateTo}
+                          onSelect={(date) => setPaidSearchFilters(prev => ({ ...prev, dateTo: date }))}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Monto Mínimo</label>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      value={paidSearchFilters.minAmount}
+                      onChange={(e) => setPaidSearchFilters(prev => ({ ...prev, minAmount: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Monto Máximo</label>
+                    <Input
+                      type="number"
+                      placeholder="999.99"
+                      value={paidSearchFilters.maxAmount}
+                      onChange={(e) => setPaidSearchFilters(prev => ({ ...prev, maxAmount: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Boletas pagadas table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Boletas Pagadas ({filteredPaidInvoices.length})</CardTitle>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -786,25 +1063,70 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                       <TableHead>Fecha Pago</TableHead>
                       <TableHead>Monto</TableHead>
                       <TableHead>Método</TableHead>
-                      <TableHead>Entries</TableHead>
+                      <TableHead>Facturas</TableHead>
+                      <TableHead>Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paidInvoices
-                      .filter(payment =>
-                        payment.clientName.toLowerCase().includes(searchPaidTerm.toLowerCase()) ||
-                        payment.clientId.toLowerCase().includes(searchPaidTerm.toLowerCase())
-                      )
-                      .map((payment, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{payment.clientName}</TableCell>
-                          <TableCell>{fmtDMY(payment.date)}</TableCell>
-                          <TableCell>S/ {Number(payment.amount || 0).toFixed(2)}</TableCell>
-                          <TableCell className="capitalize">{payment.method}</TableCell>
-                          <TableCell>{(payment.invoices || []).join(", ")}</TableCell>
+                    {filteredPaidInvoices.length > 0 ? (
+                      filteredPaidInvoices.map((payment, index) => (
+                        <TableRow key={payment.id || index}>
+                          <TableCell className="font-medium">{payment.clientName}</TableCell>
+                          <TableCell>{fmtDMY(payment.paidAt || payment.date)}</TableCell>
+                          <TableCell className="font-semibold">S/ {Number(payment.amount || 0).toFixed(2)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {payment.method || "efectivo"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="max-w-[200px] truncate" title={(payment.invoices || []).join(", ")}>
+                              {(payment.invoices || []).join(", ")}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingPayment(payment);
+                                  setShowEditPaymentDialog(true);
+                                }}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => deletePayment(payment.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
-                    }
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          <div className="flex flex-col items-center space-y-2">
+                            <Receipt className="w-8 h-8 text-muted-foreground" />
+                            <p className="text-muted-foreground">
+                              {paidInvoices.length === 0
+                                ? "No hay boletas pagadas registradas"
+                                : "No se encontraron resultados con los filtros aplicados"}
+                            </p>
+                            {paidInvoices.length > 0 && (
+                              <Button variant="outline" size="sm" onClick={clearPaidFilters}>
+                                Limpiar filtros
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -1079,6 +1401,65 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   setSelectedInvoices([]);
                   setPaymentAmount(0);
                 }}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={showEditPaymentDialog} onOpenChange={setShowEditPaymentDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Método de Pago</DialogTitle>
+            <DialogDescription>
+              Modifica el método de pago para {editingPayment?.clientName}
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingPayment && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Monto: S/ {Number(editingPayment.amount).toFixed(2)}</label>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Método de Pago</label>
+                <Select 
+                  value={editingPayment.method || "efectivo"} 
+                  onValueChange={(value) => setEditingPayment(prev => ({ ...prev, method: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                    <SelectItem value="yape">Yape</SelectItem>
+                    <SelectItem value="plin">Plin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex space-x-2 pt-4">
+                <Button
+                  onClick={async () => {
+                    await updatePaymentMethod(editingPayment.id, editingPayment.method);
+                    setShowEditPaymentDialog(false);
+                    setEditingPayment(null);
+                  }}
+                  className="flex-1"
+                >
+                  Guardar Cambios
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowEditPaymentDialog(false);
+                    setEditingPayment(null);
+                  }}
+                >
                   Cancelar
                 </Button>
               </div>
