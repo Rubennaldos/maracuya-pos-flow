@@ -18,6 +18,9 @@ import { DeletedSalesHistory } from "@/components/modules/DeletedSalesHistory";
 // 👇 IMPORTA el módulo de almuerzos (admin)
 import LunchAdmin from "@/components/modules/LunchAdmin";
 
+// 👇 IMPORTA el módulo de ChatBot
+import { ChatBot } from "@/components/modules/ChatBot";
+
 export default function Index() {
   const { isAuthenticated } = useSession();
   const [currentModule, setCurrentModule] = useState<ModuleType | null>(null);
@@ -68,6 +71,9 @@ export default function Index() {
 
   // 👇 ESTE ES EL CASE QUE FALTABA
   if (currentModule === "lunch-admin") return <LunchAdmin onBack={() => setCurrentModule(null)} />;
+  
+  // 👇 NUEVO: módulo de ChatBot
+  if (currentModule === "chatbot") return <ChatBot onBack={() => setCurrentModule(null)} />;
 
 
   return (
