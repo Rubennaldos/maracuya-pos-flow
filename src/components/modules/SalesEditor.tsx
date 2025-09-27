@@ -186,13 +186,13 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
   };
 
   const filteredClients = clients.filter(client =>
-    client.fullName.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
-    client.code?.toLowerCase().includes(clientSearchTerm.toLowerCase())
+    (client.fullName?.toLowerCase() || '').includes(clientSearchTerm.toLowerCase()) ||
+    (client.code?.toLowerCase() || '').includes(clientSearchTerm.toLowerCase())
   );
 
   const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-    product.code?.toLowerCase().includes(productSearchTerm.toLowerCase())
+    (product.name?.toLowerCase() || '').includes(productSearchTerm.toLowerCase()) ||
+    (product.code?.toLowerCase() || '').includes(productSearchTerm.toLowerCase())
   );
 
   const validateAndSave = () => {
