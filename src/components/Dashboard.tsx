@@ -3,11 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Logo } from "@/components/ui/logo";
 import { useSession } from "@/state/session";
-import { 
-  ShoppingCart, 
-  Package, 
-  Users, 
-  DollarSign, 
+import {
+  ShoppingCart,
+  Package,
+  Users,
+  DollarSign,
   CreditCard,
   FileText,
   Calendar,
@@ -16,21 +16,23 @@ import {
   LogOut,
   Calculator,
   Trash2,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Bot, // 👈 NUEVO: icono para el ChatBot
 } from "lucide-react";
 
-export type ModuleType = 
-  | 'pos' 
-  | 'sales' 
-  | 'products' 
-  | 'clients' 
-  | 'checkout' 
-  | 'accounts' 
-  | 'historical' 
-  | 'promos' 
-  | 'unregistered'
-  | 'deleted'
-  | 'lunch-admin';
+export type ModuleType =
+  | "pos"
+  | "sales"
+  | "products"
+  | "clients"
+  | "checkout"
+  | "accounts"
+  | "historical"
+  | "promos"
+  | "unregistered"
+  | "deleted"
+  | "lunch-admin"
+  | "chatbot"; // 👈 NUEVO: módulo ChatBot
 
 interface DashboardProps {
   onModuleSelect: (module: ModuleType) => void;
@@ -41,103 +43,108 @@ export const Dashboard = ({ onModuleSelect }: DashboardProps) => {
 
   const modules = [
     {
-      id: 'pos' as ModuleType,
-      title: 'Punto de Venta',
-      description: 'Realizar ventas, almuerzos y programadas',
+      id: "pos" as ModuleType,
+      title: "Punto de Venta",
+      description: "Realizar ventas, almuerzos y programadas",
       icon: ShoppingCart,
-      color: 'from-primary to-primary-light',
-      roles: ['admin', 'cajero']
+      color: "from-primary to-primary-light",
+      roles: ["admin", "cajero"],
     },
     {
-      id: 'sales' as ModuleType,
-      title: 'Lista de Ventas',
-      description: 'Ver, editar y eliminar ventas',
+      id: "sales" as ModuleType,
+      title: "Lista de Ventas",
+      description: "Ver, editar y eliminar ventas",
       icon: FileText,
-      color: 'from-secondary to-secondary-light',
-      roles: ['admin', 'cajero']
+      color: "from-secondary to-secondary-light",
+      roles: ["admin", "cajero"],
     },
     {
-      id: 'products' as ModuleType,
-      title: 'Productos',
-      description: 'Gestionar catálogo de productos',
+      id: "products" as ModuleType,
+      title: "Productos",
+      description: "Gestionar catálogo de productos",
       icon: Package,
-      color: 'from-success to-primary-light',
-      roles: ['admin']
+      color: "from-success to-primary-light",
+      roles: ["admin"],
     },
     {
-      id: 'clients' as ModuleType,
-      title: 'Clientes',
-      description: 'Gestionar base de clientes',
+      id: "clients" as ModuleType,
+      title: "Clientes",
+      description: "Gestionar base de clientes",
       icon: Users,
-      color: 'from-warning to-secondary',
-      roles: ['admin', 'cajero']
+      color: "from-warning to-secondary",
+      roles: ["admin", "cajero"],
     },
     {
-      id: 'checkout' as ModuleType,
-      title: 'Cierre de Caja',
-      description: 'Cuadrar ventas del día',
+      id: "checkout" as ModuleType,
+      title: "Cierre de Caja",
+      description: "Cuadrar ventas del día",
       icon: Calculator,
-      color: 'from-primary-dark to-success',
-      roles: ['admin', 'cajero']
+      color: "from-primary-dark to-success",
+      roles: ["admin", "cajero"],
     },
     {
-      id: 'accounts' as ModuleType,
-      title: 'Cuentas por Cobrar',
-      description: 'Gestionar créditos y cobranzas',
+      id: "accounts" as ModuleType,
+      title: "Cuentas por Cobrar",
+      description: "Gestionar créditos y cobranzas",
       icon: CreditCard,
-      color: 'from-destructive to-warning',
-      roles: ['admin', 'cobranzas']
+      color: "from-destructive to-warning",
+      roles: ["admin", "cobranzas"],
     },
     {
-      id: 'historical' as ModuleType,
-      title: 'Ventas Históricas',
-      description: 'Registrar ventas anteriores',
+      id: "historical" as ModuleType,
+      title: "Ventas Históricas",
+      description: "Registrar ventas anteriores",
       icon: Calendar,
-      color: 'from-muted-foreground to-primary',
-      roles: ['admin']
+      color: "from-muted-foreground to-primary",
+      roles: ["admin"],
     },
     {
-      id: 'promos' as ModuleType,
-      title: 'Promociones',
-      description: 'Crear combos y ofertas',
+      id: "promos" as ModuleType,
+      title: "Promociones",
+      description: "Crear combos y ofertas",
       icon: Gift,
-      color: 'from-secondary-dark to-warning',
-      roles: ['admin']
+      color: "from-secondary-dark to-warning",
+      roles: ["admin"],
     },
     {
-      id: 'unregistered' as ModuleType,
-      title: 'Ventas No Registradas',
-      description: 'Recuperar ventas con errores',
+      id: "unregistered" as ModuleType,
+      title: "Ventas No Registradas",
+      description: "Recuperar ventas con errores",
       icon: AlertTriangle,
-      color: 'from-destructive to-secondary',
-      roles: ['admin']
+      color: "from-destructive to-secondary",
+      roles: ["admin"],
     },
     {
-      id: 'deleted' as ModuleType,
-      title: 'Historial de Eliminados',
-      description: 'Papelera de ventas eliminadas',
+      id: "deleted" as ModuleType,
+      title: "Historial de Eliminados",
+      description: "Papelera de ventas eliminadas",
       icon: Trash2,
-      color: 'from-muted to-muted-foreground',
-      roles: ['admin']
+      color: "from-muted to-muted-foreground",
+      roles: ["admin"],
     },
     {
-      id: 'lunch-admin' as ModuleType,
-      title: 'Administrar Almuerzos',
-      description: 'Gestionar menú y pedidos de almuerzos',
+      id: "lunch-admin" as ModuleType,
+      title: "Administrar Almuerzos",
+      description: "Gestionar menú y pedidos de almuerzos",
       icon: UtensilsCrossed,
-      color: 'from-warning to-primary',
-      roles: ['admin']
-    }
+      color: "from-warning to-primary",
+      roles: ["admin"],
+    },
+    // 👇 NUEVO: tarjeta del ChatBot
+    {
+      id: "chatbot" as ModuleType,
+      title: "ChatBot",
+      description:
+        "Asistente para clientes, deudores, ventas y productos",
+      icon: Bot,
+      color: "from-indigo-500 to-sky-400",
+      roles: ["admin", "cajero", "cobranzas"],
+    },
   ];
 
-  const userModules = modules.filter(module => 
-    module.roles.includes(user?.role || 'cajero')
+  const userModules = modules.filter((module) =>
+    module.roles.includes(user?.role || "cajero")
   );
-
-  console.log('User role:', user?.role);
-  console.log('Total modules:', modules.length);
-  console.log('User modules:', userModules.length);
-  console.log('Lunch module exists:', modules.find(m => m.id === 'lunch-admin'));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-accent">
@@ -148,10 +155,12 @@ export const Dashboard = ({ onModuleSelect }: DashboardProps) => {
           <div className="flex items-center space-x-4">
             <div className="text-right">
               <p className="font-semibold text-foreground">{user?.name}</p>
-              <p className="text-sm text-muted-foreground capitalize">{user?.role}</p>
+              <p className="text-sm text-muted-foreground capitalize">
+                {user?.role}
+              </p>
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={logout}
               className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
@@ -178,13 +187,15 @@ export const Dashboard = ({ onModuleSelect }: DashboardProps) => {
           {userModules.map((module) => {
             const IconComponent = module.icon;
             return (
-              <Card 
+              <Card
                 key={module.id}
                 className="group cursor-pointer transition-all duration-300 hover:shadow-medium hover:scale-105 border-border/50"
                 onClick={() => onModuleSelect(module.id)}
               >
                 <CardHeader className="text-center pb-4">
-                  <div className={`w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br ${module.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                  <div
+                    className={`w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br ${module.color} flex items-center justify-center group-hover:scale-110 transition-transform`}
+                  >
                     <IconComponent className="w-8 h-8 text-white" />
                   </div>
                   <CardTitle className="text-lg text-foreground group-hover:text-primary transition-colors">
