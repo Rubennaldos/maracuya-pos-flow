@@ -191,18 +191,21 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
   };
 
   const selectClient = (client: Client) => {
+    const fullName = `${client.names || ''} ${client.lastNames || ''}`.trim();
     setEditedSale(prev => prev ? {
       ...prev,
-      client: { id: client.id, name: client.fullName }
+      client: { id: client.id, name: fullName }
     } : null);
     setClientSearchOpen(false);
     setClientSearchTerm('');
   };
 
-  const filteredClients = clients.filter(client =>
-    (client.fullName?.toLowerCase() || '').includes(clientSearchTerm.toLowerCase()) ||
-    (client.code?.toLowerCase() || '').includes(clientSearchTerm.toLowerCase())
-  );
+  const filteredClients = clients.filter(client => {
+    const fullName = `${client.names || ''} ${client.lastNames || ''}`.toLowerCase();
+    const searchTerm = clientSearchTerm.toLowerCase();
+    return fullName.includes(searchTerm) || 
+           (client.id?.toLowerCase() || '').includes(searchTerm);
+  });
 
   const filteredProducts = products.filter(product =>
     (product.name?.toLowerCase() || '').includes(productSearchTerm.toLowerCase()) ||
@@ -316,13 +319,11 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
                           className="cursor-pointer"
                         >
                           <div className="flex flex-col">
-                            <span className="font-medium">{client.fullName}</span>
-                            {client.code && (
-                              <span className="text-xs text-muted-foreground">Código: {client.code}</span>
-                            )}
-                            {client.grade && client.classroom && (
+                            <span className="font-medium">{`${client.names || ''} ${client.lastNames || ''}`.trim()}</span>
+                            <span className="text-xs text-muted-foreground">ID: {client.id}</span>
+                            {client.grade && (
                               <span className="text-xs text-muted-foreground">
-                                {client.grade} - {client.classroom}
+                                {client.grade} - {client.level}
                               </span>
                             )}
                           </div>
