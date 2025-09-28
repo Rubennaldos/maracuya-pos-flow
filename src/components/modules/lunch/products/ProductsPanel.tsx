@@ -53,7 +53,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     entrada: "",
     segundo: "",
     postre: "",
-    refresco: "Refresco del día"
+    refresco: "Refresco del día",
   });
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
@@ -71,7 +71,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       entrada: "",
       segundo: "",
       postre: "",
-      refresco: "Refresco del día"
+      refresco: "Refresco del día",
     });
     setSelectedDate(undefined);
     setEditing(null);
@@ -88,7 +88,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     const products = Object.values(menu?.products || {});
     const result: Record<string, ProductT[]> = {};
 
-    products.forEach(product => {
+    products.forEach((product) => {
       if (!product) return;
 
       // Oculta almuerzos de días pasados
@@ -96,14 +96,14 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
         return;
       }
 
-      const categoryId = product.categoryId || "sin-categoria";
+      const categoryId = (product as any).categoryId || "sin-categoria";
       if (!result[categoryId]) result[categoryId] = [];
       result[categoryId].push(product);
     });
 
     // Orden por posición
-    Object.keys(result).forEach(catId => {
-      result[catId].sort((a, b) => {
+    Object.keys(result).forEach((catId) => {
+      result[catId].sort((a: any, b: any) => {
         const posA = Number(a.position) || 0;
         const posB = Number(b.position) || 0;
         return posA - posB;
@@ -116,9 +116,9 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
   // Handle date selection
   useEffect(() => {
     if (selectedDate) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        specificDate: formatDateForPeru(selectedDate)
+        specificDate: formatDateForPeru(selectedDate),
       }));
     }
   }, [selectedDate]);
@@ -127,21 +127,21 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
   const editProduct = (product: ProductT) => {
     setEditing(product);
     setFormData({
-      name: product.name,
-      description: product.description || "",
-      price: String(product.price),
-      categoryId: product.categoryId,
-      type: product.type || "lunch",
-      specificDate: product.specificDate || "",
-      image: product.image || "",
+      name: (product as any).name,
+      description: (product as any).description || "",
+      price: String((product as any).price),
+      categoryId: (product as any).categoryId,
+      type: (product as any).type || "lunch",
+      specificDate: (product as any).specificDate || "",
+      image: (product as any).image || "",
       entrada: (product as any).entrada || "",
       segundo: (product as any).segundo || "",
       postre: (product as any).postre || "",
-      refresco: (product as any).refresco || "Refresco del día"
+      refresco: (product as any).refresco || "Refresco del día",
     });
 
-    if (product.specificDate) {
-      setSelectedDate(new Date(product.specificDate + "T12:00:00"));
+    if ((product as any).specificDate) {
+      setSelectedDate(new Date((product as any).specificDate + "T12:00:00"));
     }
 
     setShowForm(true);
@@ -179,29 +179,29 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
         specificDate: formData.type === "lunch" ? formData.specificDate : undefined,
         image: formData.image || undefined,
         active: true,
-        position: editing?.position ?? 0,
-        // Campos específicos para almuerzo
+        position: editing ? (editing as any).position ?? 0 : 0,
+        // Campos específicos para almuerzo (opcionales)
         ...(formData.type === "lunch" && {
           entrada: formData.entrada.trim() || undefined,
           segundo: formData.segundo.trim() || undefined,
           postre: formData.postre.trim() || undefined,
-          refresco: formData.refresco.trim() || "Refresco del día"
-        })
+          refresco: formData.refresco.trim() || "Refresco del día",
+        }),
       });
 
       if (editing) {
         // Actualizar producto
         await RTDBHelper.updateData({
-          [`${RTDB_PATHS.lunch_menu}/products/${editing.id}`]: {
-            ...editing,
+          [`${RTDB_PATHS.lunch_menu}/products/${(editing as any).id}`]: {
+            ...(editing as any),
             ...productData,
-            id: editing.id,
+            id: (editing as any).id,
           },
         });
         toast({ title: "Producto actualizado" });
       } else {
         // Crear nuevo producto
-        const id = await RTDBHelper.pushData(`${RTDB_PATHS.lunch_menu}/products`, productData);
+        const id = await RTDBHelper.pushData(`${RTDB_PATHS.lunch_menu}/products`, productData as any);
         await RTDBHelper.updateData({
           [`${RTDB_PATHS.lunch_menu}/products/${id}/id`]: id,
         });
@@ -221,15 +221,14 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     }
   };
 
-  // Delete product (hard delete to really remove it)
+  // Delete product (hard delete)
   const deleteProduct = async (product: ProductT) => {
-    if (!confirm(`¿Eliminar producto "${product.name}"?`)) return;
+    if (!confirm(`¿Eliminar producto "${(product as any).name}"?`)) return;
 
     setLoading(true);
     try {
-      // Eliminar completamente el producto
       await RTDBHelper.updateData({
-        [`${RTDB_PATHS.lunch_menu}/products/${product.id}`]: null,
+        [`${RTDB_PATHS.lunch_menu}/products/${(product as any).id}`]: null,
       });
 
       const updatedMenu = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
@@ -268,7 +267,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="Nombre del producto"
                 />
               </div>
@@ -280,22 +279,19 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                   type="number"
                   step="0.01"
                   value={formData.price}
-                  onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))}
                   placeholder="0.00"
                 />
               </div>
 
               <div>
                 <Label htmlFor="category">Categoría *</Label>
-                <Select
-                  value={formData.categoryId}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, categoryId: value }))}
-                >
+                <Select value={formData.categoryId} onValueChange={(value) => setFormData((prev) => ({ ...prev, categoryId: value }))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar categoría" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map(cat => (
+                    {categories.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id}>
                         {cat.name}
                       </SelectItem>
@@ -306,10 +302,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
               <div>
                 <Label htmlFor="type">Tipo de Producto *</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(value: "lunch" | "varied") => setFormData(prev => ({ ...prev, type: value }))}
-                >
+                <Select value={formData.type} onValueChange={(value: "lunch" | "varied") => setFormData((prev) => ({ ...prev, type: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -319,7 +312,6 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                   </SelectContent>
                 </Select>
               </div>
-
             </div>
 
             {/* Campos específicos para productos de almuerzo */}
@@ -353,7 +345,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                     <Input
                       id="entrada"
                       value={formData.entrada}
-                      onChange={(e) => setFormData(prev => ({ ...prev, entrada: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, entrada: e.target.value }))}
                       placeholder="Ej: Ensalada mixta"
                     />
                   </div>
@@ -363,7 +355,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                     <Input
                       id="segundo"
                       value={formData.segundo}
-                      onChange={(e) => setFormData(prev => ({ ...prev, segundo: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, segundo: e.target.value }))}
                       placeholder="Ej: Pollo a la plancha con arroz"
                     />
                   </div>
@@ -373,7 +365,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                     <Input
                       id="postre"
                       value={formData.postre}
-                      onChange={(e) => setFormData(prev => ({ ...prev, postre: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, postre: e.target.value }))}
                       placeholder="Ej: Gelatina de fresa"
                     />
                   </div>
@@ -383,7 +375,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                     <Input
                       id="refresco"
                       value={formData.refresco}
-                      onChange={(e) => setFormData(prev => ({ ...prev, refresco: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, refresco: e.target.value }))}
                       placeholder="Refresco del día"
                     />
                   </div>
@@ -392,32 +384,15 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
             )}
 
             <div className="md:col-span-2">
-              <Label htmlFor="description">Descripción</Label>
+              <Label htmlFor="description">Observación (opcional)</Label>
               <Textarea
                 id="description"
                 value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Descripción del producto (opcional)"
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Alguna nota u observación para este producto"
                 rows={3}
               />
             </div>
-
-            {/* Opción de complementos para productos variados */}
-            {formData.type === "varied" && (
-              <div>
-                <Label>Complementos (opcional)</Label>
-                <div className="text-sm text-muted-foreground mb-2">
-                  Si este producto puede tener agregados adicionales con costo extra
-                </div>
-                <Input
-                  placeholder="Ej: Papas extra +2.50, Bebida grande +1.00"
-                  onChange={(e) => {
-                    // Por ahora solo mostrar el campo, la lógica se implementará después
-                    console.log("Complementos:", e.target.value);
-                  }}
-                />
-              </div>
-            )}
 
             {/* Upload de imagen */}
             <div className="md:col-span-2">
@@ -425,17 +400,13 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
               <div className="mt-2">
                 {formData.image ? (
                   <div className="relative">
-                    <img 
-                      src={formData.image} 
-                      alt="Preview" 
-                      className="w-32 h-32 object-cover rounded-lg border"
-                    />
+                    <img src={formData.image} alt="Preview" className="w-32 h-32 object-cover rounded-lg border" />
                     <Button
                       type="button"
                       variant="destructive"
                       size="sm"
                       className="absolute top-1 right-1"
-                      onClick={() => setFormData(prev => ({ ...prev, image: "" }))}
+                      onClick={() => setFormData((prev) => ({ ...prev, image: "" }))}
                     >
                       <X className="h-3 w-3" />
                     </Button>
@@ -450,12 +421,12 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                         if (file) {
                           try {
                             const imageUrl = await uploadImage(file);
-                            setFormData(prev => ({ ...prev, image: imageUrl }));
+                            setFormData((prev) => ({ ...prev, image: imageUrl }));
                           } catch (error) {
-                            toast({ 
-                              title: "Error al subir imagen", 
+                            toast({
+                              title: "Error al subir imagen",
                               description: error instanceof Error ? error.message : "Error desconocido",
-                              variant: "destructive" 
+                              variant: "destructive",
                             });
                           }
                         }
@@ -464,21 +435,14 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                       id="image-upload"
                       disabled={isUploading}
                     />
-                    <label 
-                      htmlFor="image-upload" 
-                      className="cursor-pointer flex flex-col items-center gap-2"
-                    >
+                    <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center gap-2">
                       <Upload className="h-8 w-8 text-muted-foreground" />
                       <div className="text-sm text-center">
                         <span className="font-medium">Subir imagen</span>
                         <br />
-                        <span className="text-xs text-muted-foreground">
-                          PNG, JPG hasta 5MB (se convertirá automáticamente a WebP)
-                        </span>
+                        <span className="text-xs text-muted-foreground">PNG, JPG hasta 5MB (se convertirá a WebP)</span>
                       </div>
-                      {isUploading && (
-                        <div className="text-xs text-blue-600">Subiendo...</div>
-                      )}
+                      {isUploading && <div className="text-xs text-blue-600">Subiendo...</div>}
                     </label>
                   </div>
                 )}
@@ -501,11 +465,10 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
       {/* Products List */}
       <div className="space-y-4">
-        {categories.map(category => {
+        {categories.map((category) => {
           const products = productsByCategory[category.id] || [];
           if (products.length === 0) return null;
 
-        /* eslint-disable react/jsx-key */
           return (
             <Card key={category.id}>
               <CardHeader>
@@ -513,27 +476,53 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3">
-                  {products.map(product => (
-                    <div
-                      key={product.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
+                  {products.map((product: any) => (
+                    <div key={product.id} className="flex items-start justify-between p-3 border rounded-lg">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <h4 className="font-medium">{product.name}</h4>
-                          <span
-                            className={`px-2 py-1 text-xs rounded ${
-                              product.type === "lunch" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"
-                            }`}
-                          >
+                          <span className={`px-2 py-1 text-xs rounded ${product.type === "lunch" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}`}>
                             {product.type === "lunch" ? "Almuerzo" : "Variado"}
                           </span>
                         </div>
+
+                        {/* Observación */}
                         {product.description && (
-                          <p className="text-sm text-muted-foreground">{product.description}</p>
+                          <p className="text-sm text-muted-foreground mt-1">Observación: {product.description}</p>
                         )}
-                        <div className="flex items-center gap-4 mt-1">
-                          <span className="font-semibold">S/ {product.price.toFixed(2)}</span>
+
+                        {/* Detalle de menú si es almuerzo */}
+                        {product.type === "lunch" && (
+                          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                            {product.entrada && (
+                              <div>
+                                <span className="text-muted-foreground">Entrada: </span>
+                                <span>{product.entrada}</span>
+                              </div>
+                            )}
+                            {product.segundo && (
+                              <div>
+                                <span className="text-muted-foreground">Segundo: </span>
+                                <span>{product.segundo}</span>
+                              </div>
+                            )}
+                            {product.postre && (
+                              <div>
+                                <span className="text-muted-foreground">Postre: </span>
+                                <span>{product.postre}</span>
+                              </div>
+                            )}
+                            {product.refresco && (
+                              <div>
+                                <span className="text-muted-foreground">Refresco: </span>
+                                <span>{product.refresco}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-4 mt-2">
+                          <span className="font-semibold">S/ {Number(product.price).toFixed(2)}</span>
                           {product.type === "lunch" && product.specificDate && (
                             <span className="text-sm text-muted-foreground">
                               {format(new Date(product.specificDate + "T12:00:00"), "dd/MM/yyyy")}
@@ -541,11 +530,12 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                           )}
                         </div>
                       </div>
+
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => editProduct(product)}>
+                        <Button variant="outline" size="sm" onClick={() => editProduct(product as ProductT)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => deleteProduct(product)}>
+                        <Button variant="outline" size="sm" onClick={() => deleteProduct(product as ProductT)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -562,9 +552,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
         <Card>
           <CardContent className="text-center py-8">
             <p className="text-muted-foreground">No hay productos disponibles.</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Los productos de almuerzo de días pasados se ocultan automáticamente.
-            </p>
+            <p className="text-sm text-muted-foreground mt-2">Los productos de almuerzo de días pasados se ocultan automáticamente.</p>
           </CardContent>
         </Card>
       )}

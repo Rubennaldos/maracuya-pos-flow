@@ -1,4 +1,3 @@
-// src/components/modules/FamilyMenuWithDays.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -15,7 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Checkbox } from "@/components/ui/checkbox";
 
 import type { ProductT, CategoryT, MenuT, SettingsT as Settings, OrderItem } from "./lunch/types";
-import { getNextWeekDays, getEnabledDays, isDatePast, getTodayInPeru } from "./lunch/utils/dateUtils";
+import { getNextWeekDays, getEnabledDays, isDatePast } from "./lunch/utils/dateUtils";
+import SelectDaysDialog from "@/components/modules/lunch/preview/SelectDaysDialog";
+
 
 /* ===== Tipos ===== */
 type Client = { code: string; name?: string };
@@ -142,12 +143,10 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     const out: Record<string, ProductT[]> = {};
     const all = Object.values(menu?.products || {}).filter((p) => {
       if (!p || p.active === false) return false;
-      
-      // Filter out past lunch products
+      // Ocultar almuerzos en el pasado
       if (p.type === "lunch" && p.specificDate && isDatePast(p.specificDate)) {
         return false;
       }
-      
       return true;
     });
 
@@ -167,14 +166,12 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
   const availableDays = useMemo(() => {
     const enabledDayNames = getEnabledDays(settings?.enabledDays);
     const weekDays = getNextWeekDays();
-    
     return weekDays.filter(day => enabledDayNames.includes(day.day));
   }, [settings]);
 
   const total = useMemo(() => {
     return Object.values(cart).reduce((acc, item) => {
       if (item.type === "varied" && item.selectedDays) {
-        // Para productos variados, multiplicar por la cantidad de días seleccionados
         return acc + (item.price * item.qty * item.selectedDays.length);
       }
       return acc + (item.subtotal || 0);
@@ -198,7 +195,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     setCart((prev) => {
       const existing = prev[cartKey];
       const newQty = (existing?.qty ?? 0) + 1;
-      
+
       return {
         ...prev,
         [cartKey]: {
@@ -222,7 +219,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     setCart((prev) => {
       const existing = prev[product.id];
       const newQty = (existing?.qty ?? 0) + 1;
-      
+
       return {
         ...prev,
         [product.id]: {
@@ -234,27 +231,25 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     });
   };
 
-  const removeFromCart = (id: string) => {
+  const removeFromCart = (key: string) => {
     setCart((prev) => {
-      const existing = prev[id];
+      const existing = prev[key];
       if (!existing) return prev;
-      
+
       const newQty = existing.qty - 1;
       if (newQty <= 0) {
-        const { [id]: _, ...rest } = prev;
+        const { [key]: _, ...rest } = prev;
         return rest;
       }
-      
-      let newSubtotal;
-      if (existing.type === "varied" && existing.selectedDays) {
-        newSubtotal = existing.price * newQty * existing.selectedDays.length;
-      } else {
-        newSubtotal = existing.price * newQty;
-      }
-      
+
+      const newSubtotal =
+        existing.type === "varied" && existing.selectedDays
+          ? existing.price * newQty * existing.selectedDays.length
+          : existing.price * newQty;
+
       return {
         ...prev,
-        [id]: {
+        [key]: {
           ...existing,
           qty: newQty,
           subtotal: newSubtotal,
@@ -281,7 +276,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     setMessage(null);
     const alumno = (confirmStudent || "").trim();
     if (!alumno) { setMessage("Debe indicar el nombre del alumno."); return; }
-    
+
     setPosting(true);
     try {
       const orderCode = await RTDBHelper.getNextCorrelative("lunch");
@@ -348,7 +343,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
             />
           </div>
         )}
-        
+
         <CardContent className="p-4 space-y-3">
           <div>
             <h3 className="font-semibold">{p.name}</h3>
@@ -365,12 +360,33 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
               )}
               {p.type === "lunch" && p.specificDate && (
                 <p className="text-xs text-muted-foreground">
-                  {new Date(p.specificDate + 'T12:00:00').toLocaleDateString('es-PE', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'short'
+                  {new Date(p.specificDate + "T12:00:00").toLocaleDateString("es-PE", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "short",
                   })}
                 </p>
+              )}
+
+              {/* Detalle de almuerzo debajo del precio */}
+              {p.type === "lunch" && (
+                <ul className="mt-2 text-sm text-muted-foreground space-y-0.5">
+                  {(p as any).entrada && (
+                    <li>🥗 <span className="font-medium">Entrada:</span> {(p as any).entrada}</li>
+                  )}
+                  {(p as any).segundo && (
+                    <li>🍽️ <span className="font-medium">Segundo:</span> {(p as any).segundo}</li>
+                  )}
+                  {(p as any).postre && (
+                    <li>🍰 <span className="font-medium">Postre:</span> {(p as any).postre}</li>
+                  )}
+                  {(p as any).refresco && (
+                    <li>🥤 <span className="font-medium">Refresco:</span> {(p as any).refresco}</li>
+                  )}
+                  {p.description && (
+                    <li>📝 <span className="font-medium">Observación:</span> {p.description}</li>
+                  )}
+                </ul>
               )}
             </div>
 
@@ -479,8 +495,8 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
                 ) : (
                   <>
                     <div className="space-y-3">
-                      {Object.values(cart).map((item) => (
-                        <div key={item.id} className="flex justify-between items-start">
+                      {Object.entries(cart).map(([key, item]) => (
+                        <div key={key} className="flex justify-between items-start">
                           <div className="flex-1">
                             <p className="font-medium text-sm">{item.name}</p>
                             <p className="text-xs text-muted-foreground">
@@ -491,12 +507,12 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
                             </p>
                             {item.selectedDays && (
                               <p className="text-xs text-muted-foreground">
-                                Días: {item.selectedDays.map(date => 
-                                  new Date(date + 'T12:00:00').toLocaleDateString('es-PE', { 
-                                    weekday: 'short', 
-                                    day: 'numeric' 
+                                Días: {item.selectedDays.map(date =>
+                                  new Date(date + "T12:00:00").toLocaleDateString("es-PE", {
+                                    weekday: "short",
+                                    day: "numeric",
                                   })
-                                ).join(', ')}
+                                ).join(", ")}
                               </p>
                             )}
                           </div>
@@ -505,7 +521,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => removeFromCart(item.id.includes('_varied') ? item.id : item.id)}
+                              onClick={() => removeFromCart(key)}
                             >
                               -
                             </Button>
@@ -522,16 +538,16 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
                     </div>
 
                     <div className="space-y-2">
-                      <Button 
-                        className="w-full" 
+                      <Button
+                        className="w-full"
                         onClick={openConfirm}
                         disabled={posting}
                       >
                         {posting ? "Enviando..." : "Confirmar pedido"}
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        className="w-full" 
+                      <Button
+                        variant="outline"
+                        className="w-full"
                         onClick={clearCart}
                       >
                         Limpiar carrito
@@ -546,65 +562,21 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
       </div>
 
       {/* Modal de selección de días */}
-      <Dialog open={showDaySelection} onOpenChange={setShowDaySelection}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Seleccionar días para {selectedProduct?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Selecciona los días para los cuales quieres pedir este producto:
-            </p>
-            
-            <div className="space-y-3">
-              {availableDays.map((day) => (
-                <div key={day.date} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={day.date}
-                    checked={selectedDays.includes(day.date)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedDays([...selectedDays, day.date]);
-                      } else {
-                        setSelectedDays(selectedDays.filter(d => d !== day.date));
-                      }
-                    }}
-                  />
-                  <Label htmlFor={day.date} className="flex-1">
-                    {day.label}
-                  </Label>
-                  <span className="text-sm text-muted-foreground">
-                    {PEN(selectedProduct?.price || 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
+      <SelectDaysDialog
+  open={showDaySelection}
+  onOpenChange={setShowDaySelection}
+  productName={selectedProduct?.name}
+  pricePerDay={selectedProduct?.price}
+  // Tus availableDays ya son objetos { date, label, day }
+  days={availableDays.map(d => ({ date: d.date, label: d.label }))}
+  selectedDays={selectedDays}
+  onToggleDay={(date, checked) =>
+    setSelectedDays((prev) => (checked ? [...prev, date] : prev.filter((d) => d !== date)))
+  }
+  onConfirm={addVariedToCart}
+  confirmDisabled={selectedDays.length === 0}
+/>
 
-            {selectedDays.length > 0 && (
-              <div className="border-t pt-4">
-                <div className="flex justify-between items-center">
-                  <span>Subtotal ({selectedDays.length} días):</span>
-                  <span className="font-bold">
-                    {PEN((selectedProduct?.price || 0) * selectedDays.length)}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowDaySelection(false)}>
-                Cancelar
-              </Button>
-              <Button 
-                onClick={addVariedToCart}
-                disabled={selectedDays.length === 0}
-              >
-                Agregar al carrito
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Modal de confirmación */}
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
@@ -656,7 +628,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
               <Button variant="outline" onClick={() => setShowConfirm(false)}>
                 Cancelar
               </Button>
-              <Button 
+              <Button
                 onClick={confirmAndPlace}
                 disabled={posting}
               >

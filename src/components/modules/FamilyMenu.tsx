@@ -1,4 +1,3 @@
-// src/components/modules/lunch/FamilyMenu.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -429,6 +428,33 @@ export default function FamilyMenu({ client, onLogout }: Props) {
               Agregar
             </button>
           </div>
+
+          {/* Detalle de almuerzo debajo del precio */}
+          {(
+            (p as any).entrada ||
+            (p as any).segundo ||
+            (p as any).postre ||
+            (p as any).refresco ||
+            p.description
+          ) && (
+            <ul style={{ marginTop: 8, paddingLeft: 0, listStyle: "none", color: "#6b7280", fontSize: 13 }}>
+              {(p as any).entrada && (
+                <li>🥗 <span style={{ fontWeight: 600, color: "#111827" }}>Entrada:</span> {(p as any).entrada}</li>
+              )}
+              {(p as any).segundo && (
+                <li>🍽️ <span style={{ fontWeight: 600, color: "#111827" }}>Segundo:</span> {(p as any).segundo}</li>
+              )}
+              {(p as any).postre && (
+                <li>🍰 <span style={{ fontWeight: 600, color: "#111827" }}>Postre:</span> {(p as any).postre}</li>
+              )}
+              {(p as any).refresco && (
+                <li>🥤 <span style={{ fontWeight: 600, color: "#111827" }}>Refresco:</span> {(p as any).refresco}</li>
+              )}
+              {p.description && (
+                <li>📝 <span style={{ fontWeight: 600, color: "#111827" }}>Observación:</span> {p.description}</li>
+              )}
+            </ul>
+          )}
         </div>
       </article>
     );

@@ -1,62 +1,51 @@
-// src/components/modules/lunch/utils.ts
-import { RTDBHelper } from "@/lib/rt";
-import { RTDB_PATHS } from "@/lib/rtdb";
+// src/components/modules/lunch/utils/dateUtils.ts
 
-type Level = "patch" | "minor" | "major";
-
-/** Parsea "x.y.z" o retorna [0,0,0] si no hay versión. */
-function parseSemver(v?: string): [number, number, number] {
-  if (!v) return [0, 0, 0];
-  const m = String(v).trim().match(/^(\d+)\.(\d+)\.(\d+)$/);
-  if (!m) return [0, 0, 0];
-  return [Number(m[1]) || 0, Number(m[2]) || 0, Number(m[3]) || 0];
+// Devuelve "YYYY-MM-DD" en la zona horaria de Lima
+export function formatDateForPeru(date: Date): string {
+  // 'en-CA' formatea a YYYY-MM-DD; especificamos la timeZone para Lima
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
-/** Incrementa según nivel y devuelve string. */
-function incSemver(v?: string, level: Level = "patch"): string {
-  const [maj, min, pat] = parseSemver(v);
-  if (level === "major") return `${maj + 1}.0.0`;
-  if (level === "minor") return `${maj}.${min + 1}.0`;
-  return `${maj}.${min}.${pat + 1}`;
+// Indica si una fecha (YYYY-MM-DD) ya pasó respecto a HOY en Lima
+export function isDatePast(yyyy_mm_dd: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(yyyy_mm_dd)) return false;
+
+  const todayPeru = formatDateForPeru(new Date()); // YYYY-MM-DD
+  // Comparación lexicográfica funciona para YYYY-MM-DD
+  return yyyy_mm_dd < todayPeru;
 }
 
-/** Escribe en settings: version (semver), updateSeq (int), updatedAt (ms) */
-async function writeVersion(level: Level) {
-  const s = await RTDBHelper.getData<any>(RTDB_PATHS.lunch_settings);
-  const nextVersion = incSemver(s?.version, level);
-  const nextSeq = Number(s?.updateSeq || 0) + 1;
-  await RTDBHelper.updateData({
-    [`${RTDB_PATHS.lunch_settings}/version`]: nextVersion,
-    [`${RTDB_PATHS.lunch_settings}/updateSeq`]: nextSeq,
-    [`${RTDB_PATHS.lunch_settings}/updatedAt`]: Date.now(),
-  });
-}
+/* (Opcional) utilidades que podrían serte útiles después */
 
-/** Marca PATCH (cambios chicos). */
-export async function bumpPatch() {
-  try { await writeVersion("patch"); } catch (e) { console.error(e); }
-}
-/** Marca MINOR (cambios de contenido). */
-export async function bumpMinor() {
-  try { await writeVersion("minor"); } catch (e) { console.error(e); }
-}
-/** Marca MAJOR (actualización grande). */
-export async function bumpMajor() {
-  try { await writeVersion("major"); } catch (e) { console.error(e); }
-}
-
-/**
- * Heurística automática:
- * - si count >= majorThreshold -> MAJOR
- * - si count >= 1 -> MINOR
- * - si count = 0 -> PATCH (p.ej. reordenar)
- */
-export async function bumpAuto(countAffected = 0, majorThreshold = 5) {
-  try {
-    if (countAffected >= majorThreshold) return await writeVersion("major");
-    if (countAffected >= 1) return await writeVersion("minor");
-    return await writeVersion("patch");
-  } catch (e) {
-    console.error("No se pudo incrementar versión (auto):", e);
+// Devuelve las próximas N fechas en Lima (incluyendo hoy si includeToday=true)
+export function getNextDaysPeru(n: number, includeToday = true): string[] {
+  const out: string[] = [];
+  const start = new Date();
+  for (let i = 0; i < n; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + (includeToday ? i : i + 1));
+    out.push(formatDateForPeru(d));
   }
+  return out;
+}
+
+// Devuelve nombre corto del día en español y "dd/MM" para una fecha YYYY-MM-DD
+export function prettyDayEs(yyyy_mm_dd: string): { dayName: string; ddmm: string } {
+  const [y, m, d] = yyyy_mm_dd.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dayName = new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    weekday: "long",
+  }).format(date);
+  const ddmm = new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+  return { dayName, ddmm };
 }

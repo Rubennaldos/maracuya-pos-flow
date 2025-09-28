@@ -47,24 +47,27 @@ export type ProductT = {
   name: string;
   price: number;
   categoryId: string;
-  description?: string;
-  image?: string;      // data URL (webp) opcional
-  active?: boolean;    // true por defecto
+  description?: string; // Observación / detalle libre
+  image?: string;       // data URL (webp) opcional
+  active?: boolean;     // true por defecto
 
   // Tipo de producto: almuerzo (día específico) o variado (selección de días)
   type?: "lunch" | "varied";
-  
-  // Para productos tipo "lunch": fecha específica
-  specificDate?: string; // YYYY-MM-DD en zona horaria peruana
-  
-  // Para productos tipo "varied": no necesita fecha específica
-  // La selección de días se hace al ordenar
+
+  // Para productos tipo "lunch": fecha específica (YYYY-MM-DD)
+  specificDate?: string;
 
   // Ordenamiento
-  position?: number | string; // preferido (persistido)
+  position?: number | string; // campo preferido
   order?: number | string;    // compatibilidad antigua
 
-  // Campos de "menú del día" (combo)
+  // —— Campos de "menú del día" (opcionales, no rompen nada)
+  entrada?: string;
+  segundo?: string;
+  postre?: string;
+  refresco?: string;
+
+  // Estructuras heredadas (si usas combos)
   course?: Course;
   isCombo?: boolean;
   components?: {
@@ -76,6 +79,10 @@ export type ProductT = {
 
   // Agregados opcionales
   addons?: AddonT[];
+
+  // Timestamps opcionales (por si los usas)
+  createdAt?: number;
+  updatedAt?: number;
 };
 
 export type MenuT = {
@@ -91,10 +98,10 @@ export type OrderItem = {
   price: number;
   qty: number;
   isCombo?: boolean;
-  
+
   // Para productos variados: días seleccionados
   selectedDays?: string[]; // Array de fechas YYYY-MM-DD
-  
+
   // Para productos de almuerzo: fecha específica
   specificDate?: string; // YYYY-MM-DD
 };
