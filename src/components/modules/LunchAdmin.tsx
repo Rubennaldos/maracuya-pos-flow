@@ -1,3 +1,4 @@
+// src/components/modules/lunch/LunchAdmin.tsx
 import { useEffect, useMemo, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -11,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Package, Settings, Save, Trash2, Edit, ArrowLeft, FileText, Megaphone, Calendar, Upload } from "lucide-react";
+import { Package, Settings, Save, Trash2, Edit, ArrowLeft, FileText, Megaphone } from "lucide-react";
 
 import type { SettingsT, CategoryT, MenuT, OrderT, AnnouncementT } from "@/components/modules/lunch/types";
 import { useImageUpload } from "@/hooks/useImageUpload";
@@ -100,6 +101,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
               enabled: !!s.whatsapp?.enabled,
               phone: normalizePhone(s.whatsapp?.phone || ""),
             },
+            enabledDays: s.enabledDays || {},
           });
         }
 
@@ -145,23 +147,44 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
     setLoading(true);
     try {
       const phone = normalizePhone(settings.whatsapp?.phone);
+
+      // Construir objeto limpio
       const toSave: AdminSettings = {
         isOpen: settings.isOpen ?? true,
         showPrices: settings.showPrices ?? true,
         cutoffTime: settings.cutoffTime || "11:00",
         allowSameDay: settings.allowSameDay ?? true,
-        orderWindow: settings.orderWindow || { start: "", end: "" },
+        orderWindow: {
+          start: settings.orderWindow?.start || "",
+          end: settings.orderWindow?.end || "",
+        },
         enabledDays: settings.enabledDays || {},
         whatsapp: { enabled: !!settings.whatsapp?.enabled, phone: phone || "" },
       };
-      
-      // Solo incluir campos si no son undefined
       if (settings.version !== undefined) toSave.version = settings.version;
       if (settings.updateSeq !== undefined) toSave.updateSeq = settings.updateSeq;
-      if (settings.updatedAt !== undefined) toSave.updatedAt = settings.updatedAt;
       if (settings.forceMajor !== undefined) toSave.forceMajor = settings.forceMajor;
-      
-      await RTDBHelper.setData(RTDB_PATHS.lunch_settings, toSave);
+
+      // Fan-out con update: NO sobrescribe todo el nodo
+      const base = RTDB_PATHS.lunch_settings;
+      const updates: Record<string, any> = {
+        [`${base}/isOpen`]: toSave.isOpen,
+        [`${base}/showPrices`]: toSave.showPrices,
+        [`${base}/cutoffTime`]: toSave.cutoffTime,
+        [`${base}/allowSameDay`]: toSave.allowSameDay,
+        [`${base}/orderWindow/start`]: toSave.orderWindow!.start,
+        [`${base}/orderWindow/end`]: toSave.orderWindow!.end,
+        [`${base}/enabledDays`]: toSave.enabledDays,
+        [`${base}/whatsapp/enabled`]: toSave.whatsapp!.enabled,
+        [`${base}/whatsapp/phone`]: toSave.whatsapp!.phone,
+        [`${base}/updatedAt`]: Date.now(),
+      };
+      if (toSave.version !== undefined) updates[`${base}/version`] = toSave.version;
+      if (toSave.updateSeq !== undefined) updates[`${base}/updateSeq`] = toSave.updateSeq;
+      if (toSave.forceMajor !== undefined) updates[`${base}/forceMajor`] = toSave.forceMajor;
+
+      await RTDBHelper.updateData(updates);
+
       setSettings((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, phone } }));
       toast({ title: "✅ Configuración guardada exitosamente" });
     } catch (error) {
@@ -381,7 +404,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
       
       toast({ title: "Anuncio eliminado" });
     } catch {
-      toast({ title: "No se pudo eliminar el anuncio", variant: "destructive" });
+      toast({ title: "No se pudo eliminar", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -478,23 +501,14 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                 <CardTitle>Configuración del portal de familias</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                  <div className="grid md:grid-cols-3 gap-4">
+                <div className="grid md:grid-cols-3 gap-4">
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={settings.isOpen ?? false}
                       onCheckedChange={async (v) => {
-                        const newSettings = { 
-                          isOpen: v,
-                          showPrices: settings.showPrices ?? true,
-                          cutoffTime: settings.cutoffTime || "11:00",
-                          allowSameDay: settings.allowSameDay ?? true,
-                          orderWindow: settings.orderWindow || { start: "", end: "" },
-                          enabledDays: settings.enabledDays || {},
-                          whatsapp: settings.whatsapp || { enabled: false, phone: "" },
-                        };
                         setSettings({ ...settings, isOpen: v });
                         try {
-                          await RTDBHelper.setData(RTDB_PATHS.lunch_settings, newSettings);
+                          await RTDBHelper.updateData({ [`${RTDB_PATHS.lunch_settings}/isOpen`]: v });
                           toast({ title: `Portal ${v ? 'abierto' : 'cerrado'}` });
                         } catch (error) {
                           console.error("Error al actualizar portal:", error);
@@ -508,18 +522,9 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                     <Switch
                       checked={settings.showPrices ?? true}
                       onCheckedChange={async (v) => {
-                        const newSettings = { 
-                          isOpen: settings.isOpen ?? true,
-                          showPrices: v,
-                          cutoffTime: settings.cutoffTime || "11:00",
-                          allowSameDay: settings.allowSameDay ?? true,
-                          orderWindow: settings.orderWindow || { start: "", end: "" },
-                          enabledDays: settings.enabledDays || {},
-                          whatsapp: settings.whatsapp || { enabled: false, phone: "" },
-                        };
                         setSettings({ ...settings, showPrices: v });
                         try {
-                          await RTDBHelper.setData(RTDB_PATHS.lunch_settings, newSettings);
+                          await RTDBHelper.updateData({ [`${RTDB_PATHS.lunch_settings}/showPrices`]: v });
                           toast({ title: `Precios ${v ? 'mostrados' : 'ocultos'}` });
                         } catch (error) {
                           console.error("Error al actualizar precios:", error);
@@ -652,7 +657,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                   </div>
                 </div>
 
-                <Button onClick={saveSettings} disabled={loading}>
+                <Button type="button" onClick={saveSettings} disabled={loading}>
                   <Save className="h-4 w-4 mr-2" />
                   Guardar configuración
                 </Button>
