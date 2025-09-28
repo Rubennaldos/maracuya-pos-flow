@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import FamilyLogin from "@/components/modules/FamilyLogin";
 import FamilyMenuWithDays from "@/components/modules/FamilyMenuWithDays";
+import MaintenancePage from "@/components/ui/MaintenancePage";
+import { RTDBHelper } from "@/lib/rt";
+import { RTDB_PATHS } from "@/lib/rtdb";
 
 type LoggedClient = {
   code: string;
@@ -16,6 +19,27 @@ function isBrowser() {
 export default function Familias() {
   const [client, setClient] = useState<LoggedClient | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [portalOpen, setPortalOpen] = useState(true);
+  const [whatsappPhone, setWhatsappPhone] = useState<string>("");
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // Cargar configuración del portal
+  useEffect(() => {
+    const loadPortalSettings = async () => {
+      try {
+        const settings = await RTDBHelper.getData<any>(RTDB_PATHS.lunch_settings);
+        setPortalOpen(settings?.isOpen ?? true);
+        setWhatsappPhone(settings?.whatsapp?.phone || "");
+      } catch (error) {
+        console.error("Error loading portal settings:", error);
+        setPortalOpen(true); // Por defecto abierto si hay error
+      } finally {
+        setSettingsLoaded(true);
+      }
+    };
+
+    loadPortalSettings();
+  }, []);
 
   // Cargar sesión persistida
   useEffect(() => {
@@ -52,7 +76,12 @@ export default function Familias() {
     [client]
   );
 
-  if (!hydrated) return null;
+  if (!hydrated || !settingsLoaded) return null;
+
+  // Si el portal está cerrado, mostrar página de mantenimiento
+  if (!portalOpen) {
+    return <MaintenancePage whatsappPhone={whatsappPhone} />;
+  }
 
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: "24px 16px" }}>
