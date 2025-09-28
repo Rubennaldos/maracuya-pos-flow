@@ -40,6 +40,7 @@ type AdminSettings = SettingsT & {
   updateSeq?: number;
   updatedAt?: number;
   forceMajor?: boolean;
+  enabledDays?: Record<string, boolean>;
   whatsapp?: { enabled?: boolean; phone?: string };
 };
 
@@ -482,12 +483,21 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                     <Switch
                       checked={settings.isOpen ?? false}
                       onCheckedChange={async (v) => {
-                        const newSettings = { ...settings, isOpen: v };
-                        setSettings(newSettings);
+                        const newSettings = { 
+                          isOpen: v,
+                          showPrices: settings.showPrices ?? true,
+                          cutoffTime: settings.cutoffTime || "11:00",
+                          allowSameDay: settings.allowSameDay ?? true,
+                          orderWindow: settings.orderWindow || { start: "", end: "" },
+                          enabledDays: settings.enabledDays || {},
+                          whatsapp: settings.whatsapp || { enabled: false, phone: "" },
+                        };
+                        setSettings({ ...settings, isOpen: v });
                         try {
                           await RTDBHelper.setData(RTDB_PATHS.lunch_settings, newSettings);
                           toast({ title: `Portal ${v ? 'abierto' : 'cerrado'}` });
-                        } catch {
+                        } catch (error) {
+                          console.error("Error al actualizar portal:", error);
                           toast({ title: "Error al actualizar configuración", variant: "destructive" });
                         }
                       }}
@@ -498,12 +508,21 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                     <Switch
                       checked={settings.showPrices ?? true}
                       onCheckedChange={async (v) => {
-                        const newSettings = { ...settings, showPrices: v };
-                        setSettings(newSettings);
+                        const newSettings = { 
+                          isOpen: settings.isOpen ?? true,
+                          showPrices: v,
+                          cutoffTime: settings.cutoffTime || "11:00",
+                          allowSameDay: settings.allowSameDay ?? true,
+                          orderWindow: settings.orderWindow || { start: "", end: "" },
+                          enabledDays: settings.enabledDays || {},
+                          whatsapp: settings.whatsapp || { enabled: false, phone: "" },
+                        };
+                        setSettings({ ...settings, showPrices: v });
                         try {
                           await RTDBHelper.setData(RTDB_PATHS.lunch_settings, newSettings);
                           toast({ title: `Precios ${v ? 'mostrados' : 'ocultos'}` });
-                        } catch {
+                        } catch (error) {
+                          console.error("Error al actualizar precios:", error);
                           toast({ title: "Error al actualizar configuración", variant: "destructive" });
                         }
                       }}
