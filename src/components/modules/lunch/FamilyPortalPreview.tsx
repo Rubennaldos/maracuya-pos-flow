@@ -29,6 +29,7 @@ import type { SettingsT, MenuT, ProductT } from "@/components/modules/lunch/type
 // Import “flexible” del utils
 import * as DateUtils from "@/components/modules/lunch/utils/dateUtils";
 import SelectDaysDialog from "@/components/modules/lunch/preview/SelectDaysDialog";
+import { OrderLoadingAnimation } from "@/components/ui/OrderLoadingAnimation";
 
 /* =======================
    Fallbacks con casteo a any
@@ -107,6 +108,7 @@ export default function FamilyPortalPreview() {
   const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("primero");
   const [confirmNote, setConfirmNote] = useState("");
   const [posting, setPosting] = useState(false);
+  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false);
   const [message, setMessage] = useState("");
 
   // Cargar datos
@@ -334,6 +336,54 @@ export default function FamilyPortalPreview() {
         title: "Error en el envío",
         description: "Error al procesar el pedido",
         variant: "destructive",
+      });
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleAnimationComplete = async () => {
+    setShowLoadingAnimation(false);
+    
+    try {
+      await new Promise((r) => setTimeout(r, 500)); // small delay after animation
+
+      const orderCode = `DEMO-${Date.now().toString().slice(-6)}`;
+
+      if (settings?.whatsapp?.enabled && settings.whatsapp.phone) {
+        const items = cart
+          .map(
+            (item) =>
+              `• ${item.name} (${item.quantity}x)${
+                item.selectedDays ? ` - Días: ${item.selectedDays.join(", ")}` : ""
+              }`
+          )
+          .join("\n");
+
+        const orderSummary =
+          `🍽️ *PEDIDO DE ALMUERZO* 🍽️\n\n` +
+          `👤 Cliente: Usuario de Prueba (DEMO001)\n` +
+          `⏰ Recreo: ${confirmRecess === "primero" ? "Primer" : "Segundo"} recreo\n\n` +
+          `📦 *Productos:*\n${items}\n\n` +
+          `💰 *Total: ${PEN(total)}*\n\n` +
+          `📝 Nota: ${confirmNote || "Sin observaciones"}\n\n` +
+          `⚠️ *Este es un pedido de PRUEBA - No se ha guardado en la base de datos*`;
+
+        const cleanPhone = settings.whatsapp.phone.replace(/\D/g, "");
+        const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(orderSummary)}`;
+        window.open(whatsappUrl, "_blank");
+      }
+
+      setCart([]);
+      setMessage(
+        `✅ Pedido ${orderCode} enviado exitosamente (MODO DEMO - No se guardó en la base de datos)`
+      );
+    } catch (error) {
+      console.error("Error submitting order:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Hubo un problema al enviar el pedido. Por favor, inténtalo de nuevo.",
       });
     } finally {
       setPosting(false);
@@ -751,6 +801,12 @@ export default function FamilyPortalPreview() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        
+        {/* Loading Animation */}
+        <OrderLoadingAnimation
+          open={showLoadingAnimation}
+          onComplete={handleAnimationComplete}
+        />
       </CardContent>
     </Card>
   );
