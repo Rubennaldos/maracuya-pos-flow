@@ -8,9 +8,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { format, parseISO } from "date-fns";
+import { format, addDays, startOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 type DayOption = { date: string; label: string };
 
@@ -43,40 +43,31 @@ export default function SelectDaysDialog({
   const subtotal =
     (pricePerDay || 0) * (Array.isArray(selectedDays) ? selectedDays.length : 0);
 
-  // Convert selected days to Date objects for calendar
-  const selectedDates = selectedDays.map(date => parseISO(date));
-
-  const handleDateSelect = (dates: Date[] | undefined) => {
-    if (!dates) return;
-    
-    // Get the new selections as strings
-    const newSelectedDays = dates.map(date => format(date, 'yyyy-MM-dd'));
-    
-    // Find what changed (added or removed)
-    const wasAdded = newSelectedDays.find(date => !selectedDays.includes(date));
-    const wasRemoved = selectedDays.find(date => !newSelectedDays.includes(date));
-    
-    if (wasAdded) {
-      onToggleDay(wasAdded, true);
-    } else if (wasRemoved) {
-      onToggleDay(wasRemoved, false);
-    }
-  };
-
   // Get current date in Peru timezone (UTC-5)
   const now = new Date();
   const peruTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // UTC-5
   const today = new Date(peruTime.getFullYear(), peruTime.getMonth(), peruTime.getDate());
   
-  // Allow selection from today onwards in Peru time
-  const isDateDisabled = (date: Date) => {
-    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    return compareDate < today;
+  // Generate next 14 days starting from today
+  const availableDays = Array.from({ length: 14 }, (_, i) => {
+    const date = addDays(today, i);
+    return {
+      date: format(date, 'yyyy-MM-dd'),
+      dayName: format(date, 'EEEE', { locale: es }),
+      dayNumber: format(date, 'd'),
+      month: format(date, 'MMM', { locale: es }),
+      isToday: i === 0
+    };
+  });
+
+  const handleDayToggle = (dateString: string) => {
+    const isSelected = selectedDays.includes(dateString);
+    onToggleDay(dateString, !isSelected);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Seleccionar días {productName ? `para ${productName}` : ""}
@@ -91,22 +82,45 @@ export default function SelectDaysDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col items-center space-y-4">
-          <Calendar
-            mode="multiple"
-            selected={selectedDates}
-            onSelect={handleDateSelect}
-            disabled={isDateDisabled} // Only allow current day and future dates
-            locale={es}
-            className="rounded-md border pointer-events-auto"
-            defaultMonth={today}
-          />
+        <div className="space-y-4">
+          <div className="grid grid-cols-7 gap-2">
+            {availableDays.map(({ date, dayName, dayNumber, month, isToday }) => {
+              const isSelected = selectedDays.includes(date);
+              return (
+                <button
+                  key={date}
+                  onClick={() => handleDayToggle(date)}
+                  className={cn(
+                    "flex flex-col items-center p-3 rounded-lg border-2 transition-all hover:bg-muted/50",
+                    isSelected 
+                      ? "border-primary bg-primary text-primary-foreground" 
+                      : "border-border",
+                    isToday && "ring-2 ring-primary/20"
+                  )}
+                >
+                  <span className="text-xs font-medium capitalize">
+                    {dayName.slice(0, 3)}
+                  </span>
+                  <span className="text-lg font-bold">
+                    {dayNumber}
+                  </span>
+                  <span className="text-xs capitalize">
+                    {month}
+                  </span>
+                  {isToday && (
+                    <span className="text-xs mt-1 opacity-70">Hoy</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
           
           {selectedDays.length > 0 && (
             <div className="text-sm text-muted-foreground">
               Días seleccionados: {selectedDays.map(date => {
-                const dateObj = parseISO(date);
-                return format(dateObj, "EEEE dd/MM", { locale: es });
+                const dayInfo = availableDays.find(d => d.date === date);
+                if (!dayInfo) return date;
+                return `${dayInfo.dayName} ${dayInfo.dayNumber}/${dayInfo.month}`;
               }).join(', ')}
             </div>
           )}
