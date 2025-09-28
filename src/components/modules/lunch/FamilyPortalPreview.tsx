@@ -306,26 +306,26 @@ export default function FamilyPortalPreview() {
                               <h3 className="font-medium">{product.name}</h3>
                               
                               {/* Mostrar información específica de almuerzo */}
-                              {product.type === "lunch" && product.components && (
+                              {product.type === "lunch" && (
                                 <div className="mt-2 space-y-1">
-                                  {product.components.entradaId && (
+                                  {(product as any).entrada && (
                                     <div className="text-sm text-muted-foreground">
-                                      🥗 <span className="font-medium">Entrada:</span> {product.components.entradaId}
+                                      🥗 <span className="font-medium">Entrada:</span> {(product as any).entrada}
                                     </div>
                                   )}
-                                  {product.components.segundoId && (
+                                  {(product as any).segundo && (
                                     <div className="text-sm text-muted-foreground">
-                                      🍽️ <span className="font-medium">Segundo:</span> {product.components.segundoId}
+                                      🍽️ <span className="font-medium">Segundo:</span> {(product as any).segundo}
                                     </div>
                                   )}
-                                  {product.components.postreId && (
+                                  {(product as any).postre && (
                                     <div className="text-sm text-muted-foreground">
-                                      🍰 <span className="font-medium">Postre:</span> {product.components.postreId}
+                                      🍰 <span className="font-medium">Postre:</span> {(product as any).postre}
                                     </div>
                                   )}
-                                  {product.components.bebidaLabel && (
+                                  {(product as any).refresco && (
                                     <div className="text-sm text-muted-foreground">
-                                      🥤 <span className="font-medium">Bebida:</span> {product.components.bebidaLabel}
+                                      🥤 <span className="font-medium">Bebida:</span> {(product as any).refresco}
                                     </div>
                                   )}
                                   {product.specificDate && (
@@ -436,7 +436,7 @@ export default function FamilyPortalPreview() {
                               📅 {date === 'Sin fecha' ? 'Fecha por definir' : date}
                             </div>
                             {items.map((item, idx) => (
-                              <div key={`${item.id}-${idx}`} className="flex justify-between items-center p-2 border rounded bg-muted/30">
+                              <div key={`${item.id}-${date}-${idx}`} className="flex justify-between items-center p-2 border rounded bg-muted/30">
                                 <div className="flex-1 min-w-0">
                                   <div className="font-medium text-sm truncate">{item.name}</div>
                                   <div className="text-xs text-muted-foreground">
@@ -527,10 +527,10 @@ export default function FamilyPortalPreview() {
               {availableDays.map((day) => {
                 const date = new Date(day);
                 const dayName = date.toLocaleDateString('es-PE', { weekday: 'long' });
-                const dayDate = date.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
+                const dayDate = date.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 
                 return (
-                  <div key={day} className="flex items-center space-x-2">
+                  <div key={day} className="flex items-center space-x-2 p-2 rounded border hover:bg-muted/50">
                     <Switch
                       checked={selectedDays.includes(day)}
                       onCheckedChange={(checked) => {
@@ -541,8 +541,8 @@ export default function FamilyPortalPreview() {
                         }
                       }}
                     />
-                    <Label className="capitalize">
-                      {dayName} {dayDate}
+                    <Label className="capitalize flex-1 cursor-pointer">
+                      {dayName}, {dayDate}
                     </Label>
                   </div>
                 );

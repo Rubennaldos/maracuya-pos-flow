@@ -180,6 +180,13 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
         image: formData.image || undefined,
         active: true,
         position: editing?.position ?? 0,
+        // Campos específicos para almuerzo
+        ...(formData.type === "lunch" && {
+          entrada: formData.entrada.trim() || undefined,
+          segundo: formData.segundo.trim() || undefined,
+          postre: formData.postre.trim() || undefined,
+          refresco: formData.refresco.trim() || "Refresco del día"
+        })
       });
 
       if (editing) {
@@ -214,14 +221,15 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     }
   };
 
-  // Delete product (soft delete: active=false)
+  // Delete product (hard delete to really remove it)
   const deleteProduct = async (product: ProductT) => {
     if (!confirm(`¿Eliminar producto "${product.name}"?`)) return;
 
     setLoading(true);
     try {
+      // Eliminar completamente el producto
       await RTDBHelper.updateData({
-        [`${RTDB_PATHS.lunch_menu}/products/${product.id}/active`]: false,
+        [`${RTDB_PATHS.lunch_menu}/products/${product.id}`]: null,
       });
 
       const updatedMenu = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
@@ -394,6 +402,23 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
               />
             </div>
 
+            {/* Opción de complementos para productos variados */}
+            {formData.type === "varied" && (
+              <div>
+                <Label>Complementos (opcional)</Label>
+                <div className="text-sm text-muted-foreground mb-2">
+                  Si este producto puede tener agregados adicionales con costo extra
+                </div>
+                <Input
+                  placeholder="Ej: Papas extra +2.50, Bebida grande +1.00"
+                  onChange={(e) => {
+                    // Por ahora solo mostrar el campo, la lógica se implementará después
+                    console.log("Complementos:", e.target.value);
+                  }}
+                />
+              </div>
+            )}
+
             {/* Upload de imagen */}
             <div className="md:col-span-2">
               <Label>Imagen del producto</Label>
@@ -410,7 +435,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                       variant="destructive"
                       size="sm"
                       className="absolute top-1 right-1"
-                      onClick={() => setFormData(prev => ({ ...prev, image: undefined }))}
+                      onClick={() => setFormData(prev => ({ ...prev, image: "" }))}
                     >
                       <X className="h-3 w-3" />
                     </Button>
