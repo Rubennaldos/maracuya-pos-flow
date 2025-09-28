@@ -43,22 +43,29 @@ export default function SelectDaysDialog({
   const subtotal =
     (pricePerDay || 0) * (Array.isArray(selectedDays) ? selectedDays.length : 0);
 
-  // Convert available days to Date objects for calendar
-  const availableDates = days.map(day => parseISO(day.date));
+  // Convert selected days to Date objects for calendar
   const selectedDates = selectedDays.map(date => parseISO(date));
 
-  const handleDateToggle = (date: Date | undefined) => {
-    if (!date) return;
+  const handleDateSelect = (dates: Date[] | undefined) => {
+    if (!dates) return;
     
-    const dateString = format(date, 'yyyy-MM-dd');
-    const isSelected = selectedDays.includes(dateString);
-    onToggleDay(dateString, !isSelected);
+    // Get the new selections as strings
+    const newSelectedDays = dates.map(date => format(date, 'yyyy-MM-dd'));
+    
+    // Find what changed (added or removed)
+    const wasAdded = newSelectedDays.find(date => !selectedDays.includes(date));
+    const wasRemoved = selectedDays.find(date => !newSelectedDays.includes(date));
+    
+    if (wasAdded) {
+      onToggleDay(wasAdded, true);
+    } else if (wasRemoved) {
+      onToggleDay(wasRemoved, false);
+    }
   };
 
-  const isDateAvailable = (date: Date) => {
-    const dateString = format(date, 'yyyy-MM-dd');
-    return days.some(day => day.date === dateString);
-  };
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -78,40 +85,21 @@ export default function SelectDaysDialog({
         </DialogHeader>
 
         <div className="flex flex-col items-center space-y-4">
-          {(!days || days.length === 0) ? (
-            <div className="text-sm text-muted-foreground">
-              No hay días habilitados para selección.
-            </div>
-          ) : (
-            <Calendar
-              mode="multiple"
-              selected={selectedDates}
-              onSelect={(dates) => {
-                if (!dates) return;
-                const lastSelected = dates[dates.length - 1];
-                if (lastSelected) {
-                  handleDateToggle(lastSelected);
-                }
-              }}
-              disabled={(date) => !isDateAvailable(date)}
-              locale={es}
-              className="rounded-md border pointer-events-auto"
-              modifiers={{
-                available: availableDates,
-              }}
-              modifiersStyles={{
-                available: {
-                  fontWeight: 'bold',
-                },
-              }}
-            />
-          )}
+          <Calendar
+            mode="multiple"
+            selected={selectedDates}
+            onSelect={handleDateSelect}
+            disabled={(date) => date < tomorrow} // Only allow future dates
+            locale={es}
+            className="rounded-md border pointer-events-auto"
+            defaultMonth={tomorrow}
+          />
           
           {selectedDays.length > 0 && (
             <div className="text-sm text-muted-foreground">
               Días seleccionados: {selectedDays.map(date => {
-                const dayInfo = days.find(d => d.date === date);
-                return dayInfo ? dayInfo.label : date;
+                const dateObj = parseISO(date);
+                return format(dateObj, "EEEE dd/MM", { locale: es });
               }).join(', ')}
             </div>
           )}
