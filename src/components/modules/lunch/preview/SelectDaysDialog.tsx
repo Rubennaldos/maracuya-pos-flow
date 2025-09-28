@@ -63,9 +63,16 @@ export default function SelectDaysDialog({
     }
   };
 
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
+  // Get current date in Peru timezone (UTC-5)
+  const now = new Date();
+  const peruTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // UTC-5
+  const today = new Date(peruTime.getFullYear(), peruTime.getMonth(), peruTime.getDate());
+  
+  // Allow selection from today onwards in Peru time
+  const isDateDisabled = (date: Date) => {
+    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    return compareDate < today;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -89,10 +96,10 @@ export default function SelectDaysDialog({
             mode="multiple"
             selected={selectedDates}
             onSelect={handleDateSelect}
-            disabled={(date) => date < tomorrow} // Only allow future dates
+            disabled={isDateDisabled} // Only allow current day and future dates
             locale={es}
             className="rounded-md border pointer-events-auto"
-            defaultMonth={tomorrow}
+            defaultMonth={today}
           />
           
           {selectedDays.length > 0 && (
