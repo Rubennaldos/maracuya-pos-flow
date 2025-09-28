@@ -78,8 +78,8 @@ export default function Familias() {
       {!client ? (
         <FamilyLogin onLogged={handleLogged} />
       ) : (
-        // Pasamos SOLO el code para que FamilyMenu resuelva el nombre real desde RTDB
-        <FamilyMenu client={{ code: client.code }} onLogout={handleLogout} />
+        // Pasamos SOLO el code para que FamilyMenuWithDays resuelva el nombre real desde RTDB
+        <FamilyMenuWithDays client={{ code: client.code }} onLogout={handleLogout} />
       )}
 
       <footer style={{ textAlign: "center", marginTop: 28, color: "#6b7280", fontSize: 12 }}>
