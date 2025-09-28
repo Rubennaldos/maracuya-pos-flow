@@ -46,7 +46,12 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     categoryId: "",
     type: "lunch" as "lunch" | "varied",
     specificDate: "",
-    image: ""
+    image: "",
+    // Campos específicos para almuerzo
+    entrada: "",
+    segundo: "",
+    postre: "",
+    refresco: "Refresco del día"
   });
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
@@ -60,7 +65,11 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       categoryId: "",
       type: "lunch",
       specificDate: "",
-      image: ""
+      image: "",
+      entrada: "",
+      segundo: "",
+      postre: "",
+      refresco: "Refresco del día"
     });
     setSelectedDate(undefined);
     setEditing(null);
@@ -122,7 +131,11 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       categoryId: product.categoryId,
       type: product.type || "lunch",
       specificDate: product.specificDate || "",
-      image: product.image || ""
+      image: product.image || "",
+      entrada: (product as any).entrada || "",
+      segundo: (product as any).segundo || "",
+      postre: (product as any).postre || "",
+      refresco: (product as any).refresco || "Refresco del día"
     });
 
     if (product.specificDate) {
@@ -298,27 +311,69 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
               </div>
 
               {formData.type === "lunch" && (
-                <div className="md:col-span-2">
-                  <Label>Fecha del Almuerzo *</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left font-normal">
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {selectedDate ? format(selectedDate, "PPP", { locale: es }) : "Seleccionar fecha"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={setSelectedDate}
-                        disabled={(date) => date < new Date()}
-                        className="pointer-events-auto"
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                <>
+                  <div className="md:col-span-2">
+                    <Label>Fecha del Almuerzo *</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {selectedDate ? format(selectedDate, "PPP", { locale: es }) : "Seleccionar fecha"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={selectedDate}
+                          onSelect={setSelectedDate}
+                          disabled={(date) => date < new Date()}
+                          className="pointer-events-auto"
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="entrada">Entrada</Label>
+                    <Input
+                      id="entrada"
+                      value={formData.entrada}
+                      onChange={(e) => setFormData(prev => ({ ...prev, entrada: e.target.value }))}
+                      placeholder="Ej: Ensalada mixta"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="segundo">Segundo</Label>
+                    <Input
+                      id="segundo"
+                      value={formData.segundo}
+                      onChange={(e) => setFormData(prev => ({ ...prev, segundo: e.target.value }))}
+                      placeholder="Ej: Pollo a la plancha con arroz"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="postre">Postre</Label>
+                    <Input
+                      id="postre"
+                      value={formData.postre}
+                      onChange={(e) => setFormData(prev => ({ ...prev, postre: e.target.value }))}
+                      placeholder="Ej: Gelatina de fresa"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="refresco">Refresco</Label>
+                    <Input
+                      id="refresco"
+                      value={formData.refresco}
+                      onChange={(e) => setFormData(prev => ({ ...prev, refresco: e.target.value }))}
+                      placeholder="Refresco del día"
+                    />
+                  </div>
+                </>
               )}
 
               <div className="md:col-span-2">
