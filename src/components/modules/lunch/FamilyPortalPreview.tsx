@@ -292,57 +292,14 @@ export default function FamilyPortalPreview() {
 
   const confirmAndPlace = async () => {
     setPosting(true);
+    setShowConfirm(false);
 
-    try {
-      await new Promise((r) => setTimeout(r, 1200)); // demo
-
-      const orderCode = `DEMO-${Date.now().toString().slice(-6)}`;
-
-      if (settings?.whatsapp?.enabled && settings.whatsapp.phone) {
-        const items = cart
-          .map(
-            (item) =>
-              `• ${item.name} (${item.quantity}x)${
-                item.selectedDays ? ` - Días: ${item.selectedDays.join(", ")}` : ""
-              }`
-          )
-          .join("\n");
-
-        const total = cart.reduce((sum, i) => sum + i.subtotal, 0);
-        const orderSummary =
-          `🛒 *Nuevo Pedido DEMO*\n\n` +
-          `📋 Código: ${orderCode}\n` +
-          `👤 Cliente: Usuario de Prueba (DEMO001)\n` +
-          `⏰ Recreo: ${confirmRecess === "primero" ? "Primer" : "Segundo"} recreo\n\n` +
-          `📦 *Productos:*\n${items}\n\n` +
-          `💰 *Total: ${PEN(total)}*\n\n` +
-          `📝 Nota: ${confirmNote || "Sin observaciones"}\n\n` +
-          `⚠️ *Este es un pedido de PRUEBA - No se ha guardado en la base de datos*`;
-
-        const cleanPhone = settings.whatsapp.phone.replace(/\D/g, "");
-        const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(orderSummary)}`;
-        window.open(whatsappUrl, "_blank");
-      }
-
-      setCart([]);
-      setMessage(
-        `✅ Pedido ${orderCode} enviado exitosamente (MODO DEMO - No se guardó en la base de datos)`
-      );
-      setShowConfirm(false);
-      setConfirmNote("");
-      toast({ title: "Pedido enviado", description: "Este fue un pedido de prueba" });
-    } catch {
-      toast({
-        title: "Error en el envío",
-        description: "Error al procesar el pedido",
-        variant: "destructive",
-      });
-    } finally {
-      setPosting(false);
-    }
+    // Show loading animation first
+    setShowLoadingAnimation(true);
   };
 
   const handleAnimationComplete = async () => {
+    console.log("handleAnimationComplete called");
     setShowLoadingAnimation(false);
     
     try {
