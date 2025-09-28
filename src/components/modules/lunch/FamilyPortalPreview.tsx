@@ -4,7 +4,13 @@ import { RTDB_PATHS } from "@/lib/rtdb";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, Plus, Minus, Trash2, Eye } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { ShoppingCart, Plus, Minus, Trash2, Eye, MessageCircle, Calendar, User, BookOpen } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 import type { SettingsT, MenuT, ProductT } from "@/components/modules/lunch/types";
 
 // Tipos para el carrito de prueba
@@ -23,6 +29,17 @@ export default function FamilyPortalPreview() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCat, setActiveCat] = useState<string>("");
   const [loading, setLoading] = useState(true);
+
+  // Estados para los modales
+  const [showDaySelection, setShowDaySelection] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<ProductT | null>(null);
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmStudent, setConfirmStudent] = useState("");
+  const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("primero");
+  const [confirmNote, setConfirmNote] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [message, setMessage] = useState("");
 
   // Cargar datos
   useEffect(() => {
@@ -70,8 +87,40 @@ export default function FamilyPortalPreview() {
     return acc;
   }, {} as Record<string, ProductT[]>);
 
+  // Días disponibles para productos variados
+  const availableDays = ["2025-09-29", "2025-09-30", "2025-10-01", "2025-10-02", "2025-10-03"]; // Días de ejemplo
+
   // Funciones del carrito (demo - no guarda datos)
+  const handleVariedProduct = (product: ProductT) => {
+    setSelectedProduct(product);
+    setSelectedDays([]);
+    setShowDaySelection(true);
+  };
+
+  const addVariedToCart = () => {
+    if (!selectedProduct || selectedDays.length === 0) return;
+    
+    const subtotal = (selectedProduct.price ?? 0) * selectedDays.length;
+    const cartItem: CartItem = {
+      ...selectedProduct,
+      quantity: selectedDays.length,
+      subtotal,
+      selectedDays: [...selectedDays]
+    };
+
+    setCart(prev => [...prev, cartItem]);
+    setShowDaySelection(false);
+    setSelectedProduct(null);
+    setSelectedDays([]);
+    toast({ title: `${selectedProduct.name} agregado al carrito` });
+  };
+
   const addToCart = (product: ProductT) => {
+    if (product.type === "varied") {
+      handleVariedProduct(product);
+      return;
+    }
+
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
@@ -88,6 +137,7 @@ export default function FamilyPortalPreview() {
         }];
       }
     });
+    toast({ title: `${product.name} agregado al carrito` });
   };
 
   const removeFromCart = (productId: string) => {
@@ -105,7 +155,73 @@ export default function FamilyPortalPreview() {
     });
   };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    setCart([]);
+    toast({ title: "Carrito limpiado" });
+  };
+
+  // Proceso de confirmación y envío del pedido
+  const openConfirm = () => {
+    if (cart.length === 0) {
+      toast({ title: "Tu carrito está vacío", variant: "destructive" });
+      return;
+    }
+    setShowConfirm(true);
+  };
+
+  const confirmAndPlace = async () => {
+    if (!confirmStudent.trim()) {
+      toast({ title: "Por favor ingresa el nombre del estudiante", variant: "destructive" });
+      return;
+    }
+
+    setPosting(true);
+    
+    try {
+      // Simular envío del pedido
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simular delay
+      
+      // Generar código de pedido simulado
+      const orderCode = `DEMO-${Date.now().toString().slice(-6)}`;
+      
+      // Simular envío por WhatsApp si está habilitado
+      if (settings?.whatsapp?.enabled && settings.whatsapp.phone) {
+        const items = cart.map(item => 
+          `• ${item.name} (${item.quantity}x) ${item.selectedDays ? `- Días: ${item.selectedDays.join(', ')}` : ''}`
+        ).join('\n');
+        
+        const orderSummary = `🛒 *Nuevo Pedido DEMO*\n\n` +
+          `📋 Código: ${orderCode}\n` +
+          `👤 Cliente: Usuario de Prueba (DEMO001)\n` +
+          `🎓 Estudiante: ${confirmStudent}\n` +
+          `⏰ Recreo: ${confirmRecess === "primero" ? "Primer" : "Segundo"} recreo\n\n` +
+          `📦 *Productos:*\n${items}\n\n` +
+          `💰 *Total: ${PEN(total)}*\n\n` +
+          `📝 Nota: ${confirmNote || "Sin observaciones"}\n\n` +
+          `⚠️ *Este es un pedido de PRUEBA - No se ha guardado en la base de datos*`;
+
+        const cleanPhone = settings.whatsapp.phone.replace(/\D/g, "");
+        const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(orderSummary)}`;
+        
+        // Abrir WhatsApp en nueva ventana
+        window.open(whatsappUrl, "_blank");
+      }
+      
+      // Limpiar carrito y mostrar mensaje de éxito
+      setCart([]);
+      setMessage(`✅ Pedido ${orderCode} enviado exitosamente (MODO DEMO - No se guardó en la base de datos)`);
+      setShowConfirm(false);
+      setConfirmStudent("");
+      setConfirmNote("");
+      
+      toast({ title: "Pedido enviado", description: "Este fue un pedido de prueba" });
+      
+    } catch (error) {
+      toast({ title: "Error en el envío", description: "Error al procesar el pedido", variant: "destructive" });
+    } finally {
+      setPosting(false);
+    }
+  };
 
   const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
 
@@ -127,11 +243,18 @@ export default function FamilyPortalPreview() {
           Vista Previa del Portal de Familias
         </CardTitle>
         <div className="text-sm text-muted-foreground">
-          Esta es una simulación de cómo ven los padres el portal de almuerzos. 
-          Los datos mostrados son reales pero el carrito no se guarda.
+          Esta es una simulación completa del portal de familias con todo el proceso de compra. 
+          Puedes agregar productos, confirmar el pedido y enviar por WhatsApp, pero los datos no se guardan.
         </div>
       </CardHeader>
       <CardContent>
+        {/* Mensaje de éxito/error */}
+        {message && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800">
+            {message}
+          </div>
+        )}
+
         {/* Simulación de la interfaz de familias */}
         <div className="border rounded-lg p-4 bg-gradient-to-br from-primary/5 to-secondary/5">
           {/* Header simulado */}
@@ -174,9 +297,17 @@ export default function FamilyPortalPreview() {
                               {product.description}
                             </p>
                           )}
+                          {product.type === "varied" && (
+                            <div className="text-xs text-blue-600 mt-1">
+                              📅 Producto variado - Selecciona días
+                            </div>
+                          )}
                           {settings?.showPrices && product.price && (
                             <div className="text-lg font-bold text-primary mt-2">
                               {PEN(product.price)}
+                              {product.type === "varied" && (
+                                <span className="text-sm text-muted-foreground ml-1">por día</span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -225,6 +356,11 @@ export default function FamilyPortalPreview() {
                             <div className="text-xs text-muted-foreground">
                               {PEN(item.price ?? 0)} × {item.quantity}
                             </div>
+                            {item.selectedDays && (
+                              <div className="text-xs text-blue-600">
+                                Días: {item.selectedDays.join(', ')}
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-1">
                             <Button
@@ -256,7 +392,11 @@ export default function FamilyPortalPreview() {
                       </div>
 
                       <div className="space-y-2">
-                        <Button className="w-full" disabled>
+                        <Button
+                          className="w-full"
+                          onClick={openConfirm}
+                          disabled={cart.length === 0}
+                        >
                           Confirmar Pedido (Demo)
                         </Button>
                         <Button
@@ -280,6 +420,186 @@ export default function FamilyPortalPreview() {
             Maracuyá • Portal de Almuerzos • Vista Previa de Administrador
           </div>
         </div>
+
+        {/* Modal de selección de días para productos variados */}
+        <Dialog open={showDaySelection} onOpenChange={setShowDaySelection}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Seleccionar días para {selectedProduct?.name}
+              </DialogTitle>
+              <DialogDescription>
+                Elige los días en los que quieres recibir este producto. 
+                {selectedProduct?.price && (
+                  <span className="block mt-1 font-medium">
+                    Precio por día: {PEN(selectedProduct.price)}
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-3">
+              {availableDays.map((day) => {
+                const date = new Date(day);
+                const dayName = date.toLocaleDateString('es-PE', { weekday: 'long' });
+                const dayDate = date.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
+                
+                return (
+                  <div key={day} className="flex items-center space-x-2">
+                    <Switch
+                      checked={selectedDays.includes(day)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedDays(prev => [...prev, day]);
+                        } else {
+                          setSelectedDays(prev => prev.filter(d => d !== day));
+                        }
+                      }}
+                    />
+                    <Label className="capitalize">
+                      {dayName} {dayDate}
+                    </Label>
+                  </div>
+                );
+              })}
+            </div>
+
+            {selectedDays.length > 0 && selectedProduct?.price && (
+              <div className="bg-primary/10 p-3 rounded-lg">
+                <div className="text-sm font-medium">
+                  Subtotal: {selectedDays.length} día{selectedDays.length > 1 ? 's' : ''} × {PEN(selectedProduct.price)} = {PEN(selectedDays.length * selectedProduct.price)}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDaySelection(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={addVariedToCart}
+                disabled={selectedDays.length === 0}
+              >
+                Agregar al carrito
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de confirmación del pedido */}
+        <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                Confirmar pedido
+              </DialogTitle>
+              <DialogDescription>
+                Revisa los detalles de tu pedido antes de enviarlo
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Resumen del pedido */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-medium">Resumen del pedido:</h4>
+                {cart.map((item, idx) => (
+                  <div key={idx} className="text-sm">
+                    <div className="flex justify-between">
+                      <span>{item.name} (×{item.quantity})</span>
+                      <span>{PEN(item.subtotal)}</span>
+                    </div>
+                    {item.selectedDays && (
+                      <div className="text-xs text-muted-foreground ml-2">
+                        Días: {item.selectedDays.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div className="border-t pt-2 font-bold flex justify-between">
+                  <span>Total:</span>
+                  <span>{PEN(total)}</span>
+                </div>
+              </div>
+
+              {/* Datos del estudiante */}
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="student">Nombre del estudiante *</Label>
+                  <Input
+                    id="student"
+                    placeholder="Nombre completo del estudiante"
+                    value={confirmStudent}
+                    onChange={(e) => setConfirmStudent(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <Label>Recreo de entrega</Label>
+                  <div className="flex gap-4 mt-2">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={confirmRecess === "primero"}
+                        onCheckedChange={(checked) => checked && setConfirmRecess("primero")}
+                      />
+                      <Label>Primer recreo</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={confirmRecess === "segundo"}
+                        onCheckedChange={(checked) => checked && setConfirmRecess("segundo")}
+                      />
+                      <Label>Segundo recreo</Label>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="note">Observaciones (opcional)</Label>
+                  <Textarea
+                    id="note"
+                    placeholder="Alguna indicación especial..."
+                    value={confirmNote}
+                    onChange={(e) => setConfirmNote(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {settings?.whatsapp?.enabled && (
+                <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-800">
+                    <MessageCircle className="h-4 w-4" />
+                    <span className="text-sm font-medium">
+                      Se enviará confirmación por WhatsApp (DEMO)
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowConfirm(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                onClick={confirmAndPlace}
+                disabled={posting || !confirmStudent.trim()}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {posting ? (
+                  <>Enviando pedido...</>
+                ) : (
+                  <>
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    Enviar pedido
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
