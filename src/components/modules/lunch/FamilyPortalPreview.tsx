@@ -211,7 +211,6 @@ export default function FamilyPortalPreview() {
       setCart([]);
       setMessage(`✅ Pedido ${orderCode} enviado exitosamente (MODO DEMO - No se guardó en la base de datos)`);
       setShowConfirm(false);
-      setConfirmStudent("");
       setConfirmNote("");
       
       toast({ title: "Pedido enviado", description: "Este fue un pedido de prueba" });
@@ -289,36 +288,100 @@ export default function FamilyPortalPreview() {
                 {activeCat && productsByCategory[activeCat] ? (
                   productsByCategory[activeCat].map((product) => (
                     <Card key={product.id} className="p-4">
-                      <div className="flex justify-between items-start">
+                      <div className="flex gap-4">
+                        {/* Imagen del producto */}
+                        {product.image && (
+                          <div className="w-20 h-20 flex-shrink-0">
+                            <img 
+                              src={product.image} 
+                              alt={product.name}
+                              className="w-full h-full object-cover rounded-lg border"
+                            />
+                          </div>
+                        )}
+                        
                         <div className="flex-1">
-                          <h3 className="font-medium">{product.name}</h3>
-                          {product.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {product.description}
-                            </p>
-                          )}
-                          {product.type === "varied" && (
-                            <div className="text-xs text-blue-600 mt-1">
-                              📅 Producto variado - Selecciona días
-                            </div>
-                          )}
-                          {settings?.showPrices && product.price && (
-                            <div className="text-lg font-bold text-primary mt-2">
-                              {PEN(product.price)}
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <h3 className="font-medium">{product.name}</h3>
+                              
+                              {/* Mostrar información específica de almuerzo */}
+                              {product.type === "lunch" && product.components && (
+                                <div className="mt-2 space-y-1">
+                                  {product.components.entradaId && (
+                                    <div className="text-sm text-muted-foreground">
+                                      🥗 <span className="font-medium">Entrada:</span> {product.components.entradaId}
+                                    </div>
+                                  )}
+                                  {product.components.segundoId && (
+                                    <div className="text-sm text-muted-foreground">
+                                      🍽️ <span className="font-medium">Segundo:</span> {product.components.segundoId}
+                                    </div>
+                                  )}
+                                  {product.components.postreId && (
+                                    <div className="text-sm text-muted-foreground">
+                                      🍰 <span className="font-medium">Postre:</span> {product.components.postreId}
+                                    </div>
+                                  )}
+                                  {product.components.bebidaLabel && (
+                                    <div className="text-sm text-muted-foreground">
+                                      🥤 <span className="font-medium">Bebida:</span> {product.components.bebidaLabel}
+                                    </div>
+                                  )}
+                                  {product.specificDate && (
+                                    <div className="text-xs text-green-600 font-medium mt-1">
+                                      📅 Fecha: {product.specificDate}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {product.description && (
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {product.description}
+                                </p>
+                              )}
+
+                              {/* Mostrar agregados si los hay */}
+                              {product.addons && product.addons.length > 0 && (
+                                <div className="mt-2">
+                                  <div className="text-xs font-medium text-muted-foreground mb-1">Agregados disponibles:</div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {product.addons.map((addon) => (
+                                      <Badge key={addon.id} variant="outline" className="text-xs">
+                                        {addon.name} (+{PEN(addon.price)})
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
                               {product.type === "varied" && (
-                                <span className="text-sm text-muted-foreground ml-1">por día</span>
+                                <div className="text-xs text-blue-600 mt-1">
+                                  📅 Producto variado - Selecciona días
+                                </div>
+                              )}
+                              
+                              {settings?.showPrices && product.price && (
+                                <div className="text-lg font-bold text-primary mt-2">
+                                  {PEN(product.price)}
+                                  {product.type === "varied" && (
+                                    <span className="text-sm text-muted-foreground ml-1">por día</span>
+                                  )}
+                                </div>
                               )}
                             </div>
-                          )}
+                            
+                            <Button
+                              onClick={() => addToCart(product)}
+                              size="sm"
+                              className="ml-4"
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Agregar
+                            </Button>
+                          </div>
                         </div>
-                        <Button
-                          onClick={() => addToCart(product)}
-                          size="sm"
-                          className="ml-4"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Agregar
-                        </Button>
                       </div>
                     </Card>
                   ))
@@ -349,40 +412,61 @@ export default function FamilyPortalPreview() {
                     </div>
                   ) : (
                     <>
-                      {cart.map((item) => (
-                        <div key={item.id} className="flex justify-between items-center p-2 border rounded">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">{item.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {PEN(item.price ?? 0)} × {item.quantity}
+                      {/* Agrupar items del carrito por fecha */}
+                      {(() => {
+                        const groupedItems = cart.reduce((groups, item) => {
+                          if (item.selectedDays && item.selectedDays.length > 0) {
+                            // Para productos variados, agrupar por cada día seleccionado
+                            item.selectedDays.forEach(day => {
+                              if (!groups[day]) groups[day] = [];
+                              groups[day].push({...item, specificDay: day});
+                            });
+                          } else {
+                            // Para productos de almuerzo con fecha específica
+                            const date = item.specificDate || 'Sin fecha';
+                            if (!groups[date]) groups[date] = [];
+                            groups[date].push(item);
+                          }
+                          return groups;
+                        }, {} as Record<string, any[]>);
+
+                        return Object.entries(groupedItems).map(([date, items]) => (
+                          <div key={date} className="border rounded-lg p-3 space-y-2">
+                            <div className="text-sm font-medium text-primary border-b pb-1">
+                              📅 {date === 'Sin fecha' ? 'Fecha por definir' : date}
                             </div>
-                            {item.selectedDays && (
-                              <div className="text-xs text-blue-600">
-                                Días: {item.selectedDays.join(', ')}
+                            {items.map((item, idx) => (
+                              <div key={`${item.id}-${idx}`} className="flex justify-between items-center p-2 border rounded bg-muted/30">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm truncate">{item.name}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {PEN(item.price ?? 0)} × {item.quantity} = {PEN((item.price ?? 0) * item.quantity)}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => removeFromCart(item.id)}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </Button>
+                                  <span className="text-sm w-6 text-center">{item.quantity}</span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => addToCart(item)}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
                               </div>
-                            )}
+                            ))}
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeFromCart(item.id)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="text-sm w-6 text-center">{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => addToCart(item)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                        ));
+                      })()}
 
                       <div className="border-t pt-3 mt-3">
                         <div className="flex justify-between items-center font-bold">
@@ -523,16 +607,12 @@ export default function FamilyPortalPreview() {
                 </div>
               </div>
 
-              {/* Datos del estudiante */}
+              {/* Información del cliente (ya no se pide el nombre) */}
               <div className="space-y-3">
-                <div>
-                  <Label htmlFor="student">Nombre del estudiante *</Label>
-                  <Input
-                    id="student"
-                    placeholder="Nombre completo del estudiante"
-                    value={confirmStudent}
-                    onChange={(e) => setConfirmStudent(e.target.value)}
-                  />
+                <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                  <div className="text-sm">
+                    <strong>Cliente:</strong> Usuario de Prueba (DEMO001)
+                  </div>
                 </div>
 
                 <div>
@@ -585,7 +665,7 @@ export default function FamilyPortalPreview() {
               </Button>
               <Button 
                 onClick={confirmAndPlace}
-                disabled={posting || !confirmStudent.trim()}
+                disabled={posting}
                 className="bg-green-600 hover:bg-green-700"
               >
                 {posting ? (

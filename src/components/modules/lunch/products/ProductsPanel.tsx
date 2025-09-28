@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Plus, Edit, Trash2, Save, X } from "lucide-react";
+import { CalendarIcon, Plus, Edit, Trash2, Save, X, Upload } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useImageUpload } from "@/hooks/useImageUpload";
 
 import type { ProductT, MenuT } from "../types";
 import { formatDateForPeru, isDatePast } from "../utils/dateUtils";
@@ -37,6 +38,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<ProductT | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const { uploadImage, isUploading } = useImageUpload();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -383,16 +385,78 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
             <div className="md:col-span-2">
               <Label htmlFor="description">Descripción</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Descripción del producto (opcional)"
+                rows={3}
+              />
+            </div>
 
-              <div className="md:col-span-2">
-                <Label htmlFor="description">Descripción</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Descripción del producto (opcional)"
-                  rows={3}
-                />
+            {/* Upload de imagen */}
+            <div className="md:col-span-2">
+              <Label>Imagen del producto</Label>
+              <div className="mt-2">
+                {formData.image ? (
+                  <div className="relative">
+                    <img 
+                      src={formData.image} 
+                      alt="Preview" 
+                      className="w-32 h-32 object-cover rounded-lg border"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="absolute top-1 right-1"
+                      onClick={() => setFormData(prev => ({ ...prev, image: undefined }))}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          try {
+                            const imageUrl = await uploadImage(file);
+                            setFormData(prev => ({ ...prev, image: imageUrl }));
+                          } catch (error) {
+                            toast({ 
+                              title: "Error al subir imagen", 
+                              description: error instanceof Error ? error.message : "Error desconocido",
+                              variant: "destructive" 
+                            });
+                          }
+                        }
+                      }}
+                      className="hidden"
+                      id="image-upload"
+                      disabled={isUploading}
+                    />
+                    <label 
+                      htmlFor="image-upload" 
+                      className="cursor-pointer flex flex-col items-center gap-2"
+                    >
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                      <div className="text-sm text-center">
+                        <span className="font-medium">Subir imagen</span>
+                        <br />
+                        <span className="text-xs text-muted-foreground">
+                          PNG, JPG hasta 5MB (se convertirá automáticamente a WebP)
+                        </span>
+                      </div>
+                      {isUploading && (
+                        <div className="text-xs text-blue-600">Subiendo...</div>
+                      )}
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
 
