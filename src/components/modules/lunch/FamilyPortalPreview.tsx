@@ -328,6 +328,11 @@ export default function FamilyPortalPreview() {
                                       🥤 <span className="font-medium">Bebida:</span> {(product as any).refresco}
                                     </div>
                                   )}
+                                  {(product as any).observaciones && (
+                                    <div className="text-sm text-muted-foreground">
+                                      📝 <span className="font-medium">Observaciones:</span> {(product as any).observaciones}
+                                    </div>
+                                  )}
                                   {product.specificDate && (
                                     <div className="text-xs text-green-600 font-medium mt-1">
                                       📅 Fecha: {product.specificDate}
