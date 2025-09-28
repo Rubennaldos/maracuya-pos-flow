@@ -310,30 +310,34 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                 </Select>
               </div>
 
-              {formData.type === "lunch" && (
-                <>
-                  <div className="md:col-span-2">
-                    <Label>Fecha del Almuerzo *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start text-left font-normal">
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {selectedDate ? format(selectedDate, "PPP", { locale: es }) : "Seleccionar fecha"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={selectedDate}
-                          onSelect={setSelectedDate}
-                          disabled={(date) => date < new Date()}
-                          className="pointer-events-auto"
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+            </div>
 
+            {/* Campos específicos para productos de almuerzo */}
+            {formData.type === "lunch" && (
+              <div className="space-y-4">
+                <div className="md:col-span-2">
+                  <Label>Fecha del Almuerzo *</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedDate ? format(selectedDate, "PPP", { locale: es }) : "Seleccionar fecha"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        disabled={(date) => date < new Date()}
+                        className="pointer-events-auto"
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="entrada">Entrada</Label>
                     <Input
@@ -373,8 +377,12 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                       placeholder="Refresco del día"
                     />
                   </div>
-                </>
-              )}
+                </div>
+              </div>
+            )}
+
+            <div className="md:col-span-2">
+              <Label htmlFor="description">Descripción</Label>
 
               <div className="md:col-span-2">
                 <Label htmlFor="description">Descripción</Label>
