@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Package, Settings, Save, Trash2, Edit, ArrowLeft, FileText, Megaphone } from "lucide-react";
+import { Package, Settings, Save, Trash2, Edit, ArrowLeft, FileText, Megaphone, Eye } from "lucide-react";
 
 import type { SettingsT, CategoryT, MenuT, OrderT, AnnouncementT } from "@/components/modules/lunch/types";
 import { useImageUpload } from "@/hooks/useImageUpload";
@@ -20,6 +20,7 @@ import { format } from "date-fns";
 
 import ProductsPanel from "@/components/modules/lunch/products/ProductsPanel";
 import OrdersPanel from "@/components/modules/lunch/orders/OrdersPanel";
+import FamilyPortalPreview from "@/components/modules/lunch/FamilyPortalPreview";
 
 /* ===================== util ===================== */
 type LunchAdminProps = { onBack?: () => void };
@@ -61,7 +62,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const [menu, setMenu] = useState<MenuT>({});
   const [ordersCount, setOrdersCount] = useState<number>(0); // para mostrar en la pestaña
   const [announcements, setAnnouncements] = useState<AnnouncementT[]>([]);
-  const [tab, setTab] = useState<"settings" | "cats" | "products" | "orders" | "announcements">("settings");
+  const [tab, setTab] = useState<"settings" | "cats" | "products" | "orders" | "announcements" | "preview">("settings");
   const [loading, setLoading] = useState(false);
 
   // ---------- Estado Categorías ----------
@@ -476,7 +477,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
         </Card>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="space-y-6">
-          <TabsList className="grid grid-cols-5">
+          <TabsList className="grid grid-cols-6">
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" /> Configuración
             </TabsTrigger>
@@ -491,6 +492,9 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
             </TabsTrigger>
             <TabsTrigger value="announcements" className="flex items-center gap-2">
               <Megaphone className="h-4 w-4" /> Anuncios ({announcements.length})
+            </TabsTrigger>
+            <TabsTrigger value="preview" className="flex items-center gap-2">
+              <Eye className="h-4 w-4" /> Vista Previa
             </TabsTrigger>
           </TabsList>
 
@@ -964,6 +968,11 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* ================= Vista Previa ================= */}
+          <TabsContent value="preview">
+            <FamilyPortalPreview />
           </TabsContent>
         </Tabs>
       </div>
