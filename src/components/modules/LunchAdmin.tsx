@@ -476,14 +476,32 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={settings.isOpen ?? false}
-                      onCheckedChange={(v) => setSettings({ ...settings, isOpen: v })}
+                      onCheckedChange={async (v) => {
+                        const newSettings = { ...settings, isOpen: v };
+                        setSettings(newSettings);
+                        try {
+                          await RTDBHelper.setData(RTDB_PATHS.lunch_settings, newSettings);
+                          toast({ title: `Portal ${v ? 'abierto' : 'cerrado'}` });
+                        } catch {
+                          toast({ title: "Error al actualizar configuración", variant: "destructive" });
+                        }
+                      }}
                     />
                     <Label>Portal abierto</Label>
                   </div>
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={settings.showPrices ?? true}
-                      onCheckedChange={(v) => setSettings({ ...settings, showPrices: v })}
+                      onCheckedChange={async (v) => {
+                        const newSettings = { ...settings, showPrices: v };
+                        setSettings(newSettings);
+                        try {
+                          await RTDBHelper.setData(RTDB_PATHS.lunch_settings, newSettings);
+                          toast({ title: `Precios ${v ? 'mostrados' : 'ocultos'}` });
+                        } catch {
+                          toast({ title: "Error al actualizar configuración", variant: "destructive" });
+                        }
+                      }}
                     />
                     <Label>Mostrar precios a familias</Label>
                   </div>
