@@ -24,6 +24,7 @@ type Props = {
   onToggleDay: (date: string, checked: boolean) => void;
   onConfirm: () => void;
   confirmDisabled?: boolean;
+  disabledDays?: Record<string, boolean>; // Nueva prop para días deshabilitados
 };
 
 const PEN = (n: number) =>
@@ -39,6 +40,7 @@ export default function SelectDaysDialog({
   onToggleDay,
   onConfirm,
   confirmDisabled,
+  disabledDays,
 }: Props) {
   const subtotal =
     (pricePerDay || 0) * (Array.isArray(selectedDays) ? selectedDays.length : 0);
@@ -48,9 +50,20 @@ export default function SelectDaysDialog({
   const peruTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // UTC-5
   const today = new Date(peruTime.getFullYear(), peruTime.getMonth(), peruTime.getDate());
   
-  // Generate next 14 days starting from today
+  // Mapeo de días de la semana para verificar días deshabilitados
+  const dayKeyMap: Record<number, string> = {
+    0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 
+    4: 'thursday', 5: 'friday', 6: 'saturday'
+  };
+  
+  // Generate next 14 days starting from today, filtering out disabled days
   const availableDays = Array.from({ length: 14 }, (_, i) => {
     const date = addDays(today, i);
+    const dayKey = dayKeyMap[date.getDay()];
+    
+    // Si el día está deshabilitado en configuración, no lo incluimos
+    if (disabledDays?.[dayKey]) return null;
+    
     return {
       date: format(date, 'yyyy-MM-dd'),
       dayName: format(date, 'EEEE', { locale: es }),
@@ -58,7 +71,13 @@ export default function SelectDaysDialog({
       month: format(date, 'MMM', { locale: es }),
       isToday: i === 0
     };
-  });
+  }).filter(Boolean) as Array<{
+    date: string;
+    dayName: string;
+    dayNumber: string;
+    month: string;
+    isToday: boolean;
+  }>;
 
   const handleDayToggle = (dateString: string) => {
     const isSelected = selectedDays.includes(dateString);

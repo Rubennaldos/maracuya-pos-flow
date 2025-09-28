@@ -7,8 +7,8 @@ export type SettingsT = {
   allowSameDay?: boolean;
   orderWindow?: { start?: string; end?: string };
 
-  // Configuración de días habilitados para productos variados
-  enabledDays?: {
+  // Configuración de días no habilitados para productos variados
+  disabledDays?: {
     monday?: boolean;
     tuesday?: boolean;
     wednesday?: boolean;

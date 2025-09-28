@@ -164,7 +164,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
 
   // Obtener días disponibles basados en configuración
   const availableDays = useMemo(() => {
-    const enabledDayNames = getEnabledDays(settings?.enabledDays);
+    const enabledDayNames = getEnabledDays(settings?.disabledDays);
     const weekDays = getNextWeekDays();
     return weekDays.filter(day => enabledDayNames.includes(day.day));
   }, [settings]);

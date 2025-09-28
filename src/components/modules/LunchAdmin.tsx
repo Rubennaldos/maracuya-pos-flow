@@ -43,7 +43,7 @@ type AdminSettings = SettingsT & {
   updatedAt?: number;
   forceMajor?: boolean;
   enabledDays?: Record<string, boolean>;
-  whatsapp?: { enabled?: boolean; phone?: string };
+  disabledDays?: Record<string, boolean>;
 };
 
 export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
@@ -103,6 +103,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
               phone: normalizePhone(s.whatsapp?.phone || ""),
             },
             enabledDays: s.enabledDays || {},
+            disabledDays: s.disabledDays || {},
           });
         }
 
@@ -160,6 +161,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
           end: settings.orderWindow?.end || "",
         },
         enabledDays: settings.enabledDays || {},
+        disabledDays: settings.disabledDays || {},
         whatsapp: { enabled: !!settings.whatsapp?.enabled, phone: phone || "" },
       };
       if (settings.version !== undefined) toSave.version = settings.version;
@@ -176,7 +178,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
         [`${base}/orderWindow/start`]: toSave.orderWindow!.start,
         [`${base}/orderWindow/end`]: toSave.orderWindow!.end,
         [`${base}/enabledDays`]: toSave.enabledDays,
-        [`${base}/whatsapp/enabled`]: toSave.whatsapp!.enabled,
+        [`${base}/disabledDays`]: toSave.disabledDays,
         [`${base}/whatsapp/phone`]: toSave.whatsapp!.phone,
         [`${base}/updatedAt`]: Date.now(),
       };
@@ -588,12 +590,12 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                   </div>
                 </div>
 
-                {/* Días habilitados para productos variados */}
+                {/* Días no habilitados para productos variados */}
                 <div className="space-y-3 border-t pt-4">
                   <div>
-                    <Label className="text-base font-medium">Días habilitados para productos variados</Label>
+                    <Label className="text-base font-medium">Días no habilitados para productos variados</Label>
                     <p className="text-sm text-muted-foreground">
-                      Selecciona qué días pueden elegir los padres para productos variados
+                      Selecciona qué días NO estarán disponibles para elegir en productos variados
                     </p>
                   </div>
                   <div className="grid grid-cols-4 md:grid-cols-7 gap-3">
@@ -608,12 +610,12 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                     ].map(({ key, label }) => (
                       <div key={key} className="flex items-center gap-2">
                         <Switch
-                          checked={settings.enabledDays?.[key as keyof typeof settings.enabledDays] ?? false}
+                          checked={settings.disabledDays?.[key as keyof typeof settings.disabledDays] ?? false}
                           onCheckedChange={(v) =>
                             setSettings({
                               ...settings,
-                              enabledDays: {
-                                ...settings.enabledDays,
+                              disabledDays: {
+                                ...settings.disabledDays,
                                 [key]: v,
                               },
                             })

@@ -81,8 +81,8 @@ type CartItem = ProductT & {
 const PEN = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
 
-// map de weekday (0=domingo ... 6=sábado) -> clave en settings.enabledDays
-const WEEKDAY_KEY: Record<number, keyof NonNullable<SettingsT["enabledDays"]>> = {
+// map de weekday (0=domingo ... 6=sábado) -> clave en settings.disabledDays
+const WEEKDAY_KEY: Record<number, keyof NonNullable<SettingsT["disabledDays"]>> = {
   0: "sunday",
   1: "monday",
   2: "tuesday",
@@ -175,15 +175,15 @@ export default function FamilyPortalPreview() {
   const availableDays = useMemo(() => {
     const horizon = 14; // próximos 14 días
     const allNext = getNextDaysPeru(horizon, true); // incluye hoy
-    const enabled = settings?.enabledDays;
+    const disabled = settings?.disabledDays;
 
-    if (!enabled) return allNext;
+    if (!disabled) return allNext;
 
     return allNext.filter((yyyy_mm_dd) => {
       const [y, m, d] = yyyy_mm_dd.split("-").map(Number);
       const date = new Date(y, m - 1, d);
       const key = WEEKDAY_KEY[date.getDay()];
-      return enabled[key] ?? false;
+      return !disabled[key]; // Si no está deshabilitado, está disponible
     });
   }, [settings]);
 
@@ -652,6 +652,7 @@ export default function FamilyPortalPreview() {
           }
           onConfirm={addVariedToCart}
           confirmDisabled={selectedDays.length === 0}
+          disabledDays={settings?.disabledDays}
         />
 
         {/* Modal de confirmación */}
