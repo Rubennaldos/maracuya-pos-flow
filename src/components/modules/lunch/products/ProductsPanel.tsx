@@ -15,13 +15,23 @@ import { CalendarIcon, Plus, Edit, Trash2, Save, X } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-import type { ProductT, CategoryT, MenuT } from "../types";
+import type { ProductT, MenuT } from "../types";
 import { formatDateForPeru, isDatePast } from "../utils/dateUtils";
 
 type Props = {
   menu: MenuT;
   onMenuUpdate: (menu: MenuT) => void;
 };
+
+// 🔧 helper: elimina claves con undefined (RTDB no las acepta)
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  const clean: Record<string, any> = {};
+  Object.keys(obj).forEach((k) => {
+    const v = obj[k];
+    if (v !== undefined) clean[k] = v;
+  });
+  return clean as T;
+}
 
 export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
   const [loading, setLoading] = useState(false);
@@ -69,8 +79,8 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
     products.forEach(product => {
       if (!product) return;
-      
-      // Filter out past lunch products
+
+      // Oculta almuerzos de días pasados
       if (product.type === "lunch" && product.specificDate && isDatePast(product.specificDate)) {
         return;
       }
@@ -80,7 +90,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       result[categoryId].push(product);
     });
 
-    // Sort products by position
+    // Orden por posición
     Object.keys(result).forEach(catId => {
       result[catId].sort((a, b) => {
         const posA = Number(a.position) || 0;
@@ -114,31 +124,29 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       specificDate: product.specificDate || "",
       image: product.image || ""
     });
-    
+
     if (product.specificDate) {
-      setSelectedDate(new Date(product.specificDate + 'T12:00:00'));
+      setSelectedDate(new Date(product.specificDate + "T12:00:00"));
     }
-    
+
     setShowForm(true);
   };
 
   // Save product
   const saveProduct = async () => {
+    // Validaciones mínimas
     if (!formData.name.trim()) {
       toast({ title: "El nombre es obligatorio", variant: "destructive" });
       return;
     }
-
     if (!formData.price || isNaN(Number(formData.price))) {
       toast({ title: "El precio debe ser un número válido", variant: "destructive" });
       return;
     }
-
     if (!formData.categoryId) {
       toast({ title: "Debe seleccionar una categoría", variant: "destructive" });
       return;
     }
-
     if (formData.type === "lunch" && !formData.specificDate) {
       toast({ title: "Debe seleccionar una fecha para productos de almuerzo", variant: "destructive" });
       return;
@@ -146,7 +154,8 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
     setLoading(true);
     try {
-      const productData: Partial<ProductT> = {
+      // arma payload sin undefined
+      const productData = stripUndefined<Partial<ProductT>>({
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
         price: Number(formData.price),
@@ -155,54 +164,57 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
         specificDate: formData.type === "lunch" ? formData.specificDate : undefined,
         image: formData.image || undefined,
         active: true,
-        position: 0
-      };
+        position: editing?.position ?? 0,
+      });
 
       if (editing) {
-        // Update existing product
+        // Actualizar producto
         await RTDBHelper.updateData({
           [`${RTDB_PATHS.lunch_menu}/products/${editing.id}`]: {
             ...editing,
-            ...productData
-          }
+            ...productData,
+            id: editing.id,
+          },
         });
         toast({ title: "Producto actualizado" });
       } else {
-        // Create new product
+        // Crear nuevo producto
         const id = await RTDBHelper.pushData(`${RTDB_PATHS.lunch_menu}/products`, productData);
         await RTDBHelper.updateData({
-          [`${RTDB_PATHS.lunch_menu}/products/${id}/id`]: id
+          [`${RTDB_PATHS.lunch_menu}/products/${id}/id`]: id,
         });
         toast({ title: "Producto creado" });
       }
 
-      // Reload menu
+      // Recargar menú desde RTDB
       const updatedMenu = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
       if (updatedMenu) onMenuUpdate(updatedMenu);
-      
+
       resetForm();
     } catch (error) {
+      console.error("Error al guardar producto:", error);
       toast({ title: "Error al guardar producto", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  // Delete product
+  // Delete product (soft delete: active=false)
   const deleteProduct = async (product: ProductT) => {
     if (!confirm(`¿Eliminar producto "${product.name}"?`)) return;
 
     setLoading(true);
     try {
       await RTDBHelper.updateData({
-        [`${RTDB_PATHS.lunch_menu}/products/${product.id}/active`]: false
+        [`${RTDB_PATHS.lunch_menu}/products/${product.id}/active`]: false,
       });
 
       const updatedMenu = await RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu);
       if (updatedMenu) onMenuUpdate(updatedMenu);
-      
+
       toast({ title: "Producto eliminado" });
     } catch (error) {
+      console.error("Error al eliminar producto:", error);
       toast({ title: "Error al eliminar producto", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -252,9 +264,10 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
               <div>
                 <Label htmlFor="category">Categoría *</Label>
-                <Select value={formData.categoryId} onValueChange={(value) => 
-                  setFormData(prev => ({ ...prev, categoryId: value }))
-                }>
+                <Select
+                  value={formData.categoryId}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, categoryId: value }))}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar categoría" />
                   </SelectTrigger>
@@ -270,9 +283,10 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
               <div>
                 <Label htmlFor="type">Tipo de Producto *</Label>
-                <Select value={formData.type} onValueChange={(value: "lunch" | "varied") => 
-                  setFormData(prev => ({ ...prev, type: value }))
-                }>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value: "lunch" | "varied") => setFormData(prev => ({ ...prev, type: value }))}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -288,10 +302,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                   <Label>Fecha del Almuerzo *</Label>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="w-full justify-start text-left font-normal"
-                      >
+                      <Button variant="outline" className="w-full justify-start text-left font-normal">
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {selectedDate ? format(selectedDate, "PPP", { locale: es }) : "Seleccionar fecha"}
                       </Button>
@@ -342,6 +353,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
           const products = productsByCategory[category.id] || [];
           if (products.length === 0) return null;
 
+        /* eslint-disable react/jsx-key */
           return (
             <Card key={category.id}>
               <CardHeader>
@@ -357,11 +369,11 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <h4 className="font-medium">{product.name}</h4>
-                          <span className={`px-2 py-1 text-xs rounded ${
-                            product.type === "lunch" 
-                              ? "bg-blue-100 text-blue-800" 
-                              : "bg-green-100 text-green-800"
-                          }`}>
+                          <span
+                            className={`px-2 py-1 text-xs rounded ${
+                              product.type === "lunch" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"
+                            }`}
+                          >
                             {product.type === "lunch" ? "Almuerzo" : "Variado"}
                           </span>
                         </div>
@@ -372,24 +384,16 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                           <span className="font-semibold">S/ {product.price.toFixed(2)}</span>
                           {product.type === "lunch" && product.specificDate && (
                             <span className="text-sm text-muted-foreground">
-                              {format(new Date(product.specificDate + 'T12:00:00'), "dd/MM/yyyy")}
+                              {format(new Date(product.specificDate + "T12:00:00"), "dd/MM/yyyy")}
                             </span>
                           )}
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => editProduct(product)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => editProduct(product)}>
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => deleteProduct(product)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => deleteProduct(product)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
