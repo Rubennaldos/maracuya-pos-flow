@@ -150,17 +150,22 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
         cutoffTime: settings.cutoffTime || "11:00",
         allowSameDay: settings.allowSameDay ?? true,
         orderWindow: settings.orderWindow || { start: "", end: "" },
-        version: settings.version,
-        updateSeq: settings.updateSeq,
-        updatedAt: settings.updatedAt,
-        forceMajor: settings.forceMajor,
+        enabledDays: settings.enabledDays || {},
         whatsapp: { enabled: !!settings.whatsapp?.enabled, phone: phone || "" },
       };
+      
+      // Solo incluir campos si no son undefined
+      if (settings.version !== undefined) toSave.version = settings.version;
+      if (settings.updateSeq !== undefined) toSave.updateSeq = settings.updateSeq;
+      if (settings.updatedAt !== undefined) toSave.updatedAt = settings.updatedAt;
+      if (settings.forceMajor !== undefined) toSave.forceMajor = settings.forceMajor;
+      
       await RTDBHelper.setData(RTDB_PATHS.lunch_settings, toSave);
       setSettings((prev) => ({ ...prev, whatsapp: { ...prev.whatsapp, phone } }));
-      toast({ title: "Configuración guardada" });
-    } catch {
-      toast({ title: "No se pudo guardar la configuración", variant: "destructive" });
+      toast({ title: "✅ Configuración guardada exitosamente" });
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      toast({ title: "❌ Error al guardar la configuración", variant: "destructive" });
     } finally {
       setLoading(false);
     }
