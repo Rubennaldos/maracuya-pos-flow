@@ -472,7 +472,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                 <CardTitle>Configuración del portal de familias</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="grid md:grid-cols-3 gap-4">
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={settings.isOpen ?? false}
@@ -534,6 +534,43 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                         })
                       }
                     />
+                  </div>
+                </div>
+
+                {/* Días habilitados para productos variados */}
+                <div className="space-y-3 border-t pt-4">
+                  <div>
+                    <Label className="text-base font-medium">Días habilitados para productos variados</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Selecciona qué días pueden elegir los padres para productos variados
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-4 md:grid-cols-7 gap-3">
+                    {[
+                      { key: 'monday', label: 'Lunes' },
+                      { key: 'tuesday', label: 'Martes' },
+                      { key: 'wednesday', label: 'Miércoles' },
+                      { key: 'thursday', label: 'Jueves' },
+                      { key: 'friday', label: 'Viernes' },
+                      { key: 'saturday', label: 'Sábado' },
+                      { key: 'sunday', label: 'Domingo' },
+                    ].map(({ key, label }) => (
+                      <div key={key} className="flex items-center gap-2">
+                        <Switch
+                          checked={settings.enabledDays?.[key as keyof typeof settings.enabledDays] ?? false}
+                          onCheckedChange={(v) =>
+                            setSettings({
+                              ...settings,
+                              enabledDays: {
+                                ...settings.enabledDays,
+                                [key]: v,
+                              },
+                            })
+                          }
+                        />
+                        <Label className="text-sm">{label}</Label>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -664,7 +701,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
 
           {/* ================= Productos ================= */}
           <TabsContent value="products">
-            <ProductsPanel menu={menu} onMenuChange={setMenu} />
+            <ProductsPanel menu={menu} onMenuUpdate={setMenu} />
           </TabsContent>
 
           {/* ================= Pedidos (separado) ================= */}

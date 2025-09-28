@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import FamilyLogin from "@/components/modules/FamilyLogin";
-import FamilyMenu from "@/components/modules/FamilyMenu";
+import FamilyMenuWithDays from "@/components/modules/FamilyMenuWithDays";
 
 type LoggedClient = {
   code: string;
