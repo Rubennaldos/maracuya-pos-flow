@@ -7,9 +7,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 
 type DayOption = { date: string; label: string };
 
@@ -42,9 +43,26 @@ export default function SelectDaysDialog({
   const subtotal =
     (pricePerDay || 0) * (Array.isArray(selectedDays) ? selectedDays.length : 0);
 
+  // Convert available days to Date objects for calendar
+  const availableDates = days.map(day => parseISO(day.date));
+  const selectedDates = selectedDays.map(date => parseISO(date));
+
+  const handleDateToggle = (date: Date | undefined) => {
+    if (!date) return;
+    
+    const dateString = format(date, 'yyyy-MM-dd');
+    const isSelected = selectedDays.includes(dateString);
+    onToggleDay(dateString, !isSelected);
+  };
+
+  const isDateAvailable = (date: Date) => {
+    const dateString = format(date, 'yyyy-MM-dd');
+    return days.some(day => day.date === dateString);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Seleccionar días {productName ? `para ${productName}` : ""}
@@ -59,24 +77,43 @@ export default function SelectDaysDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="flex flex-col items-center space-y-4">
           {(!days || days.length === 0) ? (
             <div className="text-sm text-muted-foreground">
               No hay días habilitados para selección.
             </div>
           ) : (
-            days.map(({ date, label }) => (
-              <div
-                key={date}
-                className="flex items-center space-x-2 p-2 rounded border hover:bg-muted/50"
-              >
-                <Switch
-                  checked={selectedDays.includes(date)}
-                  onCheckedChange={(checked) => onToggleDay(date, !!checked)}
-                />
-                <Label className="capitalize flex-1 cursor-pointer">{label}</Label>
-              </div>
-            ))
+            <Calendar
+              mode="multiple"
+              selected={selectedDates}
+              onSelect={(dates) => {
+                if (!dates) return;
+                const lastSelected = dates[dates.length - 1];
+                if (lastSelected) {
+                  handleDateToggle(lastSelected);
+                }
+              }}
+              disabled={(date) => !isDateAvailable(date)}
+              locale={es}
+              className="rounded-md border pointer-events-auto"
+              modifiers={{
+                available: availableDates,
+              }}
+              modifiersStyles={{
+                available: {
+                  fontWeight: 'bold',
+                },
+              }}
+            />
+          )}
+          
+          {selectedDays.length > 0 && (
+            <div className="text-sm text-muted-foreground">
+              Días seleccionados: {selectedDays.map(date => {
+                const dayInfo = days.find(d => d.date === date);
+                return dayInfo ? dayInfo.label : date;
+              }).join(', ')}
+            </div>
           )}
         </div>
 
