@@ -4,17 +4,92 @@ import { RTDB_PATHS } from "@/lib/rtdb";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { ShoppingCart, Plus, Minus, MessageCircle } from "lucide-react";
+import {
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2,
+  Eye,
+  MessageCircle,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { SettingsT, MenuT, ProductT } from "@/components/modules/lunch/types";
+
+// utils flexibles (con fallbacks)
 import * as DateUtils from "@/components/modules/lunch/utils/dateUtils";
 import SelectDaysDialog from "@/components/modules/lunch/preview/SelectDaysDialog";
 import AddonsSelectorDialog from "@/components/modules/lunch/preview/AddonsSelectorDialog";
+import { OrderLoadingAnimation } from "@/components/ui/OrderLoadingAnimation";
 
 type Mode = "preview" | "live";
+
+export interface FamilyPortalAppProps {
+  /** "preview" = modo demo (no guarda), "live" = portal real (sí guarda) */
+  mode: Mode;
+  /** Datos del cliente (en preview puedes pasar un demo) */
+  client?: { id: string; name: string };
+  /** Teléfono para WhatsApp; si no se pasa, usa settings.whatsapp.phone (si existe) */
+  whatsappPhoneOverride?: string;
+  /** Persistencia (solo se usa en modo live). Debe lanzar error si falla */
+  onPlaceOrder?: (payload: any) => Promise<void>;
+}
+
+const _formatDateForPeru =
+  (DateUtils as any)?.formatDateForPeru ??
+  function (d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+const getNextDaysPeru: (horizon?: number, includeToday?: boolean) => string[] =
+  (DateUtils as any)?.getNextDaysPeru ??
+  function (horizon = 14, includeToday = false): string[] {
+    const out: string[] = [];
+    const base = new Date();
+    const start = new Date(
+      base.getFullYear(),
+      base.getMonth(),
+      base.getDate() + (includeToday ? 0 : 1)
+    );
+    for (let i = 0; i < horizon; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      out.push(_formatDateForPeru(d));
+    }
+    return out;
+  };
+
+const prettyDayEs: (yyyy_mm_dd: string) => { dayName: string; ddmm: string; label: string } =
+  (DateUtils as any)?.prettyDayEs ??
+  function (yyyy_mm_dd: string) {
+    const [y, m, d] = (yyyy_mm_dd || "").split("-").map(Number);
+    const date = new Date(y, m - 1, d);
+    const dayName = new Intl.DateTimeFormat("es-PE", { weekday: "long" })
+      .format(date)
+      .toLowerCase();
+    const ddmm = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "2-digit" }).format(date);
+    return { dayName, ddmm, label: `${dayName} ${ddmm}` };
+  };
+
+type CartItem = ProductT & {
+  quantity: number;
+  subtotal: number;
+  selectedDays?: string[];
+  selectedAddons?: { [addonId: string]: number };
+  addonsPrice?: number;
+};
 
 const PEN = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
@@ -29,66 +104,21 @@ const WEEKDAY_KEY: Record<number, keyof NonNullable<SettingsT["disabledDays"]>> 
   6: "saturday",
 };
 
-const _formatDateForPeru =
-  (DateUtils as any)?.formatDateForPeru ??
-  function (d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  };
-
-const getNextDaysPeru: (h?: number, includeToday?: boolean) => string[] =
-  (DateUtils as any)?.getNextDaysPeru ??
-  function (h = 14, includeToday = false) {
-    const out: string[] = [];
-    const base = new Date();
-    const start = new Date(
-      base.getFullYear(),
-      base.getMonth(),
-      base.getDate() + (includeToday ? 0 : 1),
-    );
-    for (let i = 0; i < h; i++) {
-      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-      out.push(_formatDateForPeru(d));
-    }
-    return out;
-  };
-
-const prettyDayEs: (yyyy_mm_dd: string) => { dayName: string; ddmm: string } =
-  (DateUtils as any)?.prettyDayEs ??
-  function (yyyy_mm_dd: string) {
-    const [y, m, d] = (yyyy_mm_dd || "").split("-").map(Number);
-    const date = new Date(y, m - 1, d);
-    const dayName = new Intl.DateTimeFormat("es-PE", { weekday: "long" })
-      .format(date)
-      .toLowerCase();
-    const ddmm = new Intl.DateTimeFormat("es-PE", {
-      day: "2-digit",
-      month: "2-digit",
-    }).format(date);
-    return { dayName, ddmm };
-  };
-
-type CartItem = ProductT & {
-  quantity: number;
-  subtotal: number;
-  selectedDays?: string[];
-  selectedAddons?: { [addonId: string]: number };
-  addonsPrice?: number;
-};
-
 export default function FamilyPortalApp({
   mode,
-  demoClient,
-}: {
-  mode: Mode;
-  demoClient?: { id: string; name: string };
-}) {
+  client,
+  whatsappPhoneOverride,
+  onPlaceOrder,
+}: FamilyPortalAppProps) {
+  const isPreview = mode === "preview";
+  const clientName = client?.name ?? "Usuario de Prueba";
+  const clientId = client?.id ?? "DEMO001";
+
   const [settings, setSettings] = useState<SettingsT | null>(null);
   const [menu, setMenu] = useState<MenuT>({});
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCat, setActiveCat] = useState<string>("");
+  const [loading, setLoading] = useState(true);
 
   // Modales
   const [showDaySelection, setShowDaySelection] = useState(false);
@@ -96,58 +126,75 @@ export default function FamilyPortalApp({
   const [selectedProduct, setSelectedProduct] = useState<ProductT | null>(null);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<{ [addonId: string]: number }>({});
+  const [showConfirm, setShowConfirm] = useState(false);
   const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("primero");
   const [confirmNote, setConfirmNote] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false);
+  const [message, setMessage] = useState("");
 
-  // Carga inicial
   useEffect(() => {
-    (async () => {
-      const [settingsData, menuData] = await Promise.all([
-        RTDBHelper.getData<SettingsT>(RTDB_PATHS.lunch_settings),
-        RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu),
-      ]);
-      setSettings(settingsData || {});
-      setMenu(menuData || {});
-      if (menuData?.categories) {
-        const first = Object.values(menuData.categories).sort(
-          (a, b) => (a.order ?? 0) - (b.order ?? 0),
-        )[0];
-        if (first) setActiveCat(first.id);
+    const loadData = async () => {
+      try {
+        const [settingsData, menuData] = await Promise.all([
+          RTDBHelper.getData<SettingsT>(RTDB_PATHS.lunch_settings),
+          RTDBHelper.getData<MenuT>(RTDB_PATHS.lunch_menu),
+        ]);
+        setSettings(settingsData || {});
+        setMenu(menuData || {});
+        if (menuData?.categories) {
+          const firstCat = Object.values(menuData.categories)
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+          if (firstCat) setActiveCat(firstCat.id);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
       }
-    })().catch((e) => console.error(e));
+    };
+    loadData();
   }, []);
 
-  // Datos procesados
   const categories = useMemo(
     () =>
-      Object.values((menu as any).categories || {})
-        .filter((cat: any) => cat && typeof cat === "object")
-        .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)),
-    [menu],
+      Object.values(menu.categories || {})
+        .filter((c) => c && typeof c === "object")
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [menu]
   );
 
   const productsByCategory = useMemo(() => {
-    return categories.reduce((acc, cat: any) => {
-      const products = Object.values((menu as any).products || {})
-        .filter((p: any) => p && p.categoryId === cat.id && p.active !== false)
-        .sort((a: any, b: any) => {
-          const pa = typeof a.position === "number" ? a.position : Number(a.position ?? Infinity);
-          const pb = typeof b.position === "number" ? b.position : Number(b.position ?? Infinity);
-          return pa !== pb ? pa - pb : a.name.localeCompare(b.name);
-        });
-      (acc as any)[cat.id] = products as ProductT[];
+    return categories.reduce((acc, cat) => {
+      const products = Object.values(menu.products || {})
+        .filter((p) => p && p.categoryId === cat.id && p.active !== false)
+        .sort((a, b) => {
+          const pa = typeof (a as any).position === "number"
+            ? (a as any).position
+            : typeof (a as any).position === "string"
+              ? parseInt((a as any).position)
+              : Number.POSITIVE_INFINITY;
+          const pb = typeof (b as any).position === "number"
+            ? (b as any).position
+            : typeof (b as any).position === "string"
+              ? parseInt((b as any).position)
+              : Number.POSITIVE_INFINITY;
+          if (pa !== pb) return pa - pb;
+          return a.name.localeCompare(b.name);
+        }) as ProductT[];
+      (acc as any)[cat.id] = products;
       return acc;
     }, {} as Record<string, ProductT[]>);
   }, [categories, menu]);
 
   const availableDays = useMemo(() => {
-    const next = getNextDaysPeru(14, true);
+    const all = getNextDaysPeru(14, true);
     const disabled = settings?.disabledDays;
-    if (!disabled) return next;
-    return next.filter((yyyy_mm_dd) => {
-      const [y, m, d] = yyyy_mm_dd.split("-").map(Number);
-      const date = new Date(y, m - 1, d);
-      const key = WEEKDAY_KEY[date.getDay()];
+    if (!disabled) return all;
+    return all.filter((ymd) => {
+      const [y, m, d] = ymd.split("-").map(Number);
+      const dt = new Date(y, m - 1, d);
+      const key = WEEKDAY_KEY[dt.getDay()];
       return !disabled[key];
     });
   }, [settings]);
@@ -158,19 +205,16 @@ export default function FamilyPortalApp({
         const { dayName, ddmm } = prettyDayEs(day);
         return { date: day, label: `${dayName} ${ddmm}` };
       }),
-    [availableDays],
+    [availableDays]
   );
 
-  // Carrito
+  // —— carrito
   const handleVariedProduct = (product: ProductT) => {
     setSelectedProduct(product);
     setSelectedDays([]);
     setSelectedAddons({});
-    if (product.addons && product.addons.length > 0) {
-      setShowAddonsSelection(true);
-    } else {
-      setShowDaySelection(true);
-    }
+    if (product.addons?.length) setShowAddonsSelection(true);
+    else setShowDaySelection(true);
   };
 
   const proceedToDaySelection = () => {
@@ -180,16 +224,15 @@ export default function FamilyPortalApp({
 
   const addVariedToCart = () => {
     if (!selectedProduct || selectedDays.length === 0) return;
-
-    const addonsPrice = Object.entries(selectedAddons).reduce((tot, [addonId, qty]) => {
-      const addon = selectedProduct.addons?.find((a) => a.id === addonId);
-      return tot + (addon?.price || 0) * qty;
+    const addonsPrice = Object.entries(selectedAddons).reduce((t, [id, qty]) => {
+      const addon = selectedProduct.addons?.find((a) => a.id === id);
+      return t + (addon?.price || 0) * qty;
     }, 0);
+    const base = selectedProduct.price ?? 0;
+    const perDay = base + addonsPrice;
+    const subtotal = perDay * selectedDays.length;
 
-    const price = (selectedProduct.price ?? 0) + addonsPrice;
-    const subtotal = price * selectedDays.length;
-
-    const ci: CartItem = {
+    const item: CartItem = {
       ...selectedProduct,
       quantity: selectedDays.length,
       subtotal,
@@ -198,7 +241,7 @@ export default function FamilyPortalApp({
       addonsPrice,
     };
 
-    setCart((prev) => [...prev, ci]);
+    setCart((p) => [...p, item]);
     setShowDaySelection(false);
     setShowAddonsSelection(false);
     setSelectedProduct(null);
@@ -207,30 +250,20 @@ export default function FamilyPortalApp({
     toast({ title: `${selectedProduct.name} agregado al carrito` });
   };
 
-  const addToCart = (product: ProductT | CartItem) => {
-    const p = product as ProductT;
-    if (p.type === "varied" && !(product as CartItem).selectedDays) {
-      handleVariedProduct(p);
-      return;
-    }
+  const addToCart = (product: ProductT) => {
+    if (product.type === "varied") return handleVariedProduct(product);
     setCart((prev) => {
-      const ex = prev.find((i) => i.id === p.id);
-      if (ex) {
+      const existing = prev.find((i) => i.id === product.id);
+      if (existing) {
         return prev.map((i) =>
-          i.id === p.id
-            ? {
-                ...i,
-                quantity: i.quantity + 1,
-                subtotal: ((i.price ?? 0) + (i.addonsPrice ?? 0)) * (i.quantity + 1),
-              }
-            : i,
+          i.id === product.id
+            ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * (i.price ?? 0) }
+            : i
         );
       }
-      return [
-        ...prev,
-        { ...(p as ProductT), quantity: 1, subtotal: (p.price ?? 0) + ((p as any).addonsPrice ?? 0) },
-      ];
+      return [...prev, { ...product, quantity: 1, subtotal: product.price ?? 0 }];
     });
+    toast({ title: `${product.name} agregado al carrito` });
   };
 
   const removeFromCart = (productId: string) => {
@@ -239,382 +272,484 @@ export default function FamilyPortalApp({
       if (ex && ex.quantity > 1) {
         return prev.map((i) =>
           i.id === productId
-            ? {
-                ...i,
-                quantity: i.quantity - 1,
-                subtotal: ((i.price ?? 0) + (i.addonsPrice ?? 0)) * (i.quantity - 1),
-              }
-            : i,
+            ? { ...i, quantity: i.quantity - 1, subtotal: (i.quantity - 1) * (i.price ?? 0) }
+            : i
         );
       }
       return prev.filter((i) => i.id !== productId);
     });
   };
 
+  const clearCart = () => {
+    setCart([]);
+    toast({ title: "Carrito limpiado" });
+  };
+
+  const openConfirm = () => {
+    if (!cart.length) return toast({ title: "Tu carrito está vacío", variant: "destructive" });
+    setShowConfirm(true);
+  };
+
   const total = cart.reduce((s, i) => s + i.subtotal, 0);
 
-  const confirmOrder = async () => {
-    if (cart.length === 0) {
-      toast({ title: "Tu carrito está vacío", variant: "destructive" });
-      return;
-    }
+  const buildOrderPayload = () => ({
+    clientCode: clientId,
+    clientName,
+    note: confirmNote || "",
+    recess: confirmRecess,
+    status: "pending",
+    total,
+    createdAt: Date.now(),
+    items: cart.map((i) => ({
+      id: i.id,
+      name: i.name,
+      qty: i.quantity,
+      price: i.price ?? 0,
+      selectedDays: i.selectedDays,
+      specificDate: i.specificDate,
+      addons: i.selectedAddons,
+    })),
+  });
 
-    if (mode === "preview") {
-      if (settings?.whatsapp?.enabled && settings.whatsapp.phone) {
-        const items = cart
-          .map(
-            (it) =>
-              `• ${it.name} (${it.quantity}x)${
-                it.selectedDays ? ` - Días: ${it.selectedDays.join(", ")}` : ""
-              }`,
-          )
-          .join("\n");
-        const clean = settings.whatsapp.phone.replace(/\D/g, "");
-        const msg =
-          `🍽️ *PEDIDO (DEMO)*\n\n` +
-          `👤 ${demoClient?.name ?? "Usuario"} (${demoClient?.id ?? "DEMO"})\n` +
-          `⏰ Recreo: ${confirmRecess}\n\n` +
-          `📦\n${items}\n\n` +
-          `💰 Total: ${PEN(total)}\n` +
-          `📝 Nota: ${confirmNote || "Sin observaciones"}\n` +
-          `⚠️ Este es un *modo PREVIEW*.`;
-        window.open(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`, "_blank");
-      }
-      toast({ title: "Pedido simulado (preview)" });
-      setCart([]);
-      return;
-    }
+  const confirmAndPlace = async () => {
+    setPosting(true);
+    setShowConfirm(false);
+    setShowLoadingAnimation(true);
+  };
 
-    // ====== LIVE (conecta aquí tu persistencia real) ======
+  const handleAnimationComplete = async () => {
+    setShowLoadingAnimation(false);
     try {
-      // TODO: guardar en RTDB o backend
-      toast({ title: "Pedido enviado (live)" });
+      const payload = buildOrderPayload();
+
+      if (isPreview) {
+        // Mensaje DEMO por WhatsApp si hay número
+        const phone =
+          whatsappPhoneOverride ??
+          (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
+        if (phone) {
+          const items = cart
+            .map(
+              (i) =>
+                `• ${i.name} (${i.quantity}x)` +
+                (i.selectedDays ? ` - Días: ${i.selectedDays.join(", ")}` : "")
+            )
+            .join("\n");
+          const rec = confirmRecess === "primero" ? "Primer" : "Segundo";
+          const text =
+            `🍽️ *PEDIDO DE ALMUERZO (DEMO)* 🍽️\n\n` +
+            `👤 ${clientName} (${clientId})\n` +
+            `⏰ Recreo: ${rec}\n\n` +
+            `📦 *Productos:*\n${items}\n\n` +
+            `💰 *Total:* ${PEN(total)}\n` +
+            `📝 Nota: ${confirmNote || "Sin observaciones"}\n\n` +
+            `⚠️ MODO DEMO - No se guarda en la base de datos.`;
+          const clean = phone.replace(/\D/g, "");
+          window.open(`https://wa.me/${clean}?text=${encodeURIComponent(text)}`, "_blank");
+        }
+        setMessage("✅ Pedido DEMO simulado (no se guardó en la base de datos).");
+      } else {
+        // Guardado real
+        if (!onPlaceOrder) throw new Error("onPlaceOrder no proporcionado en modo live");
+        await onPlaceOrder(payload);
+        setMessage("✅ Pedido enviado correctamente.");
+      }
+
       setCart([]);
     } catch (e) {
       console.error(e);
       toast({ title: "No se pudo enviar el pedido", variant: "destructive" });
+    } finally {
+      setPosting(false);
     }
   };
 
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <div className="text-muted-foreground">Cargando vista…</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <div className="container mx-auto px-3 md:px-6 py-4">
-      {/* Header */}
-      <div className="mb-3">
-        {demoClient?.id && (
-          <div className="text-sm text-muted-foreground">Código: {demoClient.id}</div>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Eye className="h-5 w-5" />
+          {isPreview ? "Vista Previa del Portal de Familias" : "Portal de Familias"}
+        </CardTitle>
+        <div className="text-sm text-muted-foreground">
+          {isPreview
+            ? "Simulación completa. Puedes agregar productos, confirmar y enviar por WhatsApp (no guarda datos)."
+            : `Sesión de ${clientName} (${clientId}).`}
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {message && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800">
+            {message}
+          </div>
         )}
-        <h2 className="text-lg font-semibold">¡Hola, {demoClient?.name ?? "Usuario"}!</h2>
-      </div>
 
-      {/* Tabs de categorías (simple) */}
-      {categories.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {categories.map((cat: any) => (
-            <Button
-              key={cat.id}
-              variant={activeCat === cat.id ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActiveCat(cat.id)}
-            >
-              {cat.name}
-            </Button>
-          ))}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
-        {/* Grid de productos */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {activeCat && productsByCategory[activeCat]?.length ? (
-            (productsByCategory[activeCat] as ProductT[]).map((p) => (
-              <Card key={p.id} className="p-4">
-                <div className="flex gap-4">
-                  {p.image && (
-                    <div className="w-20 h-20 flex-shrink-0">
-                      <img
-                        src={p.image}
-                        alt={p.name}
-                        className="w-full h-full object-cover rounded-lg border"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h3 className="font-medium">{p.name}</h3>
-
-                        {p.type === "lunch" && (
-                          <div className="mt-2 space-y-1">
-                            {(p as any).entrada && (
-                              <div className="text-sm text-muted-foreground">
-                                🥗 <span className="font-medium">Entrada:</span> {(p as any).entrada}
-                              </div>
-                            )}
-                            {(p as any).segundo && (
-                              <div className="text-sm text-muted-foreground">
-                                🍽️ <span className="font-medium">Segundo:</span> {(p as any).segundo}
-                              </div>
-                            )}
-                            {(p as any).postre && (
-                              <div className="text-sm text-muted-foreground">
-                                🍰 <span className="font-medium">Postre:</span> {(p as any).postre}
-                              </div>
-                            )}
-                            {(p as any).refresco && (
-                              <div className="text-sm text-muted-foreground">
-                                🥤 <span className="font-medium">Refresco:</span> {(p as any).refresco}
-                              </div>
-                            )}
-                            {p.specificDate && (
-                              <div className="text-xs text-green-600 font-medium mt-1">
-                                📅 Fecha:{" "}
-                                {(() => {
-                                  const [y, m, d] = p.specificDate.split("-").map(Number);
-                                  const date = new Date(y, m - 1, d);
-                                  const dayName = new Intl.DateTimeFormat("es-PE", {
-                                    weekday: "long",
-                                  }).format(date);
-                                  const ddmm = new Intl.DateTimeFormat("es-PE", {
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                  }).format(date);
-                                  return `${dayName} ${ddmm}`;
-                                })()}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {p.description && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            📝 <span className="font-medium">Observación:</span> {p.description}
-                          </p>
-                        )}
-
-                        {p.addons && p.addons.length > 0 && (
-                          <div className="mt-2">
-                            <div className="text-xs font-medium text-muted-foreground mb-1">
-                              Agregados disponibles:
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              {p.addons?.map((a, idx) => (
-                                <Badge key={`${a.id || idx}`} variant="outline" className="text-xs">
-                                  {a.name} (+{PEN(a.price)})
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {p.type === "varied" && (
-                          <div className="text-xs text-blue-600 mt-1">
-                            📅 Producto variado — Selecciona días
-                          </div>
-                        )}
-
-                        {settings?.showPrices && p.price && (
-                          <div className="text-lg font-bold text-primary mt-2">
-                            {PEN(p.price)}
-                            {p.type === "varied" && (
-                              <span className="text-sm text-muted-foreground ml-1">por día</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <Button onClick={() => addToCart(p)} size="sm" className="ml-4">
-                        <Plus className="h-4 w-4 mr-1" />
-                        Agregar
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))
-          ) : (
-            <div className="col-span-full text-center py-12 text-muted-foreground">
-              {categories.length === 0 ? "No hay categorías configuradas" : "No hay productos en esta categoría"}
+        <div className="rounded-lg p-4 border bg-white">
+          {/* Encabezado compacto como familias */}
+          <div className="bg-green-50 border border-green-200 p-3 rounded-md mb-4 flex items-center justify-between">
+            <div>
+              <div className="text-sm">¡Hola, {clientName}!</div>
+              <div className="text-xs text-muted-foreground">Código: {clientId}</div>
             </div>
-          )}
-        </div>
+            {isPreview && <Badge variant="secondary">Vista previa</Badge>}
+          </div>
 
-        {/* Sidebar carrito */}
-        <Card className="p-3 h-fit">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShoppingCart className="h-4 w-4" />
-              Mi pedido ({cart.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {cart.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground text-sm">Tu carrito está vacío</div>
-            ) : (
-              <>
-                {(() => {
-                  const groups = cart.reduce((g, item) => {
-                    if (item.selectedDays?.length) {
-                      item.selectedDays.forEach((day) => {
-                        if (!g[day]) g[day] = [];
-                        g[day].push({ ...item, specificDay: day });
-                      });
-                    } else {
-                      const date = item.specificDate || "Sin fecha";
-                      if (!g[date]) g[date] = [];
-                      g[date].push(item);
-                    }
-                    return g;
-                  }, {} as Record<string, any[]>);
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Columna de productos (2/3) */}
+            <div className="lg:col-span-2">
+              {/* Pills de categorías */}
+              {categories.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {categories.map((cat) => (
+                    <Button
+                      key={cat.id}
+                      variant={activeCat === cat.id ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setActiveCat(cat.id)}
+                      className="rounded-full"
+                    >
+                      {cat.name}
+                    </Button>
+                  ))}
+                </div>
+              )}
 
-                  return Object.entries(groups).map(([date, items]) => (
-                    <div key={date} className="border rounded-lg p-3 space-y-2">
-                      <div className="text-sm font-medium text-primary border-b pb-1">
-                        📅{" "}
-                        {date === "Sin fecha"
-                          ? "Fecha por definir"
-                          : (() => {
-                              const [y, m, d] = date.split("-").map(Number);
-                              const dt = new Date(y, m - 1, d);
-                              const dayName = new Intl.DateTimeFormat("es-PE", { weekday: "long" }).format(dt);
-                              const ddmm = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "2-digit" }).format(dt);
-                              return `${dayName} ${ddmm}`;
-                            })()}
+              {/* Grilla de tarjetas */}
+              {activeCat && productsByCategory[activeCat]?.length ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {productsByCategory[activeCat].map((product) => (
+                    <div
+                      key={product.id}
+                      className="rounded-lg border bg-white overflow-hidden hover:shadow-sm transition"
+                    >
+                      {/* Imagen */}
+                      <div className="w-full h-40 bg-muted/40 overflow-hidden">
+                        {product.image ? (
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
+                            Sin imagen
+                          </div>
+                        )}
                       </div>
-                      {items.map((item, idx) => (
-                        <div
-                          key={`${item.id}-${date}-${idx}`}
-                          className="flex justify-between items-center p-2 border rounded bg-muted/30"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">{item.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {PEN(item.price ?? 0)} × {item.quantity}
-                              {item.addonsPrice && item.addonsPrice > 0 && <span> + {PEN(item.addonsPrice)} agregados</span>}
-                              {" = "} {PEN(((item.price ?? 0) + (item.addonsPrice ?? 0)) * item.quantity)}
-                            </div>
-                            {item.selectedAddons && Object.keys(item.selectedAddons).length > 0 && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                Agregados:{" "}
-                                {Object.entries(item.selectedAddons)
-                                  .map(([addonId, qty]) => {
-                                    const addon = item.addons?.find((a: any) => a.id === addonId);
-                                    return addon ? `${addon.name} (×${qty})` : "";
-                                  })
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              </div>
+
+                      {/* Contenido */}
+                      <div className="p-3">
+                        <div className="text-sm font-medium mb-1 line-clamp-1">{product.name}</div>
+
+                        {settings?.showPrices && typeof product.price === "number" && (
+                          <div className="text-sm font-semibold text-primary">
+                            {PEN(product.price)}
+                            {product.type === "varied" && (
+                              <span className="ml-1 text-xs text-muted-foreground">por día</span>
                             )}
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeFromCart(item.id)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="text-sm w-6 text-center">{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => addToCart(item)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
+                        )}
+
+                        <div className="mt-2 flex justify-end">
+                          <Button size="sm" onClick={() => addToCart(product)}>
+                            <Plus className="h-4 w-4 mr-1" />
+                            Agregar
+                          </Button>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  ));
-                })()}
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 text-muted-foreground">
+                  {categories.length ? "No hay productos en esta categoría" : "No hay categorías configuradas"}
+                </div>
+              )}
+            </div>
 
-                <div className="border-t pt-3 mt-3">
-                  <div className="flex justify-between items-center font-bold">
-                    <span>Total:</span>
-                    <span>{PEN(total)}</span>
+            {/* Carrito (1/3) */}
+            <div className="lg:col-span-1">
+              <Card className="sticky top-4">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <ShoppingCart className="h-4 w-4" />
+                    Tu pedido
+                    <span className="text-muted-foreground font-normal">({cart.length})</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {cart.length === 0 ? (
+                    <div className="text-center py-6 text-sm text-muted-foreground">
+                      Tu carrito está vacío
+                    </div>
+                  ) : (
+                    <>
+                      {/* Agrupar por fecha cuando corresponda (igual UX) */}
+                      {(() => {
+                        const groups = cart.reduce((acc, item) => {
+                          if (item.selectedDays?.length) {
+                            item.selectedDays.forEach((d) => {
+                              (acc[d] ||= []).push({ ...item, _d: d });
+                            });
+                          } else {
+                            const k = item.specificDate || "Sin fecha";
+                            (acc[k] ||= []).push(item);
+                          }
+                          return acc;
+                        }, {} as Record<string, any[]>);
+
+                        return Object.entries(groups).map(([date, items]) => (
+                          <div key={date} className="border rounded p-2 space-y-2">
+                            <div className="text-xs font-medium text-primary border-b pb-1">
+                              📅{" "}
+                              {date === "Sin fecha"
+                                ? "Fecha por definir"
+                                : (() => {
+                                    const [y, m, d] = date.split("-").map(Number);
+                                    const dt = new Date(y, m - 1, d);
+                                    const day = new Intl.DateTimeFormat("es-PE", { weekday: "long" }).format(dt);
+                                    const ddmm = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "2-digit" }).format(dt);
+                                    return `${day} ${ddmm}`;
+                                  })()}
+                            </div>
+                            {items.map((it, idx) => (
+                              <div
+                                key={`${it.id}-${date}-${idx}`}
+                                className="flex items-center justify-between gap-2 text-sm"
+                              >
+                                <div className="min-w-0">
+                                  <div className="font-medium truncate">{it.name}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {PEN(it.price ?? 0)} × {it.quantity}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => removeFromCart(it.id)}
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </Button>
+                                  <span className="w-6 text-center">{it.quantity}</span>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => addToCart(it)}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ));
+                      })()}
+
+                      <div className="border-t pt-3 mt-3 flex items-center justify-between font-semibold">
+                        <span>Total</span>
+                        <span>{PEN(total)}</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {/* Datos de entrega */}
+                        <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                          <div className="text-sm">
+                            <strong>Cliente:</strong> {clientName} ({clientId})
+                          </div>
+                          <div className="mt-2 flex gap-4">
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                checked={confirmRecess === "primero"}
+                                onCheckedChange={(c) => c && setConfirmRecess("primero")}
+                              />
+                              <Label>Primer recreo</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                checked={confirmRecess === "segundo"}
+                                onCheckedChange={(c) => c && setConfirmRecess("segundo")}
+                              />
+                              <Label>Segundo recreo</Label>
+                            </div>
+                          </div>
+
+                          <div className="mt-3">
+                            <Label htmlFor="note">Observaciones (opcional)</Label>
+                            <Textarea
+                              id="note"
+                              placeholder="Alguna indicación especial..."
+                              value={confirmNote}
+                              onChange={(e) => setConfirmNote(e.target.value)}
+                              rows={2}
+                            />
+                          </div>
+
+                          {(whatsappPhoneOverride || settings?.whatsapp?.enabled) && (
+                            <div className="mt-2 flex items-center gap-2 text-green-800 text-sm">
+                              <MessageCircle className="h-4 w-4" />
+                              Se enviará confirmación por WhatsApp
+                            </div>
+                          )}
+                        </div>
+
+                        <Button className="w-full" onClick={openConfirm} disabled={!cart.length}>
+                          {isPreview ? "Confirmar Pedido (Demo)" : "Confirmar Pedido"}
+                        </Button>
+                        <Button variant="outline" className="w-full" onClick={clearCart}>
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Limpiar
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <div className="text-center mt-6 pt-4 border-t text-xs text-muted-foreground">
+            Maracuyá • Portal de Almuerzos {isPreview && "• Vista Previa de Administrador"}
+          </div>
+        </div>
+
+        {/* Modales */}
+        <AddonsSelectorDialog
+          open={showAddonsSelection}
+          onOpenChange={setShowAddonsSelection}
+          productName={selectedProduct?.name}
+          addons={selectedProduct?.addons || []}
+          selectedAddons={selectedAddons}
+          onAddonsChange={setSelectedAddons}
+          onConfirm={proceedToDaySelection}
+          confirmDisabled={false}
+        />
+
+        <SelectDaysDialog
+          open={showDaySelection}
+          onOpenChange={setShowDaySelection}
+          productName={selectedProduct?.name}
+          pricePerDay={selectedProduct?.price}
+          days={availableDayOptions}
+          selectedDays={selectedDays}
+          onToggleDay={(date, checked) =>
+            setSelectedDays((prev) => (checked ? [...prev, date] : prev.filter((d) => d !== date)))
+          }
+          onConfirm={addVariedToCart}
+          confirmDisabled={selectedDays.length === 0}
+          disabledDays={settings?.disabledDays}
+        />
+
+        {/* Confirmación */}
+        <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                Confirmar pedido
+              </DialogTitle>
+              <DialogDescription>Revisa los detalles de tu pedido antes de enviarlo</DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-medium">Resumen del pedido</h4>
+                {cart.map((item, idx) => (
+                  <div key={idx} className="text-sm">
+                    <div className="flex justify-between">
+                      <span>{item.name} (×{item.quantity})</span>
+                      <span>{PEN(item.subtotal)}</span>
+                    </div>
+                    {item.selectedDays?.length ? (
+                      <div className="text-xs text-muted-foreground ml-2">
+                        Días: {item.selectedDays.join(", ")}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                <div className="border-t pt-2 font-bold flex justify-between">
+                  <span>Total:</span>
+                  <span>{PEN(total)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                  <div className="text-sm">
+                    <strong>Cliente:</strong> {clientName} ({clientId})
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
-                    <div className="text-sm">
-                      <strong>Cliente:</strong> {demoClient?.name ?? "Usuario"} ({demoClient?.id ?? "—"})
-                    </div>
-                    <div className="mt-2 flex gap-4">
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={confirmRecess === "primero"}
-                          onCheckedChange={(checked) => checked && setConfirmRecess("primero")}
-                        />
-                        <Label>Primer recreo</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          checked={confirmRecess === "segundo"}
-                          onCheckedChange={(checked) => checked && setConfirmRecess("segundo")}
-                        />
-                        <Label>Segundo recreo</Label>
-                      </div>
-                    </div>
-
-                    <div className="mt-3">
-                      <Label htmlFor="note">Observaciones (opcional)</Label>
-                      <Textarea
-                        id="note"
-                        placeholder="Alguna indicación especial..."
-                        value={confirmNote}
-                        onChange={(e) => setConfirmNote(e.target.value)}
-                        rows={2}
+                <div>
+                  <Label>Recreo de entrega</Label>
+                  <div className="flex gap-4 mt-2">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={confirmRecess === "primero"}
+                        onCheckedChange={(c) => c && setConfirmRecess("primero")}
                       />
+                      <Label>Primer recreo</Label>
                     </div>
-
-                    {settings?.whatsapp?.enabled && (
-                      <div className="mt-2 flex items-center gap-2 text-green-800 text-sm">
-                        <MessageCircle className="h-4 w-4" />
-                        Se enviará confirmación por WhatsApp
-                      </div>
-                    )}
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        checked={confirmRecess === "segundo"}
+                        onCheckedChange={(c) => c && setConfirmRecess("segundo")}
+                      />
+                      <Label>Segundo recreo</Label>
+                    </div>
                   </div>
-
-                  <Button className="w-full" onClick={confirmOrder} disabled={cart.length === 0}>
-                    Confirmar pedido
-                  </Button>
                 </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Diálogos reutilizables */}
-      <AddonsSelectorDialog
-        open={showAddonsSelection}
-        onOpenChange={setShowAddonsSelection}
-        productName={selectedProduct?.name}
-        addons={selectedProduct?.addons || []}
-        selectedAddons={selectedAddons}
-        onAddonsChange={setSelectedAddons}
-        onConfirm={proceedToDaySelection}
-        confirmDisabled={false}
-      />
+                <div>
+                  <Label htmlFor="note">Observaciones (opcional)</Label>
+                  <Textarea
+                    id="note"
+                    placeholder="Alguna indicación especial..."
+                    value={confirmNote}
+                    onChange={(e) => setConfirmNote(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </div>
 
-      <SelectDaysDialog
-        open={showDaySelection}
-        onOpenChange={setShowDaySelection}
-        productName={selectedProduct?.name}
-        pricePerDay={selectedProduct?.price}
-        days={availableDayOptions}
-        selectedDays={selectedDays}
-        onToggleDay={(date, checked) =>
-          setSelectedDays((prev) => (checked ? [...prev, date] : prev.filter((d) => d !== date)))
-        }
-        onConfirm={addVariedToCart}
-        confirmDisabled={selectedDays.length === 0}
-        disabledDays={settings?.disabledDays}
-      />
-    </div>
+              {(whatsappPhoneOverride || settings?.whatsapp?.enabled) && (
+                <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-800">
+                    <MessageCircle className="h-4 w-4" />
+                    <span className="text-sm font-medium">
+                      Se enviará confirmación por WhatsApp
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowConfirm(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={confirmAndPlace} disabled={posting} className="bg-green-600 hover:bg-green-700">
+                {posting ? "Enviando pedido..." : "Enviar pedido"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <OrderLoadingAnimation open={showLoadingAnimation} onComplete={handleAnimationComplete} />
+      </CardContent>
+    </Card>
   );
 }
