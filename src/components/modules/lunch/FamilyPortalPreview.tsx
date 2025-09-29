@@ -154,27 +154,40 @@ export default function FamilyPortalPreview() {
   );
 
   const productsByCategory = useMemo(() => {
-    console.log("🔍 FamilyPortalPreview - Raw menu.products:", menu.products);
-    
+    console.log("🔍 FamilyPortalPreview - Raw menu.products:", (menu as any).products);
+
     return categories.reduce((acc, cat) => {
-      const products = Object.values(menu.products || {})
-        .filter((p) => p && p.categoryId === cat.id && p.active !== false)
-        .sort((a, b) => {
-          const positionA = typeof a.position === "number" ? a.position : 
-                           typeof a.position === "string" ? parseInt(a.position) : 
-                           Number.POSITIVE_INFINITY;
-          const positionB = typeof b.position === "number" ? b.position : 
-                           typeof b.position === "string" ? parseInt(b.position) : 
-                           Number.POSITIVE_INFINITY;
-          
-          console.log(`🔍 Sorting ${a.name} (pos: ${a.position}) vs ${b.name} (pos: ${b.position}) = ${positionA - positionB}`);
-          
+      const products = Object.values((menu as any).products || {})
+        .filter((p: any) => p && p.categoryId === cat.id && p.active !== false)
+        .sort((a: any, b: any) => {
+          const positionA =
+            typeof a.position === "number"
+              ? a.position
+              : typeof a.position === "string"
+              ? parseInt(a.position)
+              : Number.POSITIVE_INFINITY;
+          const positionB =
+            typeof b.position === "number"
+              ? b.position
+              : typeof b.position === "string"
+              ? parseInt(b.position)
+              : Number.POSITIVE_INFINITY;
+
+          console.log(
+            `🔍 Sorting ${a.name} (pos: ${a.position}) vs ${b.name} (pos: ${b.position}) = ${
+              positionA - positionB
+            }`
+          );
+
           if (positionA !== positionB) return positionA - positionB;
           return a.name.localeCompare(b.name);
         });
-      
-      console.log(`🔍 Category ${cat.name} products:`, products.map(p => ({ name: p.name, position: p.position })));
-      acc[cat.id] = products;
+
+      console.log(
+        `🔍 Category ${cat.name} products:`,
+        products.map((p: any) => ({ name: p.name, position: p.position }))
+      );
+      (acc as any)[cat.id] = products as ProductT[];
       return acc;
     }, {} as Record<string, ProductT[]>);
   }, [categories, menu]);
@@ -228,11 +241,11 @@ export default function FamilyPortalPreview() {
 
     // Calcular el precio de los agregados
     const addonsPrice = Object.entries(selectedAddons).reduce((total, [addonId, quantity]) => {
-      const addon = selectedProduct.addons?.find(a => a.id === addonId);
+      const addon = selectedProduct.addons?.find((a) => a.id === addonId);
       return total + (addon?.price || 0) * quantity;
     }, 0);
 
-    const basePrice = (selectedProduct.price ?? 0);
+    const basePrice = selectedProduct.price ?? 0;
     const totalPricePerDay = basePrice + addonsPrice;
     const subtotal = totalPricePerDay * selectedDays.length;
 
@@ -254,21 +267,25 @@ export default function FamilyPortalPreview() {
     toast({ title: `${selectedProduct.name} agregado al carrito` });
   };
 
-  const addToCart = (product: ProductT) => {
-    if (product.type === "varied") {
-      handleVariedProduct(product);
+  // ✅ Acepta ProductT o CartItem (para el botón + en el carrito)
+  const addToCart = (product: ProductT | CartItem) => {
+    const p = product as ProductT;
+
+    if (p.type === "varied" && !(product as CartItem).selectedDays) {
+      // Si viene desde la grilla (no es CartItem con días ya seleccionados), abrir selector
+      handleVariedProduct(p);
       return;
     }
 
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
+      const existing = prev.find((item) => item.id === p.id);
       if (existing) {
         return prev.map((item) =>
-          item.id === product.id
+          item.id === p.id
             ? {
                 ...item,
                 quantity: item.quantity + 1,
-                subtotal: (item.quantity + 1) * (item.price ?? 0),
+                subtotal: (item.quantity + 1) * (item.price ?? 0) + (item.addonsPrice ?? 0) * (item.quantity + 1) - (item.addonsPrice ?? 0) * item.quantity,
               }
             : item
         );
@@ -276,14 +293,14 @@ export default function FamilyPortalPreview() {
         return [
           ...prev,
           {
-            ...product,
+            ...(p as ProductT),
             quantity: 1,
-            subtotal: product.price ?? 0,
-          },
+            subtotal: (p.price ?? 0) + ((p as any).addonsPrice ?? 0),
+          } as CartItem,
         ];
       }
     });
-    toast({ title: `${product.name} agregado al carrito` });
+    toast({ title: `${p.name} agregado al carrito` });
   };
 
   const removeFromCart = (productId: string) => {
@@ -295,7 +312,7 @@ export default function FamilyPortalPreview() {
             ? {
                 ...item,
                 quantity: item.quantity - 1,
-                subtotal: (item.quantity - 1) * (item.price ?? 0),
+                subtotal: ((item.price ?? 0) + (item.addonsPrice ?? 0)) * (item.quantity - 1),
               }
             : item
         );
@@ -323,15 +340,15 @@ export default function FamilyPortalPreview() {
   const confirmAndPlace = async () => {
     setPosting(true);
     setShowConfirm(false);
-
-    // Show loading animation first
     setShowLoadingAnimation(true);
   };
+
+  const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
 
   const handleAnimationComplete = async () => {
     console.log("handleAnimationComplete called");
     setShowLoadingAnimation(false);
-    
+
     try {
       await new Promise((r) => setTimeout(r, 500)); // small delay after animation
 
@@ -376,8 +393,6 @@ export default function FamilyPortalPreview() {
       setPosting(false);
     }
   };
-
-  const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
 
   if (loading) {
     return (
@@ -514,12 +529,12 @@ export default function FamilyPortalPreview() {
                                   <div className="text-xs font-medium text-muted-foreground mb-1">
                                     Agregados disponibles:
                                   </div>
-                                   <div className="flex flex-wrap gap-1">
-                                     {product.addons?.map((addon, idx) => (
-                                       <Badge key={`${addon.id || idx}`} variant="outline" className="text-xs">
-                                         {addon.name} (+{PEN(addon.price)})
-                                       </Badge>
-                                     ))}
+                                  <div className="flex flex-wrap gap-1">
+                                    {product.addons?.map((addon, idx) => (
+                                      <Badge key={`${addon.id || idx}`} variant="outline" className="text-xs">
+                                        {addon.name} (+{PEN(addon.price)})
+                                      </Badge>
+                                    ))}
                                   </div>
                                 </div>
                               )}
@@ -542,7 +557,7 @@ export default function FamilyPortalPreview() {
                               )}
                             </div>
 
-                            <Button onClick={() => addToCart(product)} size="sm" className="ml-4">
+                            <Button onClick={() => addToCart(product as ProductT)} size="sm" className="ml-4">
                               <Plus className="h-4 w-4 mr-1" />
                               Agregar
                             </Button>
@@ -616,24 +631,30 @@ export default function FamilyPortalPreview() {
                                 key={`${item.id}-${date}-${idx}`}
                                 className="flex justify-between items-center p-2 border rounded bg-muted/30"
                               >
-                                 <div className="flex-1 min-w-0">
-                                   <div className="font-medium text-sm truncate">{item.name}</div>
-                                   <div className="text-xs text-muted-foreground">
-                                     {PEN(item.price ?? 0)} × {item.quantity}
-                                     {item.addonsPrice && item.addonsPrice > 0 && (
-                                       <span> + {PEN(item.addonsPrice)} agregados</span>
-                                     )}
-                                     {" = "} {PEN(((item.price ?? 0) + (item.addonsPrice ?? 0)) * item.quantity)}
-                                   </div>
-                                   {item.selectedAddons && Object.keys(item.selectedAddons).length > 0 && (
-                                     <div className="text-xs text-muted-foreground mt-1">
-                                       Agregados: {Object.entries(item.selectedAddons).map(([addonId, qty]) => {
-                                         const addon = item.addons?.find(a => a.id === addonId);
-                                         return addon ? `${addon.name} (×${qty})` : '';
-                                       }).filter(Boolean).join(", ")}
-                                     </div>
-                                   )}
-                                 </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm truncate">{item.name}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {PEN(item.price ?? 0)} × {item.quantity}
+                                    {item.addonsPrice && item.addonsPrice > 0 && (
+                                      <span> + {PEN(item.addonsPrice)} agregados</span>
+                                    )}
+                                    {" = "}{" "}
+                                    {PEN(((item.price ?? 0) + (item.addonsPrice ?? 0)) * item.quantity)}
+                                  </div>
+                                  {item.selectedAddons &&
+                                    Object.keys(item.selectedAddons).length > 0 && (
+                                      <div className="text-xs text-muted-foreground mt-1">
+                                        Agregados:{" "}
+                                        {Object.entries(item.selectedAddons)
+                                          .map(([addonId, qty]) => {
+                                            const addon = item.addons?.find((a) => a.id === addonId);
+                                            return addon ? `${addon.name} (×${qty})` : "";
+                                          })
+                                          .filter(Boolean)
+                                          .join(", ")}
+                                      </div>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-1">
                                   <Button
                                     variant="outline"
@@ -737,19 +758,25 @@ export default function FamilyPortalPreview() {
                       </span>
                       <span>{PEN(item.subtotal)}</span>
                     </div>
-                     {item.selectedDays && (
-                       <div className="text-xs text-muted-foreground ml-2">
-                         Días: {item.selectedDays.join(", ")}
-                       </div>
-                     )}
-                     {item.selectedAddons && Object.keys(item.selectedAddons).length > 0 && (
-                       <div className="text-xs text-muted-foreground ml-2">
-                         Agregados: {Object.entries(item.selectedAddons).map(([addonId, qty]) => {
-                           const addon = item.addons?.find(a => a.id === addonId);
-                           return addon ? `${addon.name} (×${qty})` : '';
-                         }).filter(Boolean).join(", ")} - {PEN(item.addonsPrice || 0)}
-                       </div>
-                     )}
+                    {item.selectedDays && (
+                      <div className="text-xs text-muted-foreground ml-2">
+                        Días: {item.selectedDays.join(", ")}
+                      </div>
+                    )}
+                    {item.selectedAddons &&
+                      Object.keys(item.selectedAddons).length > 0 && (
+                        <div className="text-xs text-muted-foreground ml-2">
+                          Agregados:{" "}
+                          {Object.entries(item.selectedAddons)
+                            .map(([addonId, qty]) => {
+                              const addon = item.addons?.find((a) => a.id === addonId);
+                              return addon ? `${addon.name} (×${qty})` : "";
+                            })
+                            .filter(Boolean)
+                            .join(", ")}{" "}
+                          - {PEN(item.addonsPrice || 0)}
+                        </div>
+                      )}
                   </div>
                 ))}
                 <div className="border-t pt-2 font-bold flex justify-between">
@@ -819,12 +846,9 @@ export default function FamilyPortalPreview() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        
+
         {/* Loading Animation */}
-        <OrderLoadingAnimation
-          open={showLoadingAnimation}
-          onComplete={handleAnimationComplete}
-        />
+        <OrderLoadingAnimation open={showLoadingAnimation} onComplete={handleAnimationComplete} />
       </CardContent>
     </Card>
   );
