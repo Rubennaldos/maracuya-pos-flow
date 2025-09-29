@@ -32,6 +32,9 @@ import SelectDaysDialog from "@/components/modules/lunch/preview/SelectDaysDialo
 import AddonsSelectorDialog from "@/components/modules/lunch/preview/AddonsSelectorDialog";
 import { OrderLoadingAnimation } from "@/components/ui/OrderLoadingAnimation";
 
+// Helper WhatsApp (abre sin bloqueo)
+import { normalizePhone, buildWaUrl, openWhatsAppNow } from "./openWhatsApp";
+
 type Mode = "preview" | "live";
 
 export interface FamilyPortalAppProps {
@@ -130,9 +133,10 @@ export default function FamilyPortalApp({
   const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("primero");
   const [confirmNote, setConfirmNote] = useState("");
   const [posting, setPosting] = useState(false);
-  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false);
+  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false); // mantenemos por compat
   const [message, setMessage] = useState("");
 
+  // Carga inicial
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -156,6 +160,7 @@ export default function FamilyPortalApp({
     loadData();
   }, []);
 
+  // Categorías
   const categories = useMemo(
     () =>
       Object.values(menu.categories || {})
@@ -164,6 +169,7 @@ export default function FamilyPortalApp({
     [menu]
   );
 
+  // Productos por categoría
   const productsByCategory = useMemo(() => {
     return categories.reduce((acc, cat) => {
       const products = Object.values(menu.products || {})
@@ -187,6 +193,7 @@ export default function FamilyPortalApp({
     }, {} as Record<string, ProductT[]>);
   }, [categories, menu]);
 
+  // Días disponibles
   const availableDays = useMemo(() => {
     const all = getNextDaysPeru(14, true);
     const disabled = settings?.disabledDays;
@@ -311,57 +318,77 @@ export default function FamilyPortalApp({
     })),
   });
 
-  const confirmAndPlace = async () => {
+  /** Construye el mensaje de WA */
+  const makeWaMessage = () => {
+    const lines = cart.map(
+      (i) =>
+        `• ${i.name} (${i.quantity}x)` +
+        (i.selectedDays?.length ? ` - Días: ${i.selectedDays.join(", ")}` : "")
+    );
+    const rec = confirmRecess === "primero" ? "Primer" : "Segundo";
+    return (
+      `🍽️ *PEDIDO DE ALMUERZO*${isPreview ? " (DEMO)" : ""}\n\n` +
+      `👤 ${clientName} (${clientId})\n` +
+      `⏰ Recreo: ${rec} recreo\n\n` +
+      `📦 *Productos:*\n${lines.join("\n")}\n\n` +
+      `💰 *Total:* ${PEN(total)}\n` +
+      `📝 Nota: ${confirmNote || "Sin observaciones"}`
+    );
+  };
+
+  /** Confirmar y abrir WhatsApp INMEDIATAMENTE (evita pop-up blocking) */
+  const confirmNow = async () => {
+    if (cart.length === 0) {
+      toast({ title: "Tu carrito está vacío", variant: "destructive" });
+      return;
+    }
+
     setPosting(true);
+    setShowConfirm(false);
+
+    // 1) Abrir WhatsApp YA (mismo gesto de click)
+    const rawPhone = whatsappPhoneOverride ?? (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
+    const phoneDigits = normalizePhone(rawPhone || "");
+    if (!phoneDigits) {
+      setPosting(false);
+      toast({ title: "Teléfono de WhatsApp inválido", description: "Configura un número con código de país.", variant: "destructive" });
+      return;
+    }
+    const url = buildWaUrl(phoneDigits, makeWaMessage());
+    openWhatsAppNow(url); // navega a WhatsApp en la misma pestaña
+
+    // 2) Guardar (si live) sin bloquear al usuario
+    try {
+      const payload = buildOrderPayload();
+      if (!isPreview) {
+        if (!onPlaceOrder) throw new Error("onPlaceOrder no proporcionado en modo live");
+        await onPlaceOrder(payload);
+        setMessage("✅ Pedido enviado correctamente.");
+      } else {
+        setMessage("✅ Pedido DEMO simulado (no se guardó en la base de datos).");
+      }
+      setCart([]);
+    } catch (e) {
+      console.error(e);
+      // El usuario ya salió a WhatsApp; registramos el error y mostramos toast si regresa
+      toast({ title: "No se pudo guardar el pedido", variant: "destructive" });
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  // (Compat) Si en algún flujo quieres mostrar la animación, puedes usar estas dos:
+  const confirmAndPlace = async () => {
+    // Si prefieres animación antes de abrir WA, quita el confirmNow del botón y usa este método.
+    // Nota: abrir WA después de animaciones puede ser bloqueado por el navegador.
     setShowConfirm(false);
     setShowLoadingAnimation(true);
   };
 
   const handleAnimationComplete = async () => {
     setShowLoadingAnimation(false);
-    try {
-      const payload = buildOrderPayload();
-
-      if (isPreview) {
-        // Mensaje DEMO por WhatsApp si hay número
-        const phone =
-          whatsappPhoneOverride ??
-          (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
-        if (phone) {
-          const items = cart
-            .map(
-              (i) =>
-                `• ${i.name} (${i.quantity}x)` +
-                (i.selectedDays ? ` - Días: ${i.selectedDays.join(", ")}` : "")
-            )
-            .join("\n");
-          const rec = confirmRecess === "primero" ? "Primer" : "Segundo";
-          const text =
-            `🍽️ *PEDIDO DE ALMUERZO (DEMO)* 🍽️\n\n` +
-            `👤 ${clientName} (${clientId})\n` +
-            `⏰ Recreo: ${rec}\n\n` +
-            `📦 *Productos:*\n${items}\n\n` +
-            `💰 *Total:* ${PEN(total)}\n` +
-            `📝 Nota: ${confirmNote || "Sin observaciones"}\n\n` +
-            `⚠️ MODO DEMO - No se guarda en la base de datos.`;
-          const clean = phone.replace(/\D/g, "");
-          window.open(`https://wa.me/${clean}?text=${encodeURIComponent(text)}`, "_blank");
-        }
-        setMessage("✅ Pedido DEMO simulado (no se guardó en la base de datos).");
-      } else {
-        // Guardado real
-        if (!onPlaceOrder) throw new Error("onPlaceOrder no proporcionado en modo live");
-        await onPlaceOrder(payload);
-        setMessage("✅ Pedido enviado correctamente.");
-      }
-
-      setCart([]);
-    } catch (e) {
-      console.error(e);
-      toast({ title: "No se pudo enviar el pedido", variant: "destructive" });
-    } finally {
-      setPosting(false);
-    }
+    // Abrir WhatsApp aquí puede ser bloqueado; por eso preferimos confirmNow directamente.
+    await confirmNow();
   };
 
   if (loading) {
@@ -606,9 +633,11 @@ export default function FamilyPortalApp({
                           )}
                         </div>
 
-                        <Button className="w-full" onClick={openConfirm} disabled={!cart.length}>
+                        {/* Usa confirmNow para abrir WA sin bloqueo */}
+                        <Button className="w-full" onClick={confirmNow} disabled={!cart.length || posting}>
                           {isPreview ? "Confirmar Pedido (Demo)" : "Confirmar Pedido"}
                         </Button>
+
                         <Button variant="outline" className="w-full" onClick={clearCart}>
                           <Trash2 className="h-4 w-4 mr-2" />
                           Limpiar
@@ -653,7 +682,7 @@ export default function FamilyPortalApp({
           disabledDays={settings?.disabledDays}
         />
 
-        {/* Confirmación */}
+        {/* Confirmación (sigue disponible si prefieres flujo con modal) */}
         <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -741,13 +770,15 @@ export default function FamilyPortalApp({
               <Button variant="outline" onClick={() => setShowConfirm(false)}>
                 Cancelar
               </Button>
-              <Button onClick={confirmAndPlace} disabled={posting} className="bg-green-600 hover:bg-green-700">
+              {/* También abrimos WA desde el modal sin animación */}
+              <Button onClick={confirmNow} disabled={posting} className="bg-green-600 hover:bg-green-700">
                 {posting ? "Enviando pedido..." : "Enviar pedido"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
+        {/* Animación (opcional / compat) */}
         <OrderLoadingAnimation open={showLoadingAnimation} onComplete={handleAnimationComplete} />
       </CardContent>
     </Card>
