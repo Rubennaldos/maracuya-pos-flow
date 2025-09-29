@@ -165,3 +165,33 @@ export type AnnouncementT = {
   createdAt: number;
   createdBy?: string; // admin user id
 };
+
+/* -----------------------------------------
+ * Filtro usado en HISTORIAL (Admin → Lunch)
+ * -----------------------------------------
+ * - `day`: día seleccionado (YYYY-MM-DD).
+ * - `clientName` y `status`: filtros dentro del día.
+ * - `groupBy`: por compatibilidad.
+ * - `dateFrom`/`dateTo`: opcionales (legacy p/ Reportes).
+ */
+export type OrderFilter = {
+  /** Día seleccionado en historial (YYYY-MM-DD). */
+  day?: string | null;
+
+  /** Búsqueda por nombre dentro del día (alumno/cliente/apoderado). */
+  clientName?: string;
+
+  status?:
+    | "pending"
+    | "preparing"
+    | "ready"
+    | "delivered"
+    | "canceled"
+    | "confirmed";
+
+  groupBy?: "day" | "week" | "month";
+
+  /** LEGACY (se usan en Reportes; en Historial se ignoran) */
+  dateFrom?: string | null;
+  dateTo?: string | null;
+};

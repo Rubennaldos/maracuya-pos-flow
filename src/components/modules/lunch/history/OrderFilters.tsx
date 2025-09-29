@@ -3,34 +3,68 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Filter, RefreshCw } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Filter, RefreshCw, Calendar } from "lucide-react";
 import type { OrderFilter } from "./types";
+
+/**
+ * HISTORIAL (ADMIN LUNCH)
+ * - Sin rango de fechas aquí (eso queda para Reportes).
+ * - Solo se muestran días que tienen pedidos (chips).
+ * - La búsqueda por nombre aplica al día seleccionado.
+ */
 
 interface OrderFiltersProps {
   filter: OrderFilter;
   onFilterChange: (filter: OrderFilter) => void;
   onApplyFilter: () => void;
   onResetFilter: () => void;
+
+  /** Días disponibles con pedidos (YYYY-MM-DD), ordenados desc (más reciente primero). */
+  availableDays?: string[];
 }
+
+/* ---------- helpers ---------- */
+
+function formatDayForUI(yyyy_mm_dd: string) {
+  if (!yyyy_mm_dd) return "";
+  const [y, m, d] = yyyy_mm_dd.split("-").map((v) => parseInt(v, 10));
+  if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return yyyy_mm_dd;
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString("es-PE", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+  });
+}
+
+function norm(s: string = "") {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/* ---------- component ---------- */
 
 export default function OrderFilters({
   filter,
   onFilterChange,
   onApplyFilter,
   onResetFilter,
+  availableDays = [],
 }: OrderFiltersProps) {
-  const handleQuickFilter = (days: number) => {
-    const today = new Date();
-    const fromDate = new Date(today);
-    fromDate.setDate(today.getDate() - days + 1);
-    
-    onFilterChange({
-      ...filter,
-      dateFrom: fromDate.toISOString().split('T')[0],
-      dateTo: today.toISOString().split('T')[0],
-    });
-  };
+  // Si no hay día seleccionado, usar el más reciente (primer elemento)
+  React.useEffect(() => {
+    if (!filter.day && availableDays.length > 0) {
+      onFilterChange({ ...filter, day: availableDays[0] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableDays]);
 
   return (
     <Card>
@@ -38,85 +72,44 @@ export default function OrderFilters({
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4" />
-            <h3 className="font-medium">Filtros de búsqueda</h3>
+            <h3 className="font-medium">Filtros del historial</h3>
           </div>
 
-          {/* Quick filters */}
+          {/* DÍAS DISPONIBLES (chips) */}
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleQuickFilter(1)}
-            >
-              Hoy
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleQuickFilter(7)}
-            >
-              Últimos 7 días
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleQuickFilter(30)}
-            >
-              Últimos 30 días
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const today = new Date();
-                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-                onFilterChange({
-                  ...filter,
-                  dateFrom: firstDay.toISOString().split('T')[0],
-                  dateTo: today.toISOString().split('T')[0],
-                });
-              }}
-            >
-              Este mes
-            </Button>
+            {availableDays.length === 0 ? (
+              <span className="text-sm text-muted-foreground">
+                No hay días con pedidos.
+              </span>
+            ) : (
+              availableDays.map((day) => (
+                <Button
+                  key={day}
+                  type="button"
+                  variant={filter.day === day ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => onFilterChange({ ...filter, day })}
+                  title={day}
+                >
+                  {formatDayForUI(day)}
+                </Button>
+              ))
+            )}
           </div>
 
-          {/* Date range */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Fecha desde</Label>
-              <Input
-                type="date"
-                value={filter.dateFrom}
-                onChange={(e) =>
-                  onFilterChange({ ...filter, dateFrom: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <Label>Fecha hasta</Label>
-              <Input
-                type="date"
-                value={filter.dateTo}
-                onChange={(e) =>
-                  onFilterChange({ ...filter, dateTo: e.target.value })
-                }
-              />
-            </div>
-          </div>
-
-          {/* Additional filters */}
+          {/* Búsqueda por nombre (dentro del día seleccionado) + Estado */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>Cliente</Label>
+            <div className="md:col-span-2">
+              <Label>Cliente (alumno/apoderado)</Label>
               <Input
-                placeholder="Nombre del cliente..."
+                placeholder="Buscar por nombre dentro del día seleccionado…"
                 value={filter.clientName || ""}
                 onChange={(e) =>
                   onFilterChange({ ...filter, clientName: e.target.value })
                 }
               />
             </div>
+
             <div>
               <Label>Estado</Label>
               <Select
@@ -124,7 +117,10 @@ export default function OrderFilters({
                 onValueChange={(value) =>
                   onFilterChange({
                     ...filter,
-                    status: value === "all" ? undefined : value,
+                    status:
+                      value === "all"
+                        ? undefined
+                        : (value as OrderFilter["status"]),
                   })
                 }
               >
@@ -138,13 +134,18 @@ export default function OrderFilters({
                   <SelectItem value="ready">Listo</SelectItem>
                   <SelectItem value="delivered">Entregado</SelectItem>
                   <SelectItem value="canceled">Cancelado</SelectItem>
+                  <SelectItem value="confirmed">Confirmado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Agrupar por (compatibilidad) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Agrupar por</Label>
               <Select
-                value={filter.groupBy}
+                value={filter.groupBy || "day"}
                 onValueChange={(value: "day" | "week" | "month") =>
                   onFilterChange({ ...filter, groupBy: value })
                 }
@@ -161,17 +162,30 @@ export default function OrderFilters({
             </div>
           </div>
 
-          {/* Action buttons */}
+          {/* Acciones */}
           <div className="flex gap-2">
             <Button onClick={onApplyFilter}>
               <Calendar className="h-4 w-4 mr-2" />
               Aplicar filtros
             </Button>
-            <Button variant="outline" onClick={onResetFilter}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                onResetFilter();
+                onFilterChange({
+                  day: null,
+                  clientName: "",
+                  status: undefined,
+                  groupBy: "day",
+                } as OrderFilter);
+              }}
+            >
               <RefreshCw className="h-4 w-4 mr-2" />
               Limpiar
             </Button>
           </div>
+
+          {/* Nota: dateFrom/dateTo son legacy y se ignoran en HISTORIAL. */}
         </div>
       </CardContent>
     </Card>

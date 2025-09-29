@@ -1,3 +1,6 @@
+// src/components/modules/lunch/history/types.ts
+
+/** Pedido mostrado en el Historial (Admin → Almuerzos) */
 export interface HistoryOrder {
   id: string;
   code?: string;
@@ -5,7 +8,13 @@ export interface HistoryOrder {
   clientName?: string;
   studentName?: string;
   recess?: string;
-  status: "pending" | "preparing" | "ready" | "delivered" | "canceled";
+  status:
+    | "pending"
+    | "preparing"
+    | "ready"
+    | "delivered"
+    | "canceled"
+    | "confirmed"; // alineado con OrderT
   total: number;
   items: Array<{
     qty: number;
@@ -13,27 +22,52 @@ export interface HistoryOrder {
     price?: number;
   }>;
   note?: string;
-  createdAt: number | string;
-  deliveryAt?: string;
-  selectedDays?: string[]; // For varied products
-  orderDate: string; // YYYY-MM-DD format for the day this order is for
+  createdAt: number | string; // timestamp ms o ISO
+  deliveryAt?: string;        // ISO YYYY-MM-DD (si aplica)
+  selectedDays?: string[];    // para productos "varied"
+  /** Día para el que corresponde el pedido (YYYY-MM-DD) */
+  orderDate: string;
 }
 
+/** Grupo de pedidos por día para el Historial */
 export interface DayOrders {
-  date: string; // YYYY-MM-DD
+  /** Día en formato YYYY-MM-DD */
+  date: string;
   orders: HistoryOrder[];
   totalOrders: number;
   totalAmount: number;
 }
 
+/**
+ * Filtro del Historial (Admin → Almuerzos)
+ * - `day` es el filtro principal: muestra solo ese día.
+ * - `clientName` y `status` filtran dentro del día.
+ * - `groupBy` se mantiene por compatibilidad visual.
+ * - `dateFrom`/`dateTo` quedan como OPCIONALES (legacy para Reportes).
+ */
 export interface OrderFilter {
-  dateFrom: string;
-  dateTo: string;
+  /** Día seleccionado en historial (YYYY-MM-DD). */
+  day?: string | null;
+
+  /** Búsqueda por nombre (alumno/cliente/apoderado) dentro del día. */
   clientName?: string;
-  status?: string;
-  groupBy: "day" | "week" | "month";
+
+  status?:
+    | "pending"
+    | "preparing"
+    | "ready"
+    | "delivered"
+    | "canceled"
+    | "confirmed";
+
+  groupBy?: "day" | "week" | "month";
+
+  /** LEGACY: usados en Reportes; en Historial se ignoran. */
+  dateFrom?: string | null;
+  dateTo?: string | null;
 }
 
+/** Estructura para reportes agregados (cuando corresponda) */
 export interface OrderReport {
   period: string;
   totalOrders: number;
