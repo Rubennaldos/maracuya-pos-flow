@@ -15,6 +15,8 @@ import { CalendarIcon, Plus, Edit, Trash2, Save, X, Upload, GripVertical } from 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useImageUpload } from "@/hooks/useImageUpload";
+import AddonsEditor from "./AddonsEditor";
+import type { AddonForm } from "./addons-types";
 
 import type { ProductT, MenuT } from "../types";
 import { formatDateForPeru, isDatePast } from "../utils/dateUtils";
@@ -59,6 +61,8 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
   });
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
+  const [addons, setAddons] = useState<AddonForm[]>([]);
+  const [addonsError, setAddonsError] = useState<string | null>(null);
 
   // Reset form
   const resetForm = () => {
@@ -76,6 +80,8 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       refresco: "Refresco del día",
     });
     setSelectedDate(undefined);
+    setAddons([]);
+    setAddonsError(null);
     setEditing(null);
     setShowForm(false);
   };
@@ -149,6 +155,16 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       refresco: (product as any).refresco || "Refresco del día",
     });
 
+    // Cargar agregados existentes
+    const existingAddons = (product as any).addons || [];
+    setAddons(existingAddons.map((addon: any) => ({
+      cid: addon.id || crypto.randomUUID(),
+      id: addon.id,
+      name: addon.name,
+      priceStr: String(addon.price),
+      active: addon.active !== false
+    })));
+
     if ((product as any).specificDate) {
       setSelectedDate(new Date((product as any).specificDate + "T12:00:00"));
     }
@@ -176,8 +192,28 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       return;
     }
 
+    // Validar agregados para productos variados
+    if (formData.type === "varied") {
+      setAddonsError(null);
+      const invalidAddons = addons.filter(a => a.name.trim() && (!a.priceStr || isNaN(Number(a.priceStr))));
+      if (invalidAddons.length > 0) {
+        setAddonsError("Todos los agregados deben tener un precio válido");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
+      // Procesar agregados válidos
+      const validAddons = addons
+        .filter(a => a.name.trim() && a.priceStr && !isNaN(Number(a.priceStr)))
+        .map(a => ({
+          id: a.id || crypto.randomUUID(),
+          name: a.name.trim(),
+          price: Number(a.priceStr),
+          active: a.active !== false
+        }));
+
       // arma payload sin undefined
       const productData = stripUndefined<Partial<ProductT>>({
         name: formData.name.trim(),
@@ -193,6 +229,10 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
           : Math.max(0, ...Object.values(menu.products || {})
               .filter((p) => p.categoryId === formData.categoryId)
               .map((p) => (p as any).position || 0)) + 1,
+        // Agregados para productos variados
+        ...(formData.type === "varied" && validAddons.length > 0 && {
+          addons: validAddons
+        }),
         // Campos específicos para almuerzo (opcionales)
         ...(formData.type === "lunch" && {
           entrada: formData.entrada.trim() || undefined,
@@ -489,6 +529,17 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                     />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Agregados (solo para productos variados) */}
+            {formData.type === "varied" && (
+              <div className="md:col-span-2">
+                <AddonsEditor
+                  addons={addons}
+                  setAddons={setAddons}
+                  errorText={addonsError}
+                />
               </div>
             )}
 

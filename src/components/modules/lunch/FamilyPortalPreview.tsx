@@ -29,6 +29,7 @@ import type { SettingsT, MenuT, ProductT } from "@/components/modules/lunch/type
 // Import “flexible” del utils
 import * as DateUtils from "@/components/modules/lunch/utils/dateUtils";
 import SelectDaysDialog from "@/components/modules/lunch/preview/SelectDaysDialog";
+import AddonsSelectorDialog from "@/components/modules/lunch/preview/AddonsSelectorDialog";
 import { OrderLoadingAnimation } from "@/components/ui/OrderLoadingAnimation";
 
 /* =======================
@@ -77,6 +78,8 @@ type CartItem = ProductT & {
   quantity: number;
   subtotal: number;
   selectedDays?: string[];
+  selectedAddons?: { [addonId: string]: number };
+  addonsPrice?: number;
 };
 
 const PEN = (n: number) =>
@@ -102,8 +105,10 @@ export default function FamilyPortalPreview() {
 
   // Estados para los modales
   const [showDaySelection, setShowDaySelection] = useState(false);
+  const [showAddonsSelection, setShowAddonsSelection] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductT | null>(null);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [selectedAddons, setSelectedAddons] = useState<{ [addonId: string]: number }>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("primero");
   const [confirmNote, setConfirmNote] = useState("");
@@ -204,24 +209,48 @@ export default function FamilyPortalPreview() {
   const handleVariedProduct = (product: ProductT) => {
     setSelectedProduct(product);
     setSelectedDays([]);
+    setSelectedAddons({});
+    // Si el producto tiene agregados, mostrar el selector primero
+    if (product.addons && product.addons.length > 0) {
+      setShowAddonsSelection(true);
+    } else {
+      setShowDaySelection(true);
+    }
+  };
+
+  const proceedToDaySelection = () => {
+    setShowAddonsSelection(false);
     setShowDaySelection(true);
   };
 
   const addVariedToCart = () => {
     if (!selectedProduct || selectedDays.length === 0) return;
 
-    const subtotal = (selectedProduct.price ?? 0) * selectedDays.length;
+    // Calcular el precio de los agregados
+    const addonsPrice = Object.entries(selectedAddons).reduce((total, [addonId, quantity]) => {
+      const addon = selectedProduct.addons?.find(a => a.id === addonId);
+      return total + (addon?.price || 0) * quantity;
+    }, 0);
+
+    const basePrice = (selectedProduct.price ?? 0);
+    const totalPricePerDay = basePrice + addonsPrice;
+    const subtotal = totalPricePerDay * selectedDays.length;
+
     const cartItem: CartItem = {
       ...selectedProduct,
       quantity: selectedDays.length,
       subtotal,
       selectedDays: [...selectedDays],
+      selectedAddons: Object.keys(selectedAddons).length > 0 ? { ...selectedAddons } : undefined,
+      addonsPrice,
     };
 
     setCart((prev) => [...prev, cartItem]);
     setShowDaySelection(false);
+    setShowAddonsSelection(false);
     setSelectedProduct(null);
     setSelectedDays([]);
+    setSelectedAddons({});
     toast({ title: `${selectedProduct.name} agregado al carrito` });
   };
 
@@ -587,13 +616,24 @@ export default function FamilyPortalPreview() {
                                 key={`${item.id}-${date}-${idx}`}
                                 className="flex justify-between items-center p-2 border rounded bg-muted/30"
                               >
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-sm truncate">{item.name}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {PEN(item.price ?? 0)} × {item.quantity} ={" "}
-                                    {PEN((item.price ?? 0) * item.quantity)}
-                                  </div>
-                                </div>
+                                 <div className="flex-1 min-w-0">
+                                   <div className="font-medium text-sm truncate">{item.name}</div>
+                                   <div className="text-xs text-muted-foreground">
+                                     {PEN(item.price ?? 0)} × {item.quantity}
+                                     {item.addonsPrice && item.addonsPrice > 0 && (
+                                       <span> + {PEN(item.addonsPrice)} agregados</span>
+                                     )}
+                                     {" = "} {PEN(((item.price ?? 0) + (item.addonsPrice ?? 0)) * item.quantity)}
+                                   </div>
+                                   {item.selectedAddons && Object.keys(item.selectedAddons).length > 0 && (
+                                     <div className="text-xs text-muted-foreground mt-1">
+                                       Agregados: {Object.entries(item.selectedAddons).map(([addonId, qty]) => {
+                                         const addon = item.addons?.find(a => a.id === addonId);
+                                         return addon ? `${addon.name} (×${qty})` : '';
+                                       }).filter(Boolean).join(", ")}
+                                     </div>
+                                   )}
+                                 </div>
                                 <div className="flex items-center gap-1">
                                   <Button
                                     variant="outline"
@@ -647,6 +687,18 @@ export default function FamilyPortalPreview() {
           </div>
         </div>
 
+        {/* Modal de selección de agregados */}
+        <AddonsSelectorDialog
+          open={showAddonsSelection}
+          onOpenChange={setShowAddonsSelection}
+          productName={selectedProduct?.name}
+          addons={selectedProduct?.addons || []}
+          selectedAddons={selectedAddons}
+          onAddonsChange={setSelectedAddons}
+          onConfirm={proceedToDaySelection}
+          confirmDisabled={false}
+        />
+
         {/* Modal de selección de días (reutilizable) */}
         <SelectDaysDialog
           open={showDaySelection}
@@ -685,11 +737,19 @@ export default function FamilyPortalPreview() {
                       </span>
                       <span>{PEN(item.subtotal)}</span>
                     </div>
-                    {item.selectedDays && (
-                      <div className="text-xs text-muted-foreground ml-2">
-                        Días: {item.selectedDays.join(", ")}
-                      </div>
-                    )}
+                     {item.selectedDays && (
+                       <div className="text-xs text-muted-foreground ml-2">
+                         Días: {item.selectedDays.join(", ")}
+                       </div>
+                     )}
+                     {item.selectedAddons && Object.keys(item.selectedAddons).length > 0 && (
+                       <div className="text-xs text-muted-foreground ml-2">
+                         Agregados: {Object.entries(item.selectedAddons).map(([addonId, qty]) => {
+                           const addon = item.addons?.find(a => a.id === addonId);
+                           return addon ? `${addon.name} (×${qty})` : '';
+                         }).filter(Boolean).join(", ")} - {PEN(item.addonsPrice || 0)}
+                       </div>
+                     )}
                   </div>
                 ))}
                 <div className="border-t pt-2 font-bold flex justify-between">
