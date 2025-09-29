@@ -5,7 +5,7 @@ import { RTDB_PATHS } from "@/lib/rtdb";
 
 /**
  * Lee ?code= y ?name= de la URL para identificar al cliente.
- * Si no vienen, usa un fallback. Puedes reemplazar esto por tu sesión/login.
+ * Si no vienen, usa un fallback. Puedes reemplazar esto por tu sesión/login real.
  */
 function useClientFromQuery() {
   const params = new URLSearchParams(window.location.search);
@@ -17,7 +17,7 @@ function useClientFromQuery() {
 export default function FamilyPortalPage() {
   const client = useClientFromQuery();
 
-  // Guardado real en RTDB (puedes moverlo a un servicio si prefieres)
+  // Guardado real en RTDB
   const saveOrder = async (payload: any) => {
     const id =
       (globalThis.crypto && "randomUUID" in globalThis.crypto)

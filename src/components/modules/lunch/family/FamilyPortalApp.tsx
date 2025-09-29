@@ -45,12 +45,12 @@ export interface FamilyPortalAppProps {
   onPlaceOrder?: (payload: any) => Promise<void>;
 }
 
-// === Helpers WhatsApp (locales para evitar dependencias externas) ===
+/* ===== Helpers WhatsApp (locales) ===== */
 const normalizePhone = (raw: string) => (raw || "").replace(/\D/g, "");
 const buildWaUrl = (digits: string, msg: string) =>
   `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
 const openWhatsAppNow = (url: string) => {
-  // Abrir en la MISMA pestaña reduce el bloqueo por popups
+  // Abrir en la MISMA pestaña minimiza el bloqueo de popups
   window.location.href = url;
 };
 
@@ -181,14 +181,16 @@ export default function FamilyPortalApp({
       const products = Object.values(menu.products || {})
         .filter((p) => p && p.categoryId === cat.id && p.active !== false)
         .sort((a, b) => {
-          const pa = typeof (a as any).position === "number"
-            ? (a as any).position
-            : typeof (a as any).position === "string"
+          const pa =
+            typeof (a as any).position === "number"
+              ? (a as any).position
+              : typeof (a as any).position === "string"
               ? parseInt((a as any).position)
               : Number.POSITIVE_INFINITY;
-          const pb = typeof (b as any).position === "number"
-            ? (b as any).position
-            : typeof (b as any).position === "string"
+          const pb =
+            typeof (b as any).position === "number"
+              ? (b as any).position
+              : typeof (b as any).position === "string"
               ? parseInt((b as any).position)
               : Number.POSITIVE_INFINITY;
           if (pa !== pb) return pa - pb;
@@ -390,7 +392,7 @@ export default function FamilyPortalApp({
     }
   };
 
-  // Compat si quieres usar animación antes de abrir WA (no recomendado por los bloqueos)
+  // Compat si quieres usar animación antes de abrir WA (no recomendado por bloqueos)
   const confirmAndPlace = async () => {
     setShowConfirm(false);
     setShowLoadingAnimation(true);
@@ -502,7 +504,7 @@ export default function FamilyPortalApp({
                             <div className="flex flex-wrap gap-1">
                               {product.addons.map((a, idx) => (
                                 <Badge key={`${a.id || idx}`} variant="outline" className="text-[11px]">
-                                  {a.name} (+{PEN(a.price)})
+                                  {a.name} (+{PEN(Number(a.price) || 0)})
                                 </Badge>
                               ))}
                             </div>
