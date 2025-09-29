@@ -10,14 +10,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 
-import type { ProductT, CategoryT, MenuT, SettingsT as Settings, OrderItem, AddonT } from "./lunch/types";
+import type {
+  ProductT,
+  CategoryT,
+  MenuT,
+  SettingsT as Settings,
+  OrderItem,
+  AddonT,
+} from "./lunch/types";
 import { getNextWeekDays, getEnabledDays, isDatePast } from "./lunch/utils/dateUtils";
 
-// Reusamos los mismos modales de preview
 import SelectDaysDialog from "@/components/modules/lunch/preview/SelectDaysDialog";
 import AddonsSelectorDialog from "@/components/modules/lunch/preview/AddonsSelectorDialog";
 
@@ -27,16 +32,12 @@ type Client = { code: string; name?: string };
 type CartItem = ProductT & {
   qty: number;
   subtotal: number;
-  selectedDays?: string[];                 // Para productos variados
-  selectedAddons?: { [addonId: string]: number }; // mapa id → cantidad
-  addonsPrice?: number;                    // precio total de addons por unidad (para varied: por día)
+  selectedDays?: string[];
+  selectedAddons?: { [addonId: string]: number };
+  addonsPrice?: number;
 };
 
-type Props = {
-  client: Client;
-  onLogout?: () => void;
-};
-
+/* ===== Helpers ===== */
 const PEN = (n: number) =>
   new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n ?? 0);
 
@@ -57,7 +58,16 @@ function cmpByPositionThenName(a: ProductT, b: ProductT) {
   return (a.name || "").localeCompare(b.name || "");
 }
 
-export default function FamilyMenuWithDays({ client, onLogout }: Props) {
+// WhatsApp helpers
+const normalizePhone = (raw: string) => (raw || "").replace(/\D/g, "");
+const buildWaUrl = (digits: string, msg: string) =>
+  `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
+const openWhatsAppNow = (url: string) => {
+  // abrir en la misma pestaña para evitar bloqueos de popups
+  window.location.href = url;
+};
+
+export default function FamilyMenuWithDays({ client, onLogout }: { client: Client; onLogout?: () => void; }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [menu, setMenu] = useState<MenuT | null>(null);
   const [activeCat, setActiveCat] = useState<string | null>(null);
@@ -68,13 +78,9 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
   const [resolvedName, setResolvedName] = useState<string>("");
   const [showHistory, setShowHistory] = useState(false);
 
-  // anuncios
-  const { announcements } = useActiveAnnouncements();
-
   // confirmación
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmStudent, setConfirmStudent] = useState<string>("");
-  const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("segundo");
   const [confirmNote, setConfirmNote] = useState<string>("");
 
   // variados + agregados
@@ -83,6 +89,9 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
   const [selectedProduct, setSelectedProduct] = useState<ProductT | null>(null);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<{ [addonId: string]: number }>({});
+
+  // anuncios
+  const { announcements } = useActiveAnnouncements();
 
   /* ==== Resolver nombre ==== */
   useEffect(() => {
@@ -104,7 +113,12 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
       if ((RTDB_PATHS as any)?.clients) {
         candidates.push(`${(RTDB_PATHS as any).clients}/${client.code}`);
       }
-      candidates.push(`/clients/${client.code}`, `/students/${client.code}`, `/alumnos/${client.code}`, `/people/${client.code}`);
+      candidates.push(
+        `/clients/${client.code}`,
+        `/students/${client.code}`,
+        `/alumnos/${client.code}`,
+        `/people/${client.code}`
+      );
       for (const p of candidates) {
         const row = await tryGet(p);
         const name = row?.name || row?.fullName || row?.fullname;
@@ -129,14 +143,25 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
       }
       if (mounted) setResolvedName("Estudiante");
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [client.code, client.name]);
 
   /* ==== Escuchar configuración y menú ==== */
   useEffect(() => {
-    const off1 = RTDBHelper.listenToData<Settings>(RTDB_PATHS.lunch_settings, (d) => setSettings(d || null));
-    const off2 = RTDBHelper.listenToData<MenuT>(RTDB_PATHS.lunch_menu, (d) => setMenu(d || null));
-    return () => { off1?.(); off2?.(); };
+    const off1 = RTDBHelper.listenToData<Settings>(
+      RTDB_PATHS.lunch_settings,
+      (d) => setSettings(d || null)
+    );
+    const off2 = RTDBHelper.listenToData<MenuT>(
+      RTDB_PATHS.lunch_menu,
+      (d) => setMenu(d || null)
+    );
+    return () => {
+      off1?.();
+      off2?.();
+    };
   }, []);
 
   /* ==== Derivados ==== */
@@ -149,18 +174,14 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     const out: Record<string, ProductT[]> = {};
     const all = Object.values(menu?.products || {}).filter((p) => {
       if (!p || p.active === false) return false;
-      // Ocultar almuerzos en el pasado
-      if (p.type === "lunch" && p.specificDate && isDatePast(p.specificDate)) {
-        return false;
-      }
+      if (p.type === "lunch" && p.specificDate && isDatePast(p.specificDate)) return false;
       return true;
     });
-
     for (const p of all) {
       const key = p.categoryId || "otros";
       (out[key] ||= []).push(p as ProductT);
     }
-    for (const key of Object.keys(out)) out[key].sort(cmpByPositionThenName);
+    Object.keys(out).forEach((k) => out[k].sort(cmpByPositionThenName));
     return out;
   }, [menu]);
 
@@ -172,10 +193,10 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
   const availableDays = useMemo(() => {
     const enabledDayNames = getEnabledDays(settings?.disabledDays);
     const weekDays = getNextWeekDays();
-    return weekDays.filter(day => enabledDayNames.includes(day.day));
+    return weekDays.filter((day) => enabledDayNames.includes(day.day));
   }, [settings]);
 
-  // total con agregados (para varied: por día)
+  // total (incluye agregados en varied)
   const total = useMemo(() => {
     return Object.values(cart).reduce((acc, item) => {
       if (item.type === "varied" && item.selectedDays?.length) {
@@ -191,12 +212,8 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     setSelectedProduct(product);
     setSelectedDays([]);
     setSelectedAddons({});
-    // si tiene agregados, primero addons; sino, días
-    if (product.addons && product.addons.length > 0) {
-      setShowAddonsSelection(true);
-    } else {
-      setShowDaySelection(true);
-    }
+    if (product.addons && product.addons.length > 0) setShowAddonsSelection(true);
+    else setShowDaySelection(true);
   };
 
   const proceedToDaySelection = () => {
@@ -204,10 +221,13 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     setShowDaySelection(true);
   };
 
-  const computeAddonsPrice = (addons: AddonT[] | undefined, map: { [id: string]: number }) => {
+  const computeAddonsPrice = (
+    addons: AddonT[] | undefined,
+    map: { [id: string]: number }
+  ) => {
     if (!addons || !map) return 0;
     return Object.entries(map).reduce((tot, [id, qty]) => {
-      const a = addons.find(x => x.id === id);
+      const a = addons.find((x) => x.id === id);
       return tot + (a?.price || 0) * (qty || 0);
     }, 0);
   };
@@ -218,7 +238,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
       return;
     }
 
-    const addonsPrice = computeAddonsPrice(selectedProduct.addons, selectedAddons); // por unidad (por día)
+    const addonsPrice = computeAddonsPrice(selectedProduct.addons, selectedAddons);
     const cartKey = `${selectedProduct.id}_varied`;
 
     setCart((prev) => {
@@ -231,9 +251,9 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
           ...selectedProduct,
           qty: newQty,
           selectedDays: selectedDays.slice(),
-          selectedAddons: Object.keys(selectedAddons).length ? { ...selectedAddons } : undefined,
+          selectedAddons:
+            Object.keys(selectedAddons).length ? { ...selectedAddons } : undefined,
           addonsPrice,
-          // subtotal NO se usa para varied en total(), pero lo dejamos informativo:
           subtotal: perDay * newQty * selectedDays.length,
         },
       };
@@ -246,14 +266,12 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     setSelectedAddons({});
   };
 
-  /* ==== Agregar productos tipo lunch ==== */
+  /* ==== Lunch ==== */
   const addLunchToCart = (product: ProductT) => {
     if (!product.specificDate) return;
-
     setCart((prev) => {
       const existing = prev[product.id];
       const newQty = (existing?.qty ?? 0) + 1;
-
       return {
         ...prev,
         [product.id]: {
@@ -269,14 +287,11 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
     setCart((prev) => {
       const existing = prev[key];
       if (!existing) return prev;
-
       const newQty = existing.qty - 1;
       if (newQty <= 0) {
-        const { [key]: _, ...rest } = prev;
+        const { [key]: _remove, ...rest } = prev;
         return rest;
       }
-
-      // recalcular subtotal
       let newSubtotal = 0;
       if (existing.type === "varied" && existing.selectedDays?.length) {
         const perDay = (existing.price || 0) + (existing.addonsPrice || 0);
@@ -284,28 +299,58 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
       } else {
         newSubtotal = (existing.price || 0) * newQty;
       }
-
       return {
         ...prev,
-        [key]: {
-          ...existing,
-          qty: newQty,
-          subtotal: newSubtotal,
-        },
+        [key]: { ...existing, qty: newQty, subtotal: newSubtotal },
       };
     });
   };
 
   const clearCart = () => setCart({});
 
+  /* ===== WhatsApp message ===== */
+  const makeWaMessage = () => {
+    const lines = Object.values(cart).map((i) => {
+      const base = `• ${i.name} (x${i.qty})`;
+      const days =
+        i.selectedDays && i.selectedDays.length
+          ? ` – Días: ${i.selectedDays
+              .map((d) =>
+                new Date(d + "T12:00:00").toLocaleDateString("es-PE", {
+                  weekday: "short",
+                  day: "2-digit",
+                })
+              )
+              .join(", ")}`
+          : "";
+      return base + days;
+    });
+
+    return (
+      `🍽️ *Pedido de almuerzo*\n\n` +
+      `👤 ${resolvedName || client.name || "Estudiante"} (${client.code})\n\n` +
+      `📦 *Detalle:*\n${lines.join("\n")}\n\n` +
+      `💰 *Total:* ${PEN(total)}\n` +
+      `📝 ${confirmNote ? `Nota: ${confirmNote}` : "Sin observaciones"}`
+    );
+  };
+
   /* ===== Confirmar pedido ===== */
   const openConfirm = () => {
     setMessage(null);
-    if (settings?.isOpen === false) { setMessage("El pedido no está disponible en este momento."); return; }
-    if (!inWindow(settings?.orderWindow)) { setMessage("Fuera del horario permitido para pedidos."); return; }
-    if (!Object.keys(cart).length) { setMessage("Agregue al menos un producto."); return; }
+    if (settings?.isOpen === false) {
+      setMessage("El pedido no está disponible en este momento.");
+      return;
+    }
+    if (!inWindow(settings?.orderWindow)) {
+      setMessage("Fuera del horario permitido para pedidos.");
+      return;
+    }
+    if (!Object.keys(cart).length) {
+      setMessage("Agregue al menos un producto.");
+      return;
+    }
     setConfirmStudent(resolvedName || client.name || "Estudiante");
-    setConfirmRecess("segundo");
     setConfirmNote("");
     setShowConfirm(true);
   };
@@ -313,9 +358,25 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
   const confirmAndPlace = async () => {
     setMessage(null);
     const alumno = (confirmStudent || "").trim();
-    if (!alumno) { setMessage("Debe indicar el nombre del alumno."); return; }
+    if (!alumno) {
+      setMessage("Debe indicar el nombre del alumno.");
+      return;
+    }
 
     setPosting(true);
+    setShowConfirm(false);
+
+    // 1) abrir WhatsApp YA (mismo gesto de click)
+    const phoneDigits = normalizePhone(settings?.whatsapp?.phone || "");
+    if (!phoneDigits) {
+      setPosting(false);
+      setMessage("No se pudo enviar a WhatsApp: configure un número en ajustes.");
+      return;
+    }
+    const url = buildWaUrl(phoneDigits, makeWaMessage());
+    openWhatsAppNow(url);
+
+    // 2) guardar pedido en RTDB (no bloquear al usuario)
     try {
       const orderCode = await RTDBHelper.getNextCorrelative("lunch");
 
@@ -323,11 +384,9 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
         id: item.id,
         name: item.name,
         qty: item.qty,
-        price: item.price,                // precio base
+        price: item.price,
         ...(item.type === "lunch" ? { specificDate: item.specificDate } : {}),
         ...(item.type === "varied" ? { selectedDays: item.selectedDays } : {}),
-        // si necesitas persistir addons, agrega:
-        // ...(item.selectedAddons ? { addons: item.selectedAddons } : {})
       }));
 
       // Fecha Perú (YYYY-MM-DD)
@@ -342,14 +401,13 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
         id: "",
         code: orderCode,
         clientCode: client.code,
-        clientName: resolvedName || client.name || "Estudiante",
+        clientName: alumno,
         items,
         note: confirmNote || null,
         total,
         status: "pending",
         createdAt: Date.now(),
         channel: "familias",
-        recess: confirmRecess,
         studentName: alumno,
         orderDate,
       };
@@ -361,11 +419,10 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
       });
 
       clearCart();
-      setShowConfirm(false);
       setMessage(`¡Pedido enviado! N° ${orderCode}`);
     } catch (err) {
       console.error("Error pushing order:", err);
-      setMessage("No se pudo enviar el pedido. Intente nuevamente.");
+      setMessage("No se pudo guardar el pedido. Intente nuevamente.");
     } finally {
       setPosting(false);
     }
@@ -374,24 +431,15 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
   /* ===== Tarjeta de producto ===== */
   const ProductCard: React.FC<{ p: ProductT }> = ({ p }) => {
     const handleAddToCart = () => {
-      if (p.type === "varied") {
-        handleVariedProduct(p);
-      } else {
-        // si quisieras permitir addons también en lunch, podrías abrir addons aquí
-        addLunchToCart(p);
-      }
+      if (p.type === "varied") handleVariedProduct(p);
+      else addLunchToCart(p);
     };
 
     return (
       <Card key={p.id} className="h-full">
         {p.image && (
           <div className="aspect-video w-full overflow-hidden rounded-t-lg">
-            <img
-              src={p.image}
-              alt={p.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
+            <img src={p.image} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
           </div>
         )}
 
@@ -419,7 +467,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
                 </p>
               )}
 
-              {/* Detalle de almuerzo debajo del precio */}
+              {/* Detalle de almuerzo */}
               {p.type === "lunch" && (
                 <ul className="mt-2 text-sm text-muted-foreground space-y-0.5">
                   {(p as any).entrada && (
@@ -434,13 +482,10 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
                   {(p as any).refresco && (
                     <li>🥤 <span className="font-medium">Refresco:</span> {(p as any).refresco}</li>
                   )}
-                  {p.description && (
-                    <li>📝 <span className="font-medium">Observación:</span> {p.description}</li>
-                  )}
                 </ul>
               )}
 
-              {/* Agregados visibles en la tarjeta (como en preview) */}
+              {/* Agregados visibles en la tarjeta */}
               {p.addons && p.addons.length > 0 && (
                 <div className="mt-2">
                   <div className="text-[11px] font-medium text-muted-foreground mb-1">
@@ -448,7 +493,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {p.addons
-                      .filter(a => a && a.active !== false)
+                      .filter((a) => a && a.active !== false)
                       .map((a, idx) => (
                         <Badge key={`${a.id || idx}`} variant="outline" className="text-[11px]">
                           {a.name} (+{PEN(a.price)})
@@ -459,7 +504,9 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
               )}
             </div>
 
-            <Button onClick={handleAddToCart} size="sm">Agregar</Button>
+            <Button onClick={handleAddToCart} size="sm">
+              Agregar
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -508,9 +555,21 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
         {/* Mensaje */}
         {message && (
           <div className="mb-6">
-            <Card className={message.includes("Error") || message.includes("No se") ? "border-destructive" : "border-green-500"}>
+            <Card
+              className={
+                message.includes("Error") || message.includes("No se")
+                  ? "border-destructive"
+                  : "border-green-500"
+              }
+            >
               <CardContent className="p-4">
-                <p className={message.includes("Error") || message.includes("No se") ? "text-destructive" : "text-green-700"}>
+                <p
+                  className={
+                    message.includes("Error") || message.includes("No se")
+                      ? "text-destructive"
+                      : "text-green-700"
+                  }
+                >
                   {message}
                 </p>
               </CardContent>
@@ -521,7 +580,6 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
         <div className="grid lg:grid-cols-4 gap-6">
           {/* Menú */}
           <div className="lg:col-span-3">
-            {/* Categorías */}
             <div className="flex gap-2 mb-6 overflow-x-auto">
               {categories.map((cat) => (
                 <Button
@@ -535,7 +593,6 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
               ))}
             </div>
 
-            {/* Productos */}
             {activeCat && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {(productsByCategory[activeCat] || []).map((product) => (
@@ -568,28 +625,29 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
                               {item.type === "varied" && item.selectedDays?.length ? (
                                 <>
                                   <span> × {item.selectedDays.length} días</span>
-                                  {item.addonsPrice ? <span> + agregados ({PEN(item.addonsPrice)}/día)</span> : null}
+                                  {item.addonsPrice ? (
+                                    <span> + agregados ({PEN(item.addonsPrice)}/día)</span>
+                                  ) : null}
                                 </>
                               ) : null}
                             </p>
                             {item.selectedDays && (
                               <p className="text-xs text-muted-foreground">
-                                Días: {item.selectedDays.map(date =>
-                                  new Date(date + "T12:00:00").toLocaleDateString("es-PE", {
-                                    weekday: "short",
-                                    day: "numeric",
-                                  })
-                                ).join(", ")}
+                                Días:{" "}
+                                {item.selectedDays
+                                  .map((date) =>
+                                    new Date(date + "T12:00:00").toLocaleDateString("es-PE", {
+                                      weekday: "short",
+                                      day: "numeric",
+                                    })
+                                  )
+                                  .join(", ")}
                               </p>
                             )}
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">{PEN(item.subtotal)}</span>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeFromCart(key)}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => removeFromCart(key)}>
                               -
                             </Button>
                           </div>
@@ -638,7 +696,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
         onOpenChange={setShowDaySelection}
         productName={selectedProduct?.name}
         pricePerDay={selectedProduct?.price}
-        days={availableDays.map(d => ({ date: d.date, label: d.label }))}
+        days={availableDays.map((d) => ({ date: d.date, label: d.label }))}
         selectedDays={selectedDays}
         onToggleDay={(date, checked) =>
           setSelectedDays((prev) => (checked ? [...prev, date] : prev.filter((x) => x !== date)))
@@ -648,7 +706,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
         disabledDays={settings?.disabledDays}
       />
 
-      {/* Modal de confirmación */}
+      {/* Modal de confirmación (simple) */}
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
         <DialogContent>
           <DialogHeader>
@@ -662,17 +720,6 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
                 value={confirmStudent}
                 onChange={(e) => setConfirmStudent(e.target.value)}
               />
-            </div>
-
-            <div>
-              <Label htmlFor="recess">Recreo</Label>
-              <Select value={confirmRecess} onValueChange={(value: "primero" | "segundo") => setConfirmRecess(value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="primero">Primer recreo</SelectItem>
-                  <SelectItem value="segundo">Segundo recreo</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <div>
