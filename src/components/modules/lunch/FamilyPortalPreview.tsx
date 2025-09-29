@@ -153,19 +153,9 @@ export default function FamilyPortalPreview() {
       const products = Object.values(menu.products || {})
         .filter((p) => p && p.categoryId === cat.id && p.active !== false)
         .sort((a, b) => {
-          const orderA =
-            typeof a.order === "number"
-              ? a.order
-              : typeof a.order === "string"
-              ? parseInt(a.order) || 0
-              : 0;
-          const orderB =
-            typeof b.order === "number"
-              ? b.order
-              : typeof b.order === "string"
-              ? parseInt(b.order) || 0
-              : 0;
-          if (orderA !== orderB) return orderA - orderB;
+          const positionA = typeof a.position === "number" ? a.position : Number.POSITIVE_INFINITY;
+          const positionB = typeof b.position === "number" ? b.position : Number.POSITIVE_INFINITY;
+          if (positionA !== positionB) return positionA - positionB;
           return a.name.localeCompare(b.name);
         });
       acc[cat.id] = products;
@@ -484,12 +474,12 @@ export default function FamilyPortalPreview() {
                                   <div className="text-xs font-medium text-muted-foreground mb-1">
                                     Agregados disponibles:
                                   </div>
-                                  <div className="flex flex-wrap gap-1">
-                                    {product.addons.map((addon) => (
-                                      <Badge key={addon.id} variant="outline" className="text-xs">
-                                        {addon.name} (+{PEN(addon.price)})
-                                      </Badge>
-                                    ))}
+                                   <div className="flex flex-wrap gap-1">
+                                     {product.addons?.map((addon, idx) => (
+                                       <Badge key={`${addon.id || idx}`} variant="outline" className="text-xs">
+                                         {addon.name} (+{PEN(addon.price)})
+                                       </Badge>
+                                     ))}
                                   </div>
                                 </div>
                               )}

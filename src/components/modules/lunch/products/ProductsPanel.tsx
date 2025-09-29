@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Plus, Edit, Trash2, Save, X, Upload } from "lucide-react";
+import { CalendarIcon, Plus, Edit, Trash2, Save, X, Upload, GripVertical } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useImageUpload } from "@/hooks/useImageUpload";
@@ -39,6 +39,8 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
   const [editing, setEditing] = useState<ProductT | null>(null);
   const [showForm, setShowForm] = useState(false);
   const { uploadImage, isUploading } = useImageUpload();
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -104,8 +106,8 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     // Orden por posición
     Object.keys(result).forEach((catId) => {
       result[catId].sort((a: any, b: any) => {
-        const posA = Number(a.position) || 0;
-        const posB = Number(b.position) || 0;
+        const posA = Number(a.position) || Number.POSITIVE_INFINITY;
+        const posB = Number(b.position) || Number.POSITIVE_INFINITY;
         return posA - posB;
       });
     });
@@ -243,15 +245,89 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     }
   };
 
+  // Drag and drop functions
+  const onDragStart = (id: string) => (ev: React.DragEvent) => {
+    setDraggingId(id);
+    ev.dataTransfer.effectAllowed = "move";
+  };
+
+  const onDragOver = (overId: string, categoryId: string) => (ev: React.DragEvent) => {
+    ev.preventDefault();
+    if (!draggingId || draggingId === overId) return;
+
+    const categoryProducts = productsByCategory[categoryId] || [];
+    const dragProduct = categoryProducts.find((p: any) => p.id === draggingId);
+    if (!dragProduct) return; // no mover entre categorías
+
+    const fromIndex = categoryProducts.findIndex((p: any) => p.id === draggingId);
+    const toIndex = categoryProducts.findIndex((p: any) => p.id === overId);
+    
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const reorderedProducts = [...categoryProducts];
+    reorderedProducts.splice(fromIndex, 1);
+    reorderedProducts.splice(toIndex, 0, dragProduct);
+
+    // Actualizar las posiciones
+    const updates: Record<string, any> = {};
+    reorderedProducts.forEach((product: any, index) => {
+      updates[`${RTDB_PATHS.lunch_menu}/products/${product.id}/position`] = index;
+    });
+
+    // Aplicar cambios localmente
+    const updatedMenu = { ...menu };
+    if (updatedMenu.products) {
+      reorderedProducts.forEach((product: any, index) => {
+        if (updatedMenu.products![product.id]) {
+          updatedMenu.products![product.id] = { 
+            ...updatedMenu.products![product.id], 
+            position: index 
+          };
+        }
+      });
+      onMenuUpdate(updatedMenu);
+    }
+
+    setDirty(true);
+  };
+
+  const onDragEnd = () => {
+    setDraggingId(null);
+  };
+
+  const saveOrder = async () => {
+    try {
+      const updates: Record<string, any> = {};
+      Object.values(menu.products || {}).forEach((p: any) => {
+        if (p?.id) {
+          updates[`${RTDB_PATHS.lunch_menu}/products/${p.id}/position`] = 
+            typeof p.position === "number" ? p.position : Number.POSITIVE_INFINITY;
+        }
+      });
+      await RTDBHelper.updateData(updates);
+      toast({ title: "Orden guardado" });
+      setDirty(false);
+    } catch {
+      toast({ title: "No se pudo guardar el orden", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Add Product Button */}
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Productos</h3>
-        <Button onClick={() => setShowForm(true)} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Agregar Producto
-        </Button>
+        <div className="flex gap-2">
+          {dirty && (
+            <Button onClick={saveOrder} variant="outline">
+              Guardar orden
+            </Button>
+          )}
+          <Button onClick={() => setShowForm(true)} className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Agregar Producto
+          </Button>
+        </div>
       </div>
 
       {/* Product Form */}
@@ -477,9 +553,18 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
               <CardContent>
                 <div className="grid gap-3">
                   {products.map((product: any) => (
-                    <div key={product.id} className="flex items-start justify-between p-3 border rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
+                    <div 
+                      key={product.id} 
+                      className="flex items-start justify-between p-3 border rounded-lg hover:bg-muted/30"
+                      draggable
+                      onDragStart={onDragStart(product.id)}
+                      onDragEnd={onDragEnd}
+                      onDragOver={onDragOver(product.id, category.id)}
+                    >
+                       <div className="flex items-start gap-3">
+                         <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab mt-1" />
+                         <div className="flex-1">
+                           <div className="flex items-center gap-2">
                           <h4 className="font-medium">{product.name}</h4>
                           <span className={`px-2 py-1 text-xs rounded ${product.type === "lunch" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}`}>
                             {product.type === "lunch" ? "Almuerzo" : "Variado"}
@@ -528,10 +613,11 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                               {format(new Date(product.specificDate + "T12:00:00"), "dd/MM/yyyy")}
                             </span>
                           )}
-                        </div>
-                      </div>
+                           </div>
+                         </div>
+                       </div>
 
-                      <div className="flex gap-2">
+                       <div className="flex gap-2">
                         <Button 
                           variant="outline" 
                           size="sm" 
