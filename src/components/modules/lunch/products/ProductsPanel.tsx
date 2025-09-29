@@ -532,10 +532,24 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                       </div>
 
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => editProduct(product as ProductT)}>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => {
+                            console.log("Edit button clicked for product:", product);
+                            editProduct(product as ProductT);
+                          }}
+                        >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => deleteProduct(product as ProductT)}>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => {
+                            console.log("Delete button clicked for product:", product);
+                            deleteProduct(product as ProductT);
+                          }}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
