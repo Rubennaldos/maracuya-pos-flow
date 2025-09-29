@@ -32,9 +32,6 @@ import SelectDaysDialog from "@/components/modules/lunch/preview/SelectDaysDialo
 import AddonsSelectorDialog from "@/components/modules/lunch/preview/AddonsSelectorDialog";
 import { OrderLoadingAnimation } from "@/components/ui/OrderLoadingAnimation";
 
-// Helper WhatsApp (abre sin bloqueo)
-import { normalizePhone, buildWaUrl, openWhatsAppNow } from "./openWhatsApp";
-
 type Mode = "preview" | "live";
 
 export interface FamilyPortalAppProps {
@@ -47,6 +44,15 @@ export interface FamilyPortalAppProps {
   /** Persistencia (solo se usa en modo live). Debe lanzar error si falla */
   onPlaceOrder?: (payload: any) => Promise<void>;
 }
+
+// === Helpers WhatsApp (locales para evitar dependencias externas) ===
+const normalizePhone = (raw: string) => (raw || "").replace(/\D/g, "");
+const buildWaUrl = (digits: string, msg: string) =>
+  `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
+const openWhatsAppNow = (url: string) => {
+  // Abrir en la MISMA pestaña reduce el bloqueo por popups
+  window.location.href = url;
+};
 
 const _formatDateForPeru =
   (DateUtils as any)?.formatDateForPeru ??
@@ -133,7 +139,7 @@ export default function FamilyPortalApp({
   const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("primero");
   const [confirmNote, setConfirmNote] = useState("");
   const [posting, setPosting] = useState(false);
-  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false); // mantenemos por compat
+  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false); // compat opcional
   const [message, setMessage] = useState("");
 
   // Carga inicial
@@ -258,7 +264,11 @@ export default function FamilyPortalApp({
   };
 
   const addToCart = (product: ProductT) => {
-    if (product.type === "varied") return handleVariedProduct(product);
+    // Abrimos selector si es "varied" o si tiene agregados
+    if (product.type === "varied" || (product.addons && product.addons.length > 0)) {
+      handleVariedProduct(product);
+      return;
+    }
     setCart((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) {
@@ -318,7 +328,7 @@ export default function FamilyPortalApp({
     })),
   });
 
-  /** Construye el mensaje de WA */
+  /** Mensaje de WA */
   const makeWaMessage = () => {
     const lines = cart.map(
       (i) =>
@@ -336,7 +346,7 @@ export default function FamilyPortalApp({
     );
   };
 
-  /** Confirmar y abrir WhatsApp INMEDIATAMENTE (evita pop-up blocking) */
+  /** Confirmar y abrir WhatsApp en la misma pestaña (evita bloqueos) */
   const confirmNow = async () => {
     if (cart.length === 0) {
       toast({ title: "Tu carrito está vacío", variant: "destructive" });
@@ -346,18 +356,22 @@ export default function FamilyPortalApp({
     setPosting(true);
     setShowConfirm(false);
 
-    // 1) Abrir WhatsApp YA (mismo gesto de click)
-    const rawPhone = whatsappPhoneOverride ?? (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
+    const rawPhone =
+      whatsappPhoneOverride ?? (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
     const phoneDigits = normalizePhone(rawPhone || "");
     if (!phoneDigits) {
       setPosting(false);
-      toast({ title: "Teléfono de WhatsApp inválido", description: "Configura un número con código de país.", variant: "destructive" });
+      toast({
+        title: "Teléfono de WhatsApp inválido",
+        description: "Configura un número con código de país.",
+        variant: "destructive",
+      });
       return;
     }
-    const url = buildWaUrl(phoneDigits, makeWaMessage());
-    openWhatsAppNow(url); // navega a WhatsApp en la misma pestaña
 
-    // 2) Guardar (si live) sin bloquear al usuario
+    const url = buildWaUrl(phoneDigits, makeWaMessage());
+    openWhatsAppNow(url); // Navega a WhatsApp
+
     try {
       const payload = buildOrderPayload();
       if (!isPreview) {
@@ -370,24 +384,19 @@ export default function FamilyPortalApp({
       setCart([]);
     } catch (e) {
       console.error(e);
-      // El usuario ya salió a WhatsApp; registramos el error y mostramos toast si regresa
       toast({ title: "No se pudo guardar el pedido", variant: "destructive" });
     } finally {
       setPosting(false);
     }
   };
 
-  // (Compat) Si en algún flujo quieres mostrar la animación, puedes usar estas dos:
+  // Compat si quieres usar animación antes de abrir WA (no recomendado por los bloqueos)
   const confirmAndPlace = async () => {
-    // Si prefieres animación antes de abrir WA, quita el confirmNow del botón y usa este método.
-    // Nota: abrir WA después de animaciones puede ser bloqueado por el navegador.
     setShowConfirm(false);
     setShowLoadingAnimation(true);
   };
-
   const handleAnimationComplete = async () => {
     setShowLoadingAnimation(false);
-    // Abrir WhatsApp aquí puede ser bloqueado; por eso preferimos confirmNow directamente.
     await confirmNow();
   };
 
@@ -423,7 +432,7 @@ export default function FamilyPortalApp({
         )}
 
         <div className="rounded-lg p-4 border bg-white">
-          {/* Encabezado compacto como familias */}
+          {/* Encabezado compacto */}
           <div className="bg-green-50 border border-green-200 p-3 rounded-md mb-4 flex items-center justify-between">
             <div>
               <div className="text-sm">¡Hola, {clientName}!</div>
@@ -433,9 +442,8 @@ export default function FamilyPortalApp({
           </div>
 
           <div className="grid lg:grid-cols-3 gap-6">
-            {/* Columna de productos (2/3) */}
+            {/* Productos */}
             <div className="lg:col-span-2">
-              {/* Pills de categorías */}
               {categories.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4">
                   {categories.map((cat) => (
@@ -452,7 +460,6 @@ export default function FamilyPortalApp({
                 </div>
               )}
 
-              {/* Grilla de tarjetas */}
               {activeCat && productsByCategory[activeCat]?.length ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {productsByCategory[activeCat].map((product) => (
@@ -460,7 +467,6 @@ export default function FamilyPortalApp({
                       key={product.id}
                       className="rounded-lg border bg-white overflow-hidden hover:shadow-sm transition"
                     >
-                      {/* Imagen */}
                       <div className="w-full h-40 bg-muted/40 overflow-hidden">
                         {product.image ? (
                           <img
@@ -475,7 +481,6 @@ export default function FamilyPortalApp({
                         )}
                       </div>
 
-                      {/* Contenido */}
                       <div className="p-3">
                         <div className="text-sm font-medium mb-1 line-clamp-1">{product.name}</div>
 
@@ -485,6 +490,22 @@ export default function FamilyPortalApp({
                             {product.type === "varied" && (
                               <span className="ml-1 text-xs text-muted-foreground">por día</span>
                             )}
+                          </div>
+                        )}
+
+                        {/* Agregados visibles en la tarjeta */}
+                        {product.addons && product.addons.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-[11px] font-medium text-muted-foreground mb-1">
+                              Agregados disponibles:
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {product.addons.map((a, idx) => (
+                                <Badge key={`${a.id || idx}`} variant="outline" className="text-[11px]">
+                                  {a.name} (+{PEN(a.price)})
+                                </Badge>
+                              ))}
+                            </div>
                           </div>
                         )}
 
@@ -505,7 +526,7 @@ export default function FamilyPortalApp({
               )}
             </div>
 
-            {/* Carrito (1/3) */}
+            {/* Carrito */}
             <div className="lg:col-span-1">
               <Card className="sticky top-4">
                 <CardHeader className="pb-3">
@@ -522,7 +543,6 @@ export default function FamilyPortalApp({
                     </div>
                   ) : (
                     <>
-                      {/* Agrupar por fecha cuando corresponda (igual UX) */}
                       {(() => {
                         const groups = cart.reduce((acc, item) => {
                           if (item.selectedDays?.length) {
@@ -633,7 +653,7 @@ export default function FamilyPortalApp({
                           )}
                         </div>
 
-                        {/* Usa confirmNow para abrir WA sin bloqueo */}
+                        {/* Abrimos WA sin bloqueo */}
                         <Button className="w-full" onClick={confirmNow} disabled={!cart.length || posting}>
                           {isPreview ? "Confirmar Pedido (Demo)" : "Confirmar Pedido"}
                         </Button>
@@ -682,7 +702,7 @@ export default function FamilyPortalApp({
           disabledDays={settings?.disabledDays}
         />
 
-        {/* Confirmación (sigue disponible si prefieres flujo con modal) */}
+        {/* Confirmación (si prefieres usar modal) */}
         <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -770,7 +790,6 @@ export default function FamilyPortalApp({
               <Button variant="outline" onClick={() => setShowConfirm(false)}>
                 Cancelar
               </Button>
-              {/* También abrimos WA desde el modal sin animación */}
               <Button onClick={confirmNow} disabled={posting} className="bg-green-600 hover:bg-green-700">
                 {posting ? "Enviando pedido..." : "Enviar pedido"}
               </Button>
@@ -778,7 +797,7 @@ export default function FamilyPortalApp({
           </DialogContent>
         </Dialog>
 
-        {/* Animación (opcional / compat) */}
+        {/* Animación opcional */}
         <OrderLoadingAnimation open={showLoadingAnimation} onComplete={handleAnimationComplete} />
       </CardContent>
     </Card>

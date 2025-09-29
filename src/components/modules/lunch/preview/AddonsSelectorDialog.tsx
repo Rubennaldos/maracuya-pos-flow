@@ -1,22 +1,23 @@
-// src/components/modules/lunch/preview/AddonsSelectorDialog.tsx
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Minus } from "lucide-react";
-import type { AddonT } from "../types";
+import type { AddonT } from "@/components/modules/lunch/types";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   productName?: string;
   addons: AddonT[];
-  selectedAddons: { [addonId: string]: number }; // cantidad seleccionada por addon
+  selectedAddons: { [addonId: string]: number }; // cantidad por addon
   onAddonsChange: (selectedAddons: { [addonId: string]: number }) => void;
   onConfirm: () => void;
   confirmDisabled?: boolean;
 };
+
+const PEN = (n: number) => `S/ ${Number(n || 0).toFixed(2)}`;
 
 export default function AddonsSelectorDialog({
   open,
@@ -28,44 +29,34 @@ export default function AddonsSelectorDialog({
   onConfirm,
   confirmDisabled,
 }: Props) {
-  const activeAddons = useMemo(() => 
-    addons.filter(addon => addon.active !== false), 
+  const activeAddons = useMemo(
+    () => (addons || []).filter((a) => a && a.active !== false),
     [addons]
   );
 
   const totalAddonsPrice = useMemo(() => {
-    return Object.entries(selectedAddons).reduce((total, [addonId, quantity]) => {
-      const addon = addons.find(a => a.id === addonId);
-      return total + (addon?.price || 0) * quantity;
+    return Object.entries(selectedAddons).reduce((total, [addonId, qty]) => {
+      const addon = addons.find((a) => a.id === addonId);
+      return total + (addon?.price || 0) * (qty || 0);
     }, 0);
   }, [selectedAddons, addons]);
 
-  const PEN = (amount: number) => `S/ ${amount.toFixed(2)}`;
-
-  const handleToggleAddon = (addonId: string) => {
-    const newSelected = { ...selectedAddons };
-    if (newSelected[addonId]) {
-      delete newSelected[addonId];
-    } else {
-      newSelected[addonId] = 1;
-    }
-    onAddonsChange(newSelected);
+  const toggleAddon = (id: string) => {
+    const next = { ...selectedAddons };
+    if (next[id]) delete next[id];
+    else next[id] = 1;
+    onAddonsChange(next);
   };
 
-  const handleChangeQuantity = (addonId: string, delta: number) => {
-    const newSelected = { ...selectedAddons };
-    const currentQty = newSelected[addonId] || 0;
-    const newQty = Math.max(0, currentQty + delta);
-    
-    if (newQty === 0) {
-      delete newSelected[addonId];
-    } else {
-      newSelected[addonId] = newQty;
-    }
-    onAddonsChange(newSelected);
+  const changeQty = (id: string, delta: number) => {
+    const next = { ...selectedAddons };
+    const q = (next[id] || 0) + delta;
+    if (q <= 0) delete next[id];
+    else next[id] = q;
+    onAddonsChange(next);
   };
 
-  const hasSelectedAddons = Object.keys(selectedAddons).length > 0;
+  const hasSelected = Object.keys(selectedAddons).length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,91 +73,74 @@ export default function AddonsSelectorDialog({
           )}
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {activeAddons.length === 0 ? (
             <p className="text-center text-muted-foreground py-4">
               Este producto no tiene agregados disponibles
             </p>
           ) : (
-            <>
-              <div className="space-y-3">
-                {activeAddons.map((addon) => {
-                  const isSelected = selectedAddons[addon.id!] > 0;
-                  const quantity = selectedAddons[addon.id!] || 0;
-
-                  return (
-                    <div
-                      key={addon.id}
-                      className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${
-                        isSelected ? "border-primary bg-primary/5" : "border-border"
-                      }`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => handleToggleAddon(addon.id!)}
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{addon.name}</span>
-                            <Badge variant="secondary" className="text-xs">
-                              {PEN(addon.price)}
-                            </Badge>
-                          </div>
-                        </div>
+            activeAddons.map((addon) => {
+              const selected = (selectedAddons[addon.id!] || 0) > 0;
+              const qty = selectedAddons[addon.id!] || 0;
+              return (
+                <div
+                  key={addon.id}
+                  className={`p-3 border rounded-lg flex items-start justify-between ${
+                    selected ? "border-primary bg-primary/5" : "border-border"
+                  }`}
+                >
+                  <div className="flex items-start gap-3 pr-3">
+                    <Checkbox checked={selected} onCheckedChange={() => toggleAddon(addon.id!)} />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{addon.name}</span>
+                        <Badge variant="secondary" className="text-xs">{PEN(addon.price)}</Badge>
                       </div>
-
-                      {isSelected && (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleChangeQuantity(addon.id!, -1)}
-                            className="h-7 w-7 p-0"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="text-sm w-6 text-center">{quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleChangeQuantity(addon.id!, 1)}
-                            className="h-7 w-7 p-0"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
+                      {addon.description && (
+                        <div className="text-xs text-muted-foreground mt-1">{addon.description}</div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-
-              {hasSelectedAddons && (
-                <div className="border-t pt-3">
-                  <div className="flex justify-between items-center font-medium">
-                    <span>Total agregados:</span>
-                    <span className="text-primary">{PEN(totalAddonsPrice)}</span>
                   </div>
+
+                  {selected && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => changeQty(addon.id!, -1)}
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="w-6 text-center text-sm">{qty}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => changeQty(addon.id!, +1)}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </>
+              );
+            })
           )}
         </div>
 
+        {hasSelected && (
+          <div className="border-t pt-3 mt-2 flex items-center justify-between font-medium">
+            <span>Total agregados:</span>
+            <span className="text-primary">{PEN(totalAddonsPrice)}</span>
+          </div>
+        )}
+
         <div className="flex gap-3 pt-4">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className="flex-1"
-          >
+          <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button
-            onClick={onConfirm}
-            disabled={confirmDisabled}
-            className="flex-1"
-          >
+          <Button className="flex-1" onClick={onConfirm} disabled={!!confirmDisabled}>
             Confirmar
           </Button>
         </div>
@@ -174,3 +148,4 @@ export default function AddonsSelectorDialog({
     </Dialog>
   );
 }
+  

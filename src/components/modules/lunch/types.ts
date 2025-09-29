@@ -40,6 +40,7 @@ export type AddonT = {
   name: string;
   price: number;      // se normaliza a número al guardar
   active?: boolean;   // true por defecto
+  description?: string; // <-- NUEVO: texto/observación del complemento
 };
 
 export type ProductT = {
@@ -168,19 +169,10 @@ export type AnnouncementT = {
 
 /* -----------------------------------------
  * Filtro usado en HISTORIAL (Admin → Lunch)
- * -----------------------------------------
- * - `day`: día seleccionado (YYYY-MM-DD).
- * - `clientName` y `status`: filtros dentro del día.
- * - `groupBy`: por compatibilidad.
- * - `dateFrom`/`dateTo`: opcionales (legacy p/ Reportes).
- */
+ * ----------------------------------------- */
 export type OrderFilter = {
-  /** Día seleccionado en historial (YYYY-MM-DD). */
   day?: string | null;
-
-  /** Búsqueda por nombre dentro del día (alumno/cliente/apoderado). */
   clientName?: string;
-
   status?:
     | "pending"
     | "preparing"
@@ -188,10 +180,7 @@ export type OrderFilter = {
     | "delivered"
     | "canceled"
     | "confirmed";
-
   groupBy?: "day" | "week" | "month";
-
-  /** LEGACY (se usan en Reportes; en Historial se ignoran) */
   dateFrom?: string | null;
   dateTo?: string | null;
 };
