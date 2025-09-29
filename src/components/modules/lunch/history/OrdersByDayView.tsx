@@ -1,53 +1,105 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, BarChart3 } from "lucide-react";
 
-import OrderFilters from "./OrderFilters";
+import OrderFilters from "./OrderFilters";         // Historial (calendario/un día)
+import ReportsFilters from "./ReportsFilters.tsx";
+     // Reportes (rango de fechas)
 import DayOrderCard from "./DayOrderCard";
 import OrderReports from "./OrderReports";
 import type { HistoryOrder, DayOrders, OrderFilter } from "./types";
 
 const PEN = (n: number) =>
-  new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
+  new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(
+    Number.isFinite(n) ? n : 0
+  );
 
+// ============ helpers ============
+function norm(s = "") {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Devuelve el día (YYYY-MM-DD) del pedido según tu modelo */
+function getOrderDay(o: HistoryOrder): string | null {
+  if (o.orderDate) return o.orderDate;                 // calculado en loadOrders
+  if (o.selectedDays?.length) return o.selectedDays[0]; // varied
+  if (o.deliveryAt) return o.deliveryAt;                // si lo usas
+  if (o.createdAt) {
+    const d = typeof o.createdAt === "number" ? new Date(o.createdAt) : new Date(o.createdAt);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${dd}`;
+    }
+  }
+  return null;
+}
+
+/** Agrupa pedidos en DayOrders[] */
+function groupByDay(orders: HistoryOrder[]): DayOrders[] {
+  const map = new Map<string, HistoryOrder[]>();
+  for (const o of orders) {
+    const d = getOrderDay(o);
+    if (!d) continue;
+    if (!map.has(d)) map.set(d, []);
+    map.get(d)!.push(o);
+  }
+  const days = [...map.keys()].sort((a, b) => (a < b ? 1 : -1)); // desc
+  return days.map((date) => {
+    const list = map.get(date)!;
+    const totalAmount = list.reduce((s, o) => s + (o.total || 0), 0);
+    return { date, orders: list, totalOrders: list.length, totalAmount };
+  });
+}
+
+// ============ componente ============
 export default function OrdersByDayView() {
   const [allOrders, setAllOrders] = useState<HistoryOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Default filter: last 7 days
+
+  // ---- filtros del HISTORIAL (1 día) ----
+  const [historyFilter, setHistoryFilter] = useState<OrderFilter>({
+    day: null,
+    clientName: "",
+    status: undefined,
+    groupBy: "day",
+  });
+
+  // ---- filtros de REPORTES (rango de fechas) ----
   const today = new Date();
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 6);
 
-  const [filter, setFilter] = useState<OrderFilter>({
-    dateFrom: weekAgo.toISOString().split('T')[0],
-    dateTo: today.toISOString().split('T')[0],
+  const [reportsFilter, setReportsFilter] = useState<OrderFilter>({
+    dateFrom: weekAgo.toISOString().split("T")[0],
+    dateTo: today.toISOString().split("T")[0],
     groupBy: "day",
   });
 
-  // Load all orders
+  // ============ cargar pedidos ============
   useEffect(() => {
     loadOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadOrders = async () => {
     try {
       setLoading(true);
       const ordersData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.lunch_orders);
-      
+
       if (!ordersData) {
         setAllOrders([]);
         return;
       }
 
-      // Transform orders and create separate entries for each delivery date
       const orders: HistoryOrder[] = [];
-      
+
       Object.entries(ordersData).forEach(([id, order]) => {
-        const baseOrder = {
+        const baseOrder: Omit<HistoryOrder, "orderDate"> = {
           id,
           code: order.code,
           clientCode: order.clientCode,
@@ -61,14 +113,12 @@ export default function OrdersByDayView() {
           createdAt: order.createdAt,
           deliveryAt: order.deliveryAt,
           selectedDays: order.selectedDays,
-          orderDate: "",
         };
 
-        // Determinar las fechas de entrega basadas en los productos
+        // Determinar fechas de entrega según items / selectedDays / fallback
         const deliveryDates = new Set<string>();
-        
-        // Revisar si hay productos con fechas específicas (almuerzos)
         let hasLunchItems = false;
+
         if (order.items && order.items.length > 0) {
           order.items.forEach((item: any) => {
             if (item.specificDate) {
@@ -77,38 +127,28 @@ export default function OrdersByDayView() {
             }
           });
         }
-        
-        // Si tiene días seleccionados (productos variados) y NO hay almuerzos, agregar cada día
+
         if (order.selectedDays && order.selectedDays.length > 0 && !hasLunchItems) {
-          order.selectedDays.forEach((day: string) => deliveryDates.add(day));
-        }
-        
-        // Si no hay fechas específicas, usar fecha de creación como fallback
-        if (deliveryDates.size === 0) {
-          const createdDate = new Date(
-            typeof order.createdAt === "number" ? order.createdAt : Date.parse(order.createdAt || Date.now())
-          );
-          const fallbackDate = new Intl.DateTimeFormat("en-CA", {
-            timeZone: "America/Lima",
-            year: "numeric",
-            month: "2-digit", 
-            day: "2-digit",
-          }).format(createdDate);
-          deliveryDates.add(fallbackDate);
+          order.selectedDays.forEach((d: string) => deliveryDates.add(d));
         }
 
-        // Crear una entrada por cada fecha de entrega
+        if (deliveryDates.size === 0) {
+          const created = new Date(
+            typeof order.createdAt === "number" ? order.createdAt : Date.parse(order.createdAt || Date.now())
+          );
+          const fallback = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Lima",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(created);
+          deliveryDates.add(fallback);
+        }
+
         deliveryDates.forEach((deliveryDate) => {
           const filteredItems = (order.items || []).filter((item: any) => {
-            // Si es un producto con fecha específica, debe coincidir
-            if (item.specificDate) {
-              return item.specificDate === deliveryDate;
-            }
-            // Si es un producto variado y tiene días seleccionados
-            if (order.selectedDays && order.selectedDays.includes(deliveryDate)) {
-              return true;
-            }
-            // Si no hay fecha específica ni días seleccionados, incluir
+            if (item.specificDate) return item.specificDate === deliveryDate;
+            if (order.selectedDays && order.selectedDays.includes(deliveryDate)) return true;
             return !item.specificDate && (!order.selectedDays || order.selectedDays.length === 0);
           });
 
@@ -116,10 +156,10 @@ export default function OrdersByDayView() {
             ...baseOrder,
             orderDate: deliveryDate,
             items: filteredItems,
-            // Ajustar el total proporcionalmente si es necesario
-            total: filteredItems.length > 0 ? 
-              filteredItems.reduce((sum, item) => sum + (item.price * item.qty), 0) : 
-              order.total || 0
+            total:
+              filteredItems.length > 0
+                ? filteredItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0)
+                : order.total || 0,
           });
         });
       });
@@ -137,77 +177,89 @@ export default function OrdersByDayView() {
     }
   };
 
-  // Filter and group orders by day
-  const filteredDayOrders = useMemo(() => {
-    let filtered = [...allOrders];
+  // ============ HISTORIAL: días disponibles + aplicar ============
+  const availableDays = useMemo(() => {
+    const s = new Set<string>();
+    for (const o of allOrders) {
+      const d = getOrderDay(o);
+      if (d) s.add(d);
+    }
+    return Array.from(s).sort((a, b) => (a < b ? 1 : -1));
+  }, [allOrders]);
 
-    // Date range filter
-    const fromDate = new Date(filter.dateFrom);
-    const toDate = new Date(filter.dateTo);
-    toDate.setHours(23, 59, 59, 999);
+  const [historyVisible, setHistoryVisible] = useState<DayOrders[]>([]);
 
-    filtered = filtered.filter(order => {
-      const orderDate = new Date(order.orderDate);
-      return orderDate >= fromDate && orderDate <= toDate;
+  // Por defecto, seleccionar el día más reciente
+  useEffect(() => {
+    if (!historyFilter.day && availableDays.length > 0) {
+      setHistoryFilter((f) => ({ ...f, day: availableDays[0] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableDays]);
+
+  const applyHistoryFilter = useCallback(() => {
+    const targetDay = historyFilter.day ?? null;
+
+    // 1) por día
+    let subset = allOrders.filter((o) => {
+      const d = getOrderDay(o);
+      return targetDay ? d === targetDay : true;
     });
 
-    // Client name filter
-    if (filter.clientName) {
-      const searchTerm = filter.clientName.toLowerCase();
-      filtered = filtered.filter(order =>
-        (order.clientName?.toLowerCase().includes(searchTerm)) ||
-        (order.studentName?.toLowerCase().includes(searchTerm))
-      );
+    // 2) por estado
+    if (historyFilter.status) {
+      subset = subset.filter((o) => o.status === historyFilter.status);
     }
 
-    // Status filter
-    if (filter.status) {
-      filtered = filtered.filter(order => order.status === filter.status);
+    // 3) por nombre dentro del día
+    if (historyFilter.clientName?.trim()) {
+      const q = norm(historyFilter.clientName);
+      subset = subset.filter((o) => {
+        const a = norm(o.studentName || "");
+        const c = norm(o.clientName || "");
+        return a.includes(q) || c.includes(q);
+      });
     }
 
-    // Group by day
-    const groupedByDay = filtered.reduce((acc, order) => {
-      const date = order.orderDate;
-      if (!acc[date]) {
-        acc[date] = {
-          date,
-          orders: [],
-          totalOrders: 0,
-          totalAmount: 0,
-        };
-      }
-      acc[date].orders.push(order);
-      acc[date].totalOrders += 1;
-      acc[date].totalAmount += order.total;
-      return acc;
-    }, {} as Record<string, DayOrders>);
+    setHistoryVisible(groupByDay(subset));
+    toast({ title: "Filtros aplicados", description: "Historial actualizado" });
+  }, [allOrders, historyFilter]);
 
-    // Convert to array and sort by date (newest first)
-    return Object.values(groupedByDay).sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-  }, [allOrders, filter]);
+  const resetHistoryFilter = useCallback(() => {
+    setHistoryFilter({ day: null, clientName: "", status: undefined, groupBy: "day" });
+    setHistoryVisible([]);
+  }, []);
 
-  const handleApplyFilter = () => {
-    // Filter is already applied via useMemo
-    toast({
-      title: "Filtros aplicados",
-      description: `Se encontraron ${filteredDayOrders.length} días con pedidos`,
+  // ============ REPORTES: aplicar por rango ============
+  const reportsVisible = useMemo(() => {
+    if (!reportsFilter.dateFrom || !reportsFilter.dateTo) return [];
+    let subset = [...allOrders];
+
+    const from = new Date(reportsFilter.dateFrom);
+    const to = new Date(reportsFilter.dateTo);
+    to.setHours(23, 59, 59, 999);
+
+    subset = subset.filter((o) => {
+      const d = new Date(getOrderDay(o) || "");
+      return !isNaN(d.getTime()) && d >= from && d <= to;
     });
-  };
 
-  const handleResetFilter = () => {
-    const today = new Date();
-    const weekAgo = new Date(today);
-    weekAgo.setDate(today.getDate() - 6);
+    if (reportsFilter.status) {
+      subset = subset.filter((o) => o.status === reportsFilter.status);
+    }
+    if (reportsFilter.clientName?.trim()) {
+      const q = norm(reportsFilter.clientName);
+      subset = subset.filter((o) => {
+        const a = norm(o.studentName || "");
+        const c = norm(o.clientName || "");
+        return a.includes(q) || c.includes(q);
+      });
+    }
 
-    setFilter({
-      dateFrom: weekAgo.toISOString().split('T')[0],
-      dateTo: today.toISOString().split('T')[0],
-      groupBy: "day",
-    });
-  };
+    return groupByDay(subset);
+  }, [allOrders, reportsFilter]);
 
+  // ============ acciones ============
   const handleMarkDelivered = async (order: HistoryOrder) => {
     try {
       await RTDBHelper.updateData({
@@ -229,7 +281,6 @@ export default function OrdersByDayView() {
     const confirmed = confirm(
       `¿Eliminar el pedido ${order.code || order.id.slice(-6)}? Esta acción no se puede deshacer.`
     );
-    
     if (!confirmed) return;
 
     try {
@@ -281,7 +332,9 @@ export default function OrdersByDayView() {
           (order) => `
         <div class="order">
           <div class="row">
-            <div><strong>${order.clientName || order.studentName}</strong> — <em>${order.code || order.id.slice(-6)}</em></div>
+            <div><strong>${order.clientName || order.studentName || ""}</strong> — <em>${
+            order.code || order.id.slice(-6)
+          }</em></div>
             <div class="status">${order.status}</div>
           </div>
           <div><em>Productos:</em>${
@@ -295,15 +348,13 @@ export default function OrdersByDayView() {
         )
         .join("")}
       </body></html>`;
-    
     w.document.write(html);
     w.document.close();
     w.print();
   };
 
   const handleExportCSV = () => {
-    const allFilteredOrders = filteredDayOrders.flatMap(day => day.orders);
-    
+    const allFilteredOrders = reportsVisible.flatMap((d) => d.orders);
     if (!allFilteredOrders.length) {
       toast({ title: "No hay datos para exportar", variant: "destructive" });
       return;
@@ -322,20 +373,18 @@ export default function OrdersByDayView() {
       "observaciones",
     ];
 
-    const rows = allFilteredOrders.map((order) => {
-      const items = (order.items || [])
-        .map((i) => `${i.qty}x ${i.name}`)
-        .join(" | ");
+    const rows = allFilteredOrders.map((o) => {
+      const items = (o.items || []).map((i) => `${i.qty}x ${i.name}`).join(" | ");
       return [
-        order.orderDate,
-        order.code || order.id.slice(-6),
-        order.clientName || "",
-        order.studentName || "",
-        order.recess || "",
-        order.status,
-        Number(order.total).toFixed(2),
+        o.orderDate,
+        o.code || o.id.slice(-6),
+        o.clientName || "",
+        o.studentName || "",
+        o.recess || "",
+        o.status,
+        Number(o.total).toFixed(2),
         items,
-        order.note || "",
+        o.note || "",
       ]
         .map(esc)
         .join(",");
@@ -346,7 +395,7 @@ export default function OrdersByDayView() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `historial_pedidos_${filter.dateFrom}_a_${filter.dateTo}.csv`;
+    a.download = `historial_pedidos_${reportsFilter.dateFrom}_a_${reportsFilter.dateTo}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -376,21 +425,25 @@ export default function OrdersByDayView() {
           </TabsTrigger>
         </TabsList>
 
+        {/* ---------- HISTORIAL (un día) ---------- */}
         <TabsContent value="orders" className="space-y-6">
           <OrderFilters
-            filter={filter}
-            onFilterChange={setFilter}
-            onApplyFilter={handleApplyFilter}
-            onResetFilter={handleResetFilter}
+            filter={historyFilter}
+            onFilterChange={setHistoryFilter}
+            onApplyFilter={applyHistoryFilter}
+            onResetFilter={resetHistoryFilter}
+            availableDays={availableDays}
           />
 
-          {filteredDayOrders.length === 0 ? (
+          {historyVisible.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              No se encontraron pedidos en el rango de fechas seleccionado.
+              {historyFilter.day
+                ? "No se encontraron pedidos para el día seleccionado."
+                : "Selecciona un día y pulsa Aplicar filtros."}
             </div>
           ) : (
             <div>
-              {filteredDayOrders.map((dayOrders) => (
+              {historyVisible.map((dayOrders) => (
                 <DayOrderCard
                   key={dayOrders.date}
                   dayOrders={dayOrders}
@@ -403,13 +456,38 @@ export default function OrdersByDayView() {
           )}
         </TabsContent>
 
+        {/* ---------- REPORTES (rango de fechas) ---------- */}
         <TabsContent value="reports" className="space-y-6">
-          <OrderReports
-            dayOrders={filteredDayOrders}
-            dateRange={{ from: filter.dateFrom, to: filter.dateTo }}
-            onExportCSV={handleExportCSV}
-            onExportPDF={handleExportPDF}
+          <ReportsFilters
+            filter={reportsFilter}
+            onFilterChange={setReportsFilter}
+            onApplyFilter={() =>
+              toast({ title: "Filtros aplicados", description: "Reportes actualizados" })
+            }
+            onResetFilter={() => {
+              const t = new Date();
+              const w = new Date(t);
+              w.setDate(t.getDate() - 6);
+              setReportsFilter({
+                dateFrom: w.toISOString().split("T")[0],
+                dateTo: t.toISOString().split("T")[0],
+                groupBy: "day",
+              });
+            }}
           />
+
+          {reportsVisible.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              No se encontraron pedidos en el rango de fechas seleccionado.
+            </div>
+          ) : (
+            <OrderReports
+              dayOrders={reportsVisible}
+              dateRange={{ from: reportsFilter.dateFrom!, to: reportsFilter.dateTo! }}
+              onExportCSV={handleExportCSV}
+              onExportPDF={handleExportPDF}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>
