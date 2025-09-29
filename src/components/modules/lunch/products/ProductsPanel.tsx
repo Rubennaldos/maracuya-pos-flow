@@ -181,7 +181,11 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
         specificDate: formData.type === "lunch" ? formData.specificDate : undefined,
         image: formData.image || undefined,
         active: true,
-        position: editing ? (editing as any).position ?? 0 : 0,
+        position: editing 
+          ? (editing as any).position ?? 0 
+          : Math.max(0, ...Object.values(menu.products || {})
+              .filter((p) => p.categoryId === formData.categoryId)
+              .map((p) => (p as any).position || 0)) + 1,
         // Campos específicos para almuerzo (opcionales)
         ...(formData.type === "lunch" && {
           entrada: formData.entrada.trim() || undefined,
@@ -298,17 +302,39 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
   const saveOrder = async () => {
     try {
       const updates: Record<string, any> = {};
-      Object.values(menu.products || {}).forEach((p: any) => {
-        if (p?.id) {
-          updates[`${RTDB_PATHS.lunch_menu}/products/${p.id}/position`] = 
-            typeof p.position === "number" ? p.position : Number.POSITIVE_INFINITY;
-        }
+      
+      // Guardar el orden actual tal como está en productsByCategory
+      Object.keys(productsByCategory).forEach(categoryId => {
+        const products = productsByCategory[categoryId];
+        products.forEach((product: any, index) => {
+          updates[`${RTDB_PATHS.lunch_menu}/products/${product.id}/position`] = index;
+        });
       });
+
       await RTDBHelper.updateData(updates);
-      toast({ title: "Orden guardado" });
+      
+      // Actualizar el estado local para reflejar los cambios
+      const updatedMenu = { ...menu };
+      if (updatedMenu.products) {
+        Object.keys(productsByCategory).forEach(categoryId => {
+          const products = productsByCategory[categoryId];
+          products.forEach((product: any, index) => {
+            if (updatedMenu.products![product.id]) {
+              updatedMenu.products![product.id] = {
+                ...updatedMenu.products![product.id],
+                position: index
+              };
+            }
+          });
+        });
+        onMenuUpdate(updatedMenu);
+      }
+      
+      toast({ title: "Orden guardado exitosamente" });
       setDirty(false);
-    } catch {
-      toast({ title: "No se pudo guardar el orden", variant: "destructive" });
+    } catch (error) {
+      console.error("Error saving order:", error);
+      toast({ title: "Error al guardar el orden", variant: "destructive" });
     }
   };
 
