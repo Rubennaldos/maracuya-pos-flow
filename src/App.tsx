@@ -3,7 +3,7 @@ import { useMemo, useEffect } from "react";
 import { Routes, Route, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import Index from "./pages/Index";
-import Pedidos from "./pages/Pedidos";
+import HistorialPedidos from "./pages/HistorialPedidos";
 import Familias from "./pages/Familias";
 import NotFound from "./pages/NotFound";
 
@@ -91,7 +91,7 @@ export default function App() {
           }}
         >
           <NavLink to="/" end>Inicio</NavLink>
-          <NavLink to="/pedidos">Pedidos</NavLink>
+          <NavLink to="/historial-pedidos">Historial de Pedidos</NavLink>
           <NavLink to="/familias">Familias</NavLink>
           <NavLink to="/lunch-admin">Administrar Almuerzos</NavLink> {/* 👈 acceso directo */}
         </nav>
@@ -103,7 +103,7 @@ export default function App() {
 
         {/* Protegidas */}
         <Route path="/" element={<Protected element={<Index />} />} />
-        <Route path="/pedidos" element={<Protected element={<Pedidos />} />} />
+        <Route path="/historial-pedidos" element={<Protected element={<HistorialPedidos />} />} />
         <Route path="/lunch-admin" element={<Protected element={<LunchAdminPage />} />} /> {/* 👈 NUEVA */}
         <Route path="*" element={<Protected element={<NotFound />} />} />
       </Routes>
