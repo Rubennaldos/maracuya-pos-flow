@@ -48,18 +48,23 @@ export default function OrdersByDayView() {
         // Determine the order date
         let orderDate = "";
         
-        if (order.selectedDays && order.selectedDays.length > 0) {
-          // For varied products, use the first selected day
-          orderDate = order.selectedDays[0];
-        } else if (order.orderDate) {
-          // If explicitly set
+        if (order.orderDate) {
+          // Si ya tiene fecha explícita del pedido, usarla
           orderDate = order.orderDate;
+        } else if (order.selectedDays && order.selectedDays.length > 0) {
+          // Para productos variados, usar el primer día seleccionado
+          orderDate = order.selectedDays[0];
         } else {
-          // Fall back to creation date
+          // Convertir timestamp de creación a fecha en zona horaria de Perú
           const createdDate = new Date(
             typeof order.createdAt === "number" ? order.createdAt : Date.parse(order.createdAt || Date.now())
           );
-          orderDate = createdDate.toISOString().split('T')[0];
+          orderDate = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Lima",
+            year: "numeric",
+            month: "2-digit", 
+            day: "2-digit",
+          }).format(createdDate);
         }
 
         return {

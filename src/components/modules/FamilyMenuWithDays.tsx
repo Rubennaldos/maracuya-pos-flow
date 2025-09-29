@@ -289,6 +289,14 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
         ...(item.type === "varied" ? { selectedDays: item.selectedDays } : {}),
       }));
 
+      // Determinar la fecha del pedido en zona horaria de Perú
+      const orderDate = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Lima",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+
       const payload = {
         id: "",
         code: orderCode,
@@ -302,6 +310,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: Props) {
         channel: "familias",
         recess: confirmRecess,
         studentName: alumno,
+        orderDate, // Agregar fecha del pedido en formato YYYY-MM-DD
       };
 
       const orderId = await RTDBHelper.pushData(RTDB_PATHS.lunch_orders, payload);
