@@ -19,7 +19,7 @@ import { useImageUpload } from "@/hooks/useImageUpload";
 import { format } from "date-fns";
 
 import ProductsPanel from "@/components/modules/lunch/products/ProductsPanel";
-import OrdersPanel from "@/components/modules/lunch/orders/OrdersPanel";
+import OrdersByDayView from "@/components/modules/lunch/history/OrdersByDayView";
 import FamilyPortalPreview from "@/components/modules/lunch/FamilyPortalPreview";
 
 /* ===================== util ===================== */
@@ -490,7 +490,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
               <Package className="h-4 w-4" /> Productos
             </TabsTrigger>
             <TabsTrigger value="orders" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Pedidos ({ordersCount})
+              <FileText className="h-4 w-4" /> Historial de Pedidos ({ordersCount})
             </TabsTrigger>
             <TabsTrigger value="announcements" className="flex items-center gap-2">
               <Megaphone className="h-4 w-4" /> Anuncios ({announcements.length})
@@ -757,9 +757,9 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
             <ProductsPanel menu={menu} onMenuUpdate={setMenu} />
           </TabsContent>
 
-          {/* ================= Pedidos (separado) ================= */}
+          {/* ================= Historial de Pedidos ================= */}
           <TabsContent value="orders">
-            <OrdersPanel />
+            <OrdersByDayView />
           </TabsContent>
 
           {/* ================= Anuncios ================= */}
