@@ -67,18 +67,20 @@ export default function OrdersByDayView() {
         // Determinar las fechas de entrega basadas en los productos
         const deliveryDates = new Set<string>();
         
-        // Si tiene días seleccionados (productos variados), agregar cada día
-        if (order.selectedDays && order.selectedDays.length > 0) {
-          order.selectedDays.forEach((day: string) => deliveryDates.add(day));
-        }
-        
-        // Si tiene productos de almuerzo, agregar sus fechas específicas
+        // Revisar si hay productos con fechas específicas (almuerzos)
+        let hasLunchItems = false;
         if (order.items && order.items.length > 0) {
           order.items.forEach((item: any) => {
             if (item.specificDate) {
               deliveryDates.add(item.specificDate);
+              hasLunchItems = true;
             }
           });
+        }
+        
+        // Si tiene días seleccionados (productos variados) y NO hay almuerzos, agregar cada día
+        if (order.selectedDays && order.selectedDays.length > 0 && !hasLunchItems) {
+          order.selectedDays.forEach((day: string) => deliveryDates.add(day));
         }
         
         // Si no hay fechas específicas, usar fecha de creación como fallback
@@ -97,22 +99,27 @@ export default function OrdersByDayView() {
 
         // Crear una entrada por cada fecha de entrega
         deliveryDates.forEach((deliveryDate) => {
+          const filteredItems = (order.items || []).filter((item: any) => {
+            // Si es un producto con fecha específica, debe coincidir
+            if (item.specificDate) {
+              return item.specificDate === deliveryDate;
+            }
+            // Si es un producto variado y tiene días seleccionados
+            if (order.selectedDays && order.selectedDays.includes(deliveryDate)) {
+              return true;
+            }
+            // Si no hay fecha específica ni días seleccionados, incluir
+            return !item.specificDate && (!order.selectedDays || order.selectedDays.length === 0);
+          });
+
           orders.push({
             ...baseOrder,
             orderDate: deliveryDate,
-            // Filtrar items relevantes para esta fecha
-            items: (order.items || []).filter((item: any) => {
-              // Si es un producto con fecha específica, debe coincidir
-              if (item.specificDate) {
-                return item.specificDate === deliveryDate;
-              }
-              // Si es un producto variado, está disponible en todos los días seleccionados
-              if (order.selectedDays && order.selectedDays.includes(deliveryDate)) {
-                return true;
-              }
-              // Si no hay fecha específica ni días seleccionados, incluir
-              return !item.specificDate && (!order.selectedDays || order.selectedDays.length === 0);
-            })
+            items: filteredItems,
+            // Ajustar el total proporcionalmente si es necesario
+            total: filteredItems.length > 0 ? 
+              filteredItems.reduce((sum, item) => sum + (item.price * item.qty), 0) : 
+              order.total || 0
           });
         });
       });
