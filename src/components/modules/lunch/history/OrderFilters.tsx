@@ -10,15 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Filter, RefreshCw, Calendar } from "lucide-react";
+import { Filter, RefreshCw, Calendar as CalIcon } from "lucide-react";
 import type { OrderFilter } from "./types";
-
-/**
- * HISTORIAL (ADMIN LUNCH)
- * - Sin rango de fechas aquí (eso queda para Reportes).
- * - Solo se muestran días que tienen pedidos (chips).
- * - La búsqueda por nombre aplica al día seleccionado.
- */
 
 interface OrderFiltersProps {
   filter: OrderFilter;
@@ -26,7 +19,7 @@ interface OrderFiltersProps {
   onApplyFilter: () => void;
   onResetFilter: () => void;
 
-  /** Días disponibles con pedidos (YYYY-MM-DD), ordenados desc (más reciente primero). */
+  /** Días con pedidos (opcional). Si lo pasas, muestro chips como atajos. */
   availableDays?: string[];
 }
 
@@ -45,12 +38,6 @@ function formatDayForUI(yyyy_mm_dd: string) {
   });
 }
 
-function norm(s: string = "") {
-  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-
-/* ---------- component ---------- */
-
 export default function OrderFilters({
   filter,
   onFilterChange,
@@ -58,13 +45,17 @@ export default function OrderFilters({
   onResetFilter,
   availableDays = [],
 }: OrderFiltersProps) {
-  // Si no hay día seleccionado, usar el más reciente (primer elemento)
+  // Si no hay día seleccionado, setear hoy por defecto
   React.useEffect(() => {
-    if (!filter.day && availableDays.length > 0) {
-      onFilterChange({ ...filter, day: availableDays[0] });
+    if (!filter.day) {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      onFilterChange({ ...filter, day: `${yyyy}-${mm}-${dd}` });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableDays]);
+  }, []);
 
   return (
     <Card>
@@ -75,14 +66,39 @@ export default function OrderFilters({
             <h3 className="font-medium">Filtros del historial</h3>
           </div>
 
-          {/* DÍAS DISPONIBLES (chips) */}
-          <div className="flex flex-wrap gap-2">
-            {availableDays.length === 0 ? (
-              <span className="text-sm text-muted-foreground">
-                No hay días con pedidos.
-              </span>
-            ) : (
-              availableDays.map((day) => (
+          {/* Selector de día (calendario) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Seleccionar día</Label>
+              <Input
+                type="date"
+                value={filter.day ?? ""}
+                onChange={(e) => onFilterChange({ ...filter, day: e.target.value })}
+              />
+              {filter.day && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formatDayForUI(filter.day)}
+                </p>
+              )}
+            </div>
+
+            {/* Búsqueda por nombre */}
+            <div className="md:col-span-2">
+              <Label>Cliente (alumno/apoderado)</Label>
+              <Input
+                placeholder="Buscar por nombre dentro del día seleccionado…"
+                value={filter.clientName ?? ""}
+                onChange={(e) =>
+                  onFilterChange({ ...filter, clientName: e.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          {/* Chips de días con pedidos (opcional, como atajos) */}
+          {availableDays.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {availableDays.map((day) => (
                 <Button
                   key={day}
                   type="button"
@@ -93,27 +109,16 @@ export default function OrderFilters({
                 >
                   {formatDayForUI(day)}
                 </Button>
-              ))
-            )}
-          </div>
-
-          {/* Búsqueda por nombre (dentro del día seleccionado) + Estado */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <Label>Cliente (alumno/apoderado)</Label>
-              <Input
-                placeholder="Buscar por nombre dentro del día seleccionado…"
-                value={filter.clientName || ""}
-                onChange={(e) =>
-                  onFilterChange({ ...filter, clientName: e.target.value })
-                }
-              />
+              ))}
             </div>
+          )}
 
+          {/* Estado + Agrupar (compatibilidad) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Estado</Label>
               <Select
-                value={filter.status || "all"}
+                value={filter.status ?? "all"}
                 onValueChange={(value) =>
                   onFilterChange({
                     ...filter,
@@ -138,14 +143,11 @@ export default function OrderFilters({
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          {/* Agrupar por (compatibilidad) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Agrupar por</Label>
               <Select
-                value={filter.groupBy || "day"}
+                value={filter.groupBy ?? "day"}
                 onValueChange={(value: "day" | "week" | "month") =>
                   onFilterChange({ ...filter, groupBy: value })
                 }
@@ -165,7 +167,7 @@ export default function OrderFilters({
           {/* Acciones */}
           <div className="flex gap-2">
             <Button onClick={onApplyFilter}>
-              <Calendar className="h-4 w-4 mr-2" />
+              <CalIcon className="h-4 w-4 mr-2" />
               Aplicar filtros
             </Button>
             <Button
@@ -184,8 +186,6 @@ export default function OrderFilters({
               Limpiar
             </Button>
           </div>
-
-          {/* Nota: dateFrom/dateTo son legacy y se ignoran en HISTORIAL. */}
         </div>
       </CardContent>
     </Card>
