@@ -8,7 +8,7 @@ import { RTDB_PATHS } from "@/lib/rtdb";
 
 type LoggedClient = {
   code: string;
-  name: string; // se guarda por compatibilidad; FamilyMenuWithDays puede resolver nombre real
+  name: string; // compat, el nombre real puede resolverse en FamilyMenuWithDays
 };
 
 const STORAGE_KEY = "family_portal_client";
@@ -24,24 +24,6 @@ export default function Familias() {
   const [whatsappPhone, setWhatsappPhone] = useState<string>("");
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  // --- NUEVO: flags por querystring
-  const params = isBrowser() ? new URLSearchParams(window.location.search) : null;
-  const shouldAutologin = params?.get("autologin") === "1"; // por defecto NO auto-loguea
-  const forceLogout = params?.get("logout") === "1";
-
-  // Si viene ?logout=1, limpiamos la sesión guardada
-  useEffect(() => {
-    if (!isBrowser()) return;
-    if (forceLogout) {
-      localStorage.removeItem(STORAGE_KEY);
-      setClient(null);
-      // Opcional: limpiar el query para que no quede
-      const url = new URL(window.location.href);
-      url.searchParams.delete("logout");
-      history.replaceState({}, "", url.toString());
-    }
-  }, [forceLogout]);
-
   // Cargar configuración del portal
   useEffect(() => {
     const loadPortalSettings = async () => {
@@ -51,7 +33,7 @@ export default function Familias() {
         setWhatsappPhone(settings?.whatsapp?.phone || "");
       } catch (error) {
         console.error("Error loading portal settings:", error);
-        setPortalOpen(true); // Por defecto abierto si hay error
+        setPortalOpen(true);
       } finally {
         setSettingsLoaded(true);
       }
@@ -59,13 +41,9 @@ export default function Familias() {
     loadPortalSettings();
   }, []);
 
-  // Cargar sesión persistida SOLO si ?autologin=1
+  // Cargar sesión guardada del dispositivo (no aceptamos ?code= en URL)
   useEffect(() => {
     if (!isBrowser()) return;
-    if (!shouldAutologin) {
-      setHydrated(true);
-      return;
-    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -79,58 +57,80 @@ export default function Familias() {
     } finally {
       setHydrated(true);
     }
-  }, [shouldAutologin]);
+  }, []);
 
+  // Login normal
   const handleLogged = (c: LoggedClient) => {
     const clean: LoggedClient = { code: c.code.trim(), name: (c.name || "").trim() };
     setClient(clean);
-    // Si en el futuro quieres recordar sesión, descomenta la siguiente línea
-    // localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+    if (isBrowser()) localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
   };
 
+  // Logout (botón "Salir de perfil")
   const handleLogout = () => {
     setClient(null);
     if (isBrowser()) localStorage.removeItem(STORAGE_KEY);
   };
 
-  const greeting = useMemo(
-    // Cabecera solo cuando NO hay sesión
-    () => (!client ? "Portal de Familias" : ""),
-    [client]
-  );
+  const headingText = useMemo(() => "Portal de Familias", []);
 
   if (!hydrated || !settingsLoaded) return null;
 
-  // Si el portal está cerrado, mostrar página de mantenimiento
   if (!portalOpen) {
     return <MaintenancePage whatsappPhone={whatsappPhone} />;
   }
 
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: "24px 16px" }}>
-      {/* Header SOLO en pantalla de login (evita doble bienvenida) */}
-      {!client && (
-        <header
-          style={{
-            background: "#e8f5e9",
-            border: "1px solid #c8e6c9",
-            padding: "14px 16px",
-            borderRadius: 12,
-            marginBottom: 16,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <h1 style={{ margin: 0, fontSize: 18 }}>{greeting}</h1>
-        </header>
-      )}
+      {/* Header SIEMPRE visible. Cuando hay sesión, muestra botón "Salir de perfil" */}
+      <header
+        style={{
+          background: "#e8f5e9",
+          border: "1px solid #c8e6c9",
+          padding: "14px 16px",
+          borderRadius: 12,
+          marginBottom: 16,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <h1 style={{ margin: 0, fontSize: 18 }}>{headingText}</h1>
+
+        {client ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 12, color: "#166534" }}>
+              Sesión de <strong>{client.name || client.code}</strong> ({client.code})
+            </span>
+            <button
+              onClick={handleLogout}
+              type="button"
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: "1px solid #dc2626",
+                background: "#fee2e2",
+                color: "#b91c1c",
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              Salir de perfil
+            </button>
+          </div>
+        ) : (
+          <span style={{ fontSize: 12, color: "#166534" }}>
+            Ingresa tu código para continuar
+          </span>
+        )}
+      </header>
 
       {!client ? (
         <FamilyLogin onLogged={handleLogged} />
       ) : (
-        // Pasamos SOLO el code para que FamilyMenuWithDays resuelva el nombre real desde RTDB
+        // bloqueamos cambio de perfil: solo con "Salir de perfil"
         <FamilyMenuWithDays client={{ code: client.code }} onLogout={handleLogout} />
       )}
 
