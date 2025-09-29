@@ -43,31 +43,11 @@ export default function OrdersByDayView() {
         return;
       }
 
-      // Transform orders and determine order date
-      const orders: HistoryOrder[] = Object.entries(ordersData).map(([id, order]) => {
-        // Determine the order date
-        let orderDate = "";
-        
-        if (order.orderDate) {
-          // Si ya tiene fecha explícita del pedido, usarla
-          orderDate = order.orderDate;
-        } else if (order.selectedDays && order.selectedDays.length > 0) {
-          // Para productos variados, usar el primer día seleccionado
-          orderDate = order.selectedDays[0];
-        } else {
-          // Convertir timestamp de creación a fecha en zona horaria de Perú
-          const createdDate = new Date(
-            typeof order.createdAt === "number" ? order.createdAt : Date.parse(order.createdAt || Date.now())
-          );
-          orderDate = new Intl.DateTimeFormat("en-CA", {
-            timeZone: "America/Lima",
-            year: "numeric",
-            month: "2-digit", 
-            day: "2-digit",
-          }).format(createdDate);
-        }
-
-        return {
+      // Transform orders and create separate entries for each delivery date
+      const orders: HistoryOrder[] = [];
+      
+      Object.entries(ordersData).forEach(([id, order]) => {
+        const baseOrder = {
           id,
           code: order.code,
           clientCode: order.clientCode,
@@ -81,8 +61,60 @@ export default function OrdersByDayView() {
           createdAt: order.createdAt,
           deliveryAt: order.deliveryAt,
           selectedDays: order.selectedDays,
-          orderDate,
+          orderDate: "",
         };
+
+        // Determinar las fechas de entrega basadas en los productos
+        const deliveryDates = new Set<string>();
+        
+        // Si tiene días seleccionados (productos variados), agregar cada día
+        if (order.selectedDays && order.selectedDays.length > 0) {
+          order.selectedDays.forEach((day: string) => deliveryDates.add(day));
+        }
+        
+        // Si tiene productos de almuerzo, agregar sus fechas específicas
+        if (order.items && order.items.length > 0) {
+          order.items.forEach((item: any) => {
+            if (item.specificDate) {
+              deliveryDates.add(item.specificDate);
+            }
+          });
+        }
+        
+        // Si no hay fechas específicas, usar fecha de creación como fallback
+        if (deliveryDates.size === 0) {
+          const createdDate = new Date(
+            typeof order.createdAt === "number" ? order.createdAt : Date.parse(order.createdAt || Date.now())
+          );
+          const fallbackDate = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Lima",
+            year: "numeric",
+            month: "2-digit", 
+            day: "2-digit",
+          }).format(createdDate);
+          deliveryDates.add(fallbackDate);
+        }
+
+        // Crear una entrada por cada fecha de entrega
+        deliveryDates.forEach((deliveryDate) => {
+          orders.push({
+            ...baseOrder,
+            orderDate: deliveryDate,
+            // Filtrar items relevantes para esta fecha
+            items: (order.items || []).filter((item: any) => {
+              // Si es un producto con fecha específica, debe coincidir
+              if (item.specificDate) {
+                return item.specificDate === deliveryDate;
+              }
+              // Si es un producto variado, está disponible en todos los días seleccionados
+              if (order.selectedDays && order.selectedDays.includes(deliveryDate)) {
+                return true;
+              }
+              // Si no hay fecha específica ni días seleccionados, incluir
+              return !item.specificDate && (!order.selectedDays || order.selectedDays.length === 0);
+            })
+          });
+        });
       });
 
       setAllOrders(orders);

@@ -134,7 +134,7 @@ export default function DayOrderCard({
                   <Badge variant={getStatusVariant(order.status)}>
                     {order.status}
                   </Badge>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground" title="Hora de creación del pedido">
                     <Clock className="h-3 w-3" />
                     {formatTime(order.createdAt)}
                   </div>
@@ -165,6 +165,17 @@ export default function DayOrderCard({
                       <span className="ml-2 text-muted-foreground">{order.recess}</span>
                     </div>
                   )}
+                  <div>
+                    <span className="font-medium">Fecha del pedido:</span>
+                    <span className="ml-2 text-muted-foreground">
+                      {new Date(typeof order.createdAt === "number" ? order.createdAt : Date.parse(String(order.createdAt || Date.now()))).toLocaleDateString("es-PE", {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "2-digit"
+                      })}
+                    </span>
+                  </div>
                   {order.selectedDays && order.selectedDays.length > 0 && (
                     <div>
                       <span className="font-medium">Días seleccionados:</span>
