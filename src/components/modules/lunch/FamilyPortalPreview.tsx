@@ -149,15 +149,26 @@ export default function FamilyPortalPreview() {
   );
 
   const productsByCategory = useMemo(() => {
+    console.log("🔍 FamilyPortalPreview - Raw menu.products:", menu.products);
+    
     return categories.reduce((acc, cat) => {
       const products = Object.values(menu.products || {})
         .filter((p) => p && p.categoryId === cat.id && p.active !== false)
         .sort((a, b) => {
-          const positionA = typeof a.position === "number" ? a.position : Number.POSITIVE_INFINITY;
-          const positionB = typeof b.position === "number" ? b.position : Number.POSITIVE_INFINITY;
+          const positionA = typeof a.position === "number" ? a.position : 
+                           typeof a.position === "string" ? parseInt(a.position) : 
+                           Number.POSITIVE_INFINITY;
+          const positionB = typeof b.position === "number" ? b.position : 
+                           typeof b.position === "string" ? parseInt(b.position) : 
+                           Number.POSITIVE_INFINITY;
+          
+          console.log(`🔍 Sorting ${a.name} (pos: ${a.position}) vs ${b.name} (pos: ${b.position}) = ${positionA - positionB}`);
+          
           if (positionA !== positionB) return positionA - positionB;
           return a.name.localeCompare(b.name);
         });
+      
+      console.log(`🔍 Category ${cat.name} products:`, products.map(p => ({ name: p.name, position: p.position })));
       acc[cat.id] = products;
       return acc;
     }, {} as Record<string, ProductT[]>);

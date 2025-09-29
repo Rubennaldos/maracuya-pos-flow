@@ -105,11 +105,18 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
     // Orden por posición
     Object.keys(result).forEach((catId) => {
+      console.log(`🔍 ProductsPanel - Before sorting category ${catId}:`, 
+        result[catId].map((p: any) => ({ name: p.name, position: p.position })));
+      
       result[catId].sort((a: any, b: any) => {
         const posA = Number(a.position) || Number.POSITIVE_INFINITY;
         const posB = Number(b.position) || Number.POSITIVE_INFINITY;
+        console.log(`🔍 ProductsPanel - Sorting ${a.name} (pos: ${a.position}) vs ${b.name} (pos: ${b.position}) = ${posA - posB}`);
         return posA - posB;
       });
+      
+      console.log(`🔍 ProductsPanel - After sorting category ${catId}:`, 
+        result[catId].map((p: any) => ({ name: p.name, position: p.position })));
     });
 
     return result;
