@@ -3,11 +3,11 @@ import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, BarChart3 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar, BarChart3, Printer } from "lucide-react";
 
 import OrderFilters from "./OrderFilters";         // Historial (calendario/un día)
-import ReportsFilters from "./ReportsFilters.tsx";
-     // Reportes (rango de fechas)
+import ReportsFilters from "./ReportsFilters";     // Reportes (rango de fechas)
 import DayOrderCard from "./DayOrderCard";
 import OrderReports from "./OrderReports";
 import type { HistoryOrder, DayOrders, OrderFilter } from "./types";
@@ -20,6 +20,17 @@ const PEN = (n: number) =>
 // ============ helpers ============
 function norm(s = "") {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/** YYYY-MM-DD en zona America/Lima (hoy) */
+function todayLima(): string {
+  const now = new Date();
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
 }
 
 /** Devuelve el día (YYYY-MM-DD) del pedido según tu modelo */
@@ -48,7 +59,7 @@ function groupByDay(orders: HistoryOrder[]): DayOrders[] {
     if (!map.has(d)) map.set(d, []);
     map.get(d)!.push(o);
   }
-  const days = [...map.keys()].sort((a, b) => (a < b ? 1 : -1)); // desc
+  const days = [...map.keys()].sort(); // asc
   return days.map((date) => {
     const list = map.get(date)!;
     const totalAmount = list.reduce((s, o) => s + (o.total || 0), 0);
@@ -158,7 +169,10 @@ export default function OrdersByDayView() {
             items: filteredItems,
             total:
               filteredItems.length > 0
-                ? filteredItems.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0)
+                ? filteredItems.reduce(
+                    (sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)),
+                    0
+                  )
                 : order.total || 0,
           });
         });
@@ -177,26 +191,32 @@ export default function OrdersByDayView() {
     }
   };
 
-  // ============ HISTORIAL: días disponibles + aplicar ============
+  // ============ HISTORIAL: días disponibles (solo HOY en adelante) ============
   const availableDays = useMemo(() => {
+    const t = todayLima();
     const s = new Set<string>();
     for (const o of allOrders) {
       const d = getOrderDay(o);
-      if (d) s.add(d);
+      if (d && d >= t) s.add(d); // solo hoy y futuros
     }
-    return Array.from(s).sort((a, b) => (a < b ? 1 : -1));
+    return Array.from(s).sort(); // asc (hoy -> futuros)
   }, [allOrders]);
 
   const [historyVisible, setHistoryVisible] = useState<DayOrders[]>([]);
 
-  // Por defecto, seleccionar el día más reciente
+  // Al tener availableDays, seleccionar HOY si existe; si no, el próximo día
   useEffect(() => {
-    if (!historyFilter.day && availableDays.length > 0) {
-      setHistoryFilter((f) => ({ ...f, day: availableDays[0] }));
-    }
+    if (!availableDays.length) return;
+    setHistoryFilter((f) => {
+      if (f.day && availableDays.includes(f.day)) return f;
+      const t = todayLima();
+      const pick = availableDays.includes(t) ? t : availableDays[0];
+      return { ...f, day: pick };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableDays]);
 
+  // --- APLICAR filtros (calendario + nombre + estado) ---
   const applyHistoryFilter = useCallback(() => {
     const targetDay = historyFilter.day ?? null;
 
@@ -299,6 +319,7 @@ export default function OrdersByDayView() {
     }
   };
 
+  /** Imprime un DayOrders en GRID (“cuadraditos”) */
   const handlePrintDay = (dayOrders: DayOrders) => {
     const w = window.open("", "_blank");
     if (!w) return;
@@ -316,41 +337,56 @@ export default function OrdersByDayView() {
       <style>
         body{font-family:Arial, sans-serif; margin:16px}
         .header{ text-align:center; border-bottom:2px solid #333; padding-bottom:8px; margin-bottom:16px;}
-        .order{ border:1px solid #ddd; border-radius:8px; padding:12px; margin-bottom:10px; page-break-inside: avoid;}
-        .row{display:flex; justify-content:space-between; align-items:center}
-        .status{font-size:12px; padding:2px 8px; border-radius:12px; background:#eee}
-        .items{margin-left:12px}
-        .summary{margin-top:20px; padding:10px; background:#f9f9f9; border-radius:8px;}
+        .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
+        .card{ border:1px solid #ddd; border-radius:10px; padding:10px; page-break-inside: avoid; }
+        .title{ font-weight:600; margin-bottom:6px; }
+        .row{ font-size:12px; color:#444; margin:2px 0; }
+        .total{ text-align:right; font-weight:600; margin-top:6px; }
       </style></head><body>
       <div class="header">
         <h2>PEDIDOS DEL ${dateStr.toUpperCase()}</h2>
         <div>Total: ${dayOrders.totalOrders} pedidos - ${PEN(dayOrders.totalAmount)}</div>
         <div style="font-size:12px; color:#666;">Generado el ${new Date().toLocaleString("es-PE")}</div>
       </div>
+
+      <div class="grid">
       ${dayOrders.orders
         .map(
-          (order) => `
-        <div class="order">
-          <div class="row">
-            <div><strong>${order.clientName || order.studentName || ""}</strong> — <em>${
-            order.code || order.id.slice(-6)
-          }</em></div>
-            <div class="status">${order.status}</div>
-          </div>
-          <div><em>Productos:</em>${
-            order.items?.map((i) => `<div class="items">• ${i.qty} x ${i.name}</div>`).join("") || ""
-          }</div>
-          ${order.studentName ? `<div><em>Alumno:</em> ${order.studentName}</div>` : ""}
-          ${order.recess ? `<div><em>Recreo:</em> ${order.recess}</div>` : ""}
-          ${order.note ? `<div><em>Obs:</em> ${order.note}</div>` : ""}
-          <div style="text-align:right; margin-top:8px;"><strong>Total:</strong> ${PEN(order.total)}</div>
+          (o) => `
+        <div class="card">
+          <div class="title">${o.clientName || o.studentName || ""} — <em>${o.code || o.id.slice(-6)}</em></div>
+          ${o.studentName ? `<div class="row"><b>Alumno:</b> ${o.studentName}</div>` : ""}
+          ${o.recess ? `<div class="row"><b>Recreo:</b> ${o.recess}</div>` : ""}
+          <div class="row"><b>Estado:</b> ${o.status}</div>
+          <div class="row"><b>Productos:</b> ${(o.items || [])
+            .map((i) => `${i.qty} x ${i.name}`)
+            .join(" | ")}</div>
+          ${o.note ? `<div class="row"><b>Obs:</b> ${o.note}</div>` : ""}
+          <div class="total">${PEN(o.total)}</div>
         </div>`
         )
         .join("")}
+      </div>
       </body></html>`;
     w.document.write(html);
     w.document.close();
     w.print();
+  };
+
+  /** Imprime el día actualmente seleccionado (si hay datos) */
+  const printSelectedDay = () => {
+    if (!historyFilter.day) {
+      toast({ title: "Selecciona un día para imprimir", variant: "destructive" });
+      return;
+    }
+    // Armar DayOrders del día seleccionado
+    const subset = allOrders.filter((o) => getOrderDay(o) === historyFilter.day);
+    const grouped = groupByDay(subset);
+    if (!grouped.length) {
+      toast({ title: "No hay pedidos para imprimir en ese día", variant: "destructive" });
+      return;
+    }
+    handlePrintDay(grouped[0]);
   };
 
   const handleExportCSV = () => {
@@ -426,7 +462,7 @@ export default function OrdersByDayView() {
         </TabsList>
 
         {/* ---------- HISTORIAL (un día) ---------- */}
-        <TabsContent value="orders" className="space-y-6">
+        <TabsContent value="orders" className="space-y-4">
           <OrderFilters
             filter={historyFilter}
             onFilterChange={setHistoryFilter}
@@ -435,6 +471,14 @@ export default function OrdersByDayView() {
             availableDays={availableDays}
           />
 
+          {/* Botón extra: imprimir día seleccionado */}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={printSelectedDay}>
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir día
+            </Button>
+          </div>
+
           {historyVisible.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               {historyFilter.day
@@ -442,7 +486,7 @@ export default function OrdersByDayView() {
                 : "Selecciona un día y pulsa Aplicar filtros."}
             </div>
           ) : (
-            <div>
+            <div className="space-y-4">
               {historyVisible.map((dayOrders) => (
                 <DayOrderCard
                   key={dayOrders.date}
