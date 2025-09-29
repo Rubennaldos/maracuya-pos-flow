@@ -1,5 +1,5 @@
 // src/components/modules/lunch/products/ProductsPanel.tsx
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 import { toast } from "@/components/ui/use-toast";
@@ -43,6 +43,10 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
   const { uploadImage, isUploading } = useImageUpload();
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  
+  // Referencias para scroll automático
+  const formRef = useRef<HTMLDivElement>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Form state
   const [formData, setFormData] = useState({
@@ -82,6 +86,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     setSelectedDate(undefined);
     setAddons([]);
     setAddonsError(null);
+    setErrors({});
     setEditing(null);
     setShowForm(false);
   };
@@ -170,26 +175,34 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     }
 
     setShowForm(true);
+    
+    // Scroll automático al formulario cuando se abre para editar
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+    }, 100);
   };
 
   // Save product
   const saveProduct = async () => {
+    // Limpiar errores previos
+    setErrors({});
+    const newErrors: Record<string, string> = {};
+
     // Validaciones mínimas
     if (!formData.name.trim()) {
-      toast({ title: "El nombre es obligatorio", variant: "destructive" });
-      return;
+      newErrors.name = "El nombre es obligatorio";
     }
     if (!formData.price || isNaN(Number(formData.price))) {
-      toast({ title: "El precio debe ser un número válido", variant: "destructive" });
-      return;
+      newErrors.price = "El precio debe ser un número válido";
     }
     if (!formData.categoryId) {
-      toast({ title: "Debe seleccionar una categoría", variant: "destructive" });
-      return;
+      newErrors.categoryId = "Debe seleccionar una categoría";
     }
     if (formData.type === "lunch" && !formData.specificDate) {
-      toast({ title: "Debe seleccionar una fecha para productos de almuerzo", variant: "destructive" });
-      return;
+      newErrors.specificDate = "Debe seleccionar una fecha para productos de almuerzo";
     }
 
     // Validar agregados para productos variados
@@ -198,8 +211,23 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       const invalidAddons = addons.filter(a => a.name.trim() && (!a.priceStr || isNaN(Number(a.priceStr))));
       if (invalidAddons.length > 0) {
         setAddonsError("Todos los agregados deben tener un precio válido");
-        return;
+        newErrors.addons = "Agregados inválidos";
       }
+    }
+
+    // Si hay errores, mostrarlos y hacer scroll al formulario
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast({ title: "Por favor corrige los errores marcados", variant: "destructive" });
+      
+      // Scroll al formulario con errores
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }, 100);
+      return;
     }
 
     setLoading(true);
@@ -396,7 +424,16 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
               Guardar orden
             </Button>
           )}
-          <Button onClick={() => setShowForm(true)} className="flex items-center gap-2">
+          <Button onClick={() => {
+            setShowForm(true);
+            // Scroll automático al formulario cuando se abre para agregar nuevo producto
+            setTimeout(() => {
+              formRef.current?.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center' 
+              });
+            }, 100);
+          }} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Agregar Producto
           </Button>
@@ -405,7 +442,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
       {/* Product Form */}
       {showForm && (
-        <Card>
+        <Card ref={formRef} className={`animate-fade-in ${Object.keys(errors).length > 0 ? 'ring-2 ring-destructive/50 shadow-lg shadow-destructive/10' : ''}`}>
           <CardHeader>
             <CardTitle>{editing ? "Editar Producto" : "Nuevo Producto"}</CardTitle>
           </CardHeader>
@@ -418,7 +455,9 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                   value={formData.name}
                   onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="Nombre del producto"
+                  className={errors.name ? 'border-destructive ring-destructive focus:ring-destructive' : ''}
                 />
+                {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
               </div>
 
               <div>
@@ -430,13 +469,15 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                   value={formData.price}
                   onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))}
                   placeholder="0.00"
+                  className={errors.price ? 'border-destructive ring-destructive focus:ring-destructive' : ''}
                 />
+                {errors.price && <p className="text-xs text-destructive mt-1">{errors.price}</p>}
               </div>
 
               <div>
                 <Label htmlFor="category">Categoría *</Label>
                 <Select value={formData.categoryId} onValueChange={(value) => setFormData((prev) => ({ ...prev, categoryId: value }))}>
-                  <SelectTrigger>
+                  <SelectTrigger className={errors.categoryId ? 'border-destructive ring-destructive focus:ring-destructive' : ''}>
                     <SelectValue placeholder="Seleccionar categoría" />
                   </SelectTrigger>
                   <SelectContent>
@@ -447,6 +488,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.categoryId && <p className="text-xs text-destructive mt-1">{errors.categoryId}</p>}
               </div>
 
               <div>
@@ -470,7 +512,10 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                   <Label>Fecha del Almuerzo *</Label>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <Button 
+                        variant="outline" 
+                        className={`w-full justify-start text-left font-normal ${errors.specificDate ? 'border-destructive ring-destructive' : ''}`}
+                      >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {selectedDate ? format(selectedDate, "PPP", { locale: es }) : "Seleccionar fecha"}
                       </Button>
@@ -486,6 +531,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                       />
                     </PopoverContent>
                   </Popover>
+                  {errors.specificDate && <p className="text-xs text-destructive mt-1">{errors.specificDate}</p>}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -534,12 +580,13 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
             {/* Agregados (solo para productos variados) */}
             {formData.type === "varied" && (
-              <div className="md:col-span-2">
+              <div className={`md:col-span-2 ${errors.addons ? 'ring-2 ring-destructive/50 rounded p-2' : ''}`}>
                 <AddonsEditor
                   addons={addons}
                   setAddons={setAddons}
                   errorText={addonsError}
                 />
+                {errors.addons && <p className="text-xs text-destructive mt-1">{errors.addons}</p>}
               </div>
             )}
 
