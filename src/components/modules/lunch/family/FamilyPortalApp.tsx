@@ -22,6 +22,7 @@ import {
   Trash2,
   Eye,
   MessageCircle,
+  X,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { SettingsT, MenuT, ProductT } from "@/components/modules/lunch/types";
@@ -118,7 +119,13 @@ const WEEKDAY_KEY: Record<number, keyof NonNullable<SettingsT["disabledDays"]>> 
 };
 
 // UX helpers
-const haptics = (ms = 10) => { if (navigator?.vibrate) navigator.vibrate(ms); };
+const haptics = (ms = 10) => {
+  try {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      (navigator as any).vibrate(ms);
+    }
+  } catch {}
+};
 
 export default function FamilyPortalApp({
   mode,
@@ -164,7 +171,7 @@ export default function FamilyPortalApp({
         setMenu(menuData || {});
         if (menuData?.categories) {
           const firstCat = Object.values(menuData.categories)
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0] as any;
+            .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))[0] as any;
           if (firstCat?.id) setActiveCat(firstCat.id);
         }
       } catch (e) {
@@ -434,12 +441,12 @@ export default function FamilyPortalApp({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Eye className="h-5 w-5" />
+      <CardHeader className="py-3">
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+          <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
           {isPreview ? "Vista Previa del Portal de Familias" : "Portal de Familias"}
         </CardTitle>
-        <div className="text-sm text-muted-foreground">
+        <div className="text-xs sm:text-sm text-muted-foreground">
           {isPreview
             ? "Simulación completa. Puedes agregar productos, confirmar y enviar por WhatsApp (no guarda datos)."
             : `Sesión de ${clientName} (${clientId}).`}
@@ -457,24 +464,28 @@ export default function FamilyPortalApp({
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowCartSheet(true)}
-          className="fixed bottom-4 right-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-strong md:hidden flex items-center justify-center"
+          className="fixed bottom-4 right-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-strong md:hidden grid place-items-center"
           aria-label="Abrir carrito"
         >
-          <ShoppingCart className="h-6 w-6" />
-          {cart.length > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-secondary text-secondary-foreground text-xs flex items-center justify-center">
-              {cart.length}
-            </span>
-          )}
+          <div className="relative">
+            <ShoppingCart className="h-6 w-6" />
+            {cart.length > 0 && (
+              <span
+                className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-secondary text-secondary-foreground text-[11px] grid place-items-center"
+                aria-live="polite"
+              >
+                {cart.length}
+              </span>
+            )}
+          </div>
         </motion.button>
 
         <div className="rounded-lg p-4 border bg-white">
           {/* Encabezado compacto (móvil) */}
-          <div className="bg-green-50 border border-green-200 p-2 md:p-3 rounded-md mb-4 flex items-center justify-between h-12 md:h-auto">
-            <div className="flex items-center gap-3 md:flex-col md:items-start">
+          <div className="bg-green-50 border border-green-200 px-3 py-2 rounded-md mb-4 flex items-center justify-between h-12 md:h-auto">
+            <div className="flex items-center gap-2">
               <div className="text-sm font-medium">Hola, {clientName}</div>
-              <div className="text-xs text-muted-foreground hidden md:block">Código: {clientId}</div>
-              <div className="text-xs text-muted-foreground md:hidden">• {clientId}</div>
+              <div className="text-xs text-muted-foreground">• {clientId}</div>
             </div>
             {isPreview && <Badge variant="secondary" className="text-xs">Preview</Badge>}
           </div>
@@ -490,7 +501,9 @@ export default function FamilyPortalApp({
                         key={cat.id}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setActiveCat(cat.id)}
-                        className={`chip snap-child ${activeCat === cat.id ? 'chip--active' : ''} whitespace-nowrap`}
+                        className={`chip snap-child ${activeCat === cat.id ? "chip--active" : ""} whitespace-nowrap`}
+                        aria-pressed={activeCat === cat.id}
+                        aria-label={`Categoría ${cat.name}`}
                       >
                         {cat.name}
                       </motion.button>
@@ -510,11 +523,12 @@ export default function FamilyPortalApp({
                       className="card-compact anim-soft"
                     >
                       {/* imagen 16:9 */}
-                      <div className="ratio-16-9 relative bg-muted/40">
+                      <div className="ratio-16-9 relative bg-muted/40 overflow-hidden rounded-t-2xl">
                         {product.image ? (
                           <img
                             src={product.image}
                             alt={product.name}
+                            className="absolute inset-0 w-full h-full object-cover"
                             loading="lazy"
                             decoding="async"
                             sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -524,11 +538,10 @@ export default function FamilyPortalApp({
                             Sin imagen
                           </div>
                         )}
-                        
+
                         {/* Botón + circular dentro de la imagen */}
                         <motion.button
                           whileTap={{ scale: 0.92 }}
-                          whileHover={{ y: -2 }}
                           onClick={() => { haptics(); addToCart(product); }}
                           className="card-add-fab tap-40"
                           aria-label={`Agregar ${product.name}`}
@@ -757,7 +770,7 @@ export default function FamilyPortalApp({
           disabledDays={settings?.disabledDays}
         />
 
-        {/* Confirmación (si prefieres usar modal) */}
+        {/* Confirmación */}
         <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -857,12 +870,22 @@ export default function FamilyPortalApp({
 
         {/* Bottom Sheet Carrito (móvil) */}
         <Dialog open={showCartSheet} onOpenChange={setShowCartSheet}>
-          <DialogContent className="mobile-sheet sm:max-w-lg sm:rounded-lg sm:translate-y-0 sm:bottom-auto data-[state=open]:slide-in-from-bottom-full md:data-[state=open]:slide-in-from-bottom-0">
-            <div className="p-4 border-b text-center font-medium text-base">
-              <ShoppingCart className="h-5 w-5 inline mr-2" />
-              Tu pedido ({cart.length})
+          <DialogContent className="mobile-sheet sm:max-w-lg sm:rounded-lg sm:translate-y-0 sm:bottom-auto">
+            {/* header sheet */}
+            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b bg-white">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <ShoppingCart className="h-4 w-4" />
+                Tu pedido ({cart.length})
+              </div>
+              <button
+                aria-label="Cerrar"
+                onClick={() => setShowCartSheet(false)}
+                className="p-2 rounded-md hover:bg-muted"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            
+
             <div className="max-h-[50vh] overflow-y-auto p-4 space-y-3">
               {cart.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8 text-sm">Tu carrito está vacío</div>
@@ -904,11 +927,11 @@ export default function FamilyPortalApp({
                               </div>
                             </div>
                             <div className="flex items-center gap-1">
-                              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => removeFromCart(it.id)}>
+                              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => removeFromCart(it.id)} aria-label="Quitar uno">
                                 <Minus className="h-3 w-3" />
                               </Button>
                               <span className="w-8 text-center text-xs font-medium">{it.quantity}</span>
-                              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => addToCart(it)}>
+                              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => addToCart(it)} aria-label="Agregar uno">
                                 <Plus className="h-3 w-3" />
                               </Button>
                             </div>
@@ -920,17 +943,17 @@ export default function FamilyPortalApp({
                 </>
               )}
             </div>
-            
+
             <div className="modal-sticky-footer space-y-3">
               <div className="flex justify-between items-center text-sm font-bold">
                 <span>Total</span>
                 <span className="text-primary">{PEN(total)}</span>
               </div>
               <div className="flex gap-3 items-center">
-                <Button 
-                  className="flex-1" 
-                  onClick={() => { 
-                    setShowCartSheet(false); 
+                <Button
+                  className="flex-1"
+                  onClick={() => {
+                    setShowCartSheet(false);
                     if (cart.length > 0) openConfirm();
                   }}
                   disabled={!cart.length}
@@ -948,7 +971,7 @@ export default function FamilyPortalApp({
                       openWhatsAppNow(url);
                     }
                   }}
-                  className="h-10 w-10 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md tap-44"
+                  className="h-10 w-10 rounded-full bg-green-500 text-white grid place-items-center shadow-md tap-44 disabled:opacity-50"
                   aria-label="Enviar por WhatsApp"
                   disabled={!cart.length}
                 >
