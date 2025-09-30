@@ -1,5 +1,4 @@
-// src/components/modules/FamilyMenuWithDays.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 import FamilyOrderHistory from "@/components/modules/lunch/FamilyOrderHistory";
@@ -67,7 +66,13 @@ const openWhatsAppNow = (url: string) => {
   window.location.href = url;
 };
 
-export default function FamilyMenuWithDays({ client, onLogout }: { client: Client; onLogout?: () => void; }) {
+export default function FamilyMenuWithDays({
+  client,
+  onLogout,
+}: {
+  client: Client;
+  onLogout?: () => void;
+}) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [menu, setMenu] = useState<MenuT | null>(null);
   const [activeCat, setActiveCat] = useState<string | null>(null);
@@ -92,6 +97,9 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
 
   // anuncios
   const { announcements } = useActiveAnnouncements();
+
+  // refs para UX móvil
+  const cartRef = useRef<HTMLDivElement | null>(null);
 
   /* ==== Resolver nombre ==== */
   useEffect(() => {
@@ -376,7 +384,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
     const url = buildWaUrl(phoneDigits, makeWaMessage());
     openWhatsAppNow(url);
 
-    // 2) guardar pedido en RTDB (no bloquear al usuario)
+    // 2) guardar pedido en RTDB
     try {
       const orderCode = await RTDBHelper.getNextCorrelative("lunch");
 
@@ -389,7 +397,6 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
         ...(item.type === "varied" ? { selectedDays: item.selectedDays } : {}),
       }));
 
-      // Fecha Perú (YYYY-MM-DD)
       const orderDate = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Lima",
         year: "numeric",
@@ -436,29 +443,38 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
     };
 
     return (
-      <Card key={p.id} className="h-full">
+      <Card key={p.id} className="h-full shadow-sm hover:shadow-md transition-shadow">
+        {/* Imagen compacta en móvil (16:9) */}
         {p.image && (
-          <div className="aspect-video w-full overflow-hidden rounded-t-lg">
-            <img src={p.image} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+          <div className="w-full overflow-hidden rounded-t-lg aspect-[16/9] md:aspect-[4/3]">
+            <img
+              src={p.image}
+              alt={p.name}
+              className="h-full w-full object-cover"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         )}
 
-        <CardContent className="p-4 space-y-3">
+        <CardContent className="p-3 md:p-4 space-y-3">
           <div>
-            <h3 className="font-semibold">{p.name}</h3>
+            <h3 className="font-semibold text-sm md:text-base line-clamp-2">{p.name}</h3>
             {p.description && (
-              <p className="text-sm text-muted-foreground mt-1">{p.description}</p>
+              <p className="text-xs md:text-sm text-muted-foreground mt-1 line-clamp-2">
+                {p.description}
+              </p>
             )}
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-bold text-lg">{PEN(p.price)}</span>
+          <div className="flex items-end justify-between gap-2">
+            <div className="min-w-0">
+              <span className="font-bold text-base md:text-lg">{PEN(p.price)}</span>
               {p.type === "varied" && (
-                <p className="text-xs text-muted-foreground">por día</p>
+                <p className="text-[11px] md:text-xs text-muted-foreground">por día</p>
               )}
               {p.type === "lunch" && p.specificDate && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] md:text-xs text-muted-foreground">
                   {new Date(p.specificDate + "T12:00:00").toLocaleDateString("es-PE", {
                     weekday: "long",
                     day: "numeric",
@@ -469,7 +485,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
 
               {/* Detalle de almuerzo */}
               {p.type === "lunch" && (
-                <ul className="mt-2 text-sm text-muted-foreground space-y-0.5">
+                <ul className="mt-2 text-[12px] md:text-sm text-muted-foreground space-y-0.5">
                   {(p as any).entrada && (
                     <li>🥗 <span className="font-medium">Entrada:</span> {(p as any).entrada}</li>
                   )}
@@ -495,8 +511,12 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
                     {p.addons
                       .filter((a) => a && a.active !== false)
                       .map((a, idx) => (
-                        <Badge key={`${a.id || idx}`} variant="outline" className="text-[11px]">
-                          {a.name} (+{PEN(a.price)})
+                        <Badge
+                          key={`${a.id || idx}`}
+                          variant="outline"
+                          className="text-[10px] md:text-[11px] rounded-full"
+                        >
+                          {a.name} (+{PEN(Number(a.price) || 0)})
                         </Badge>
                       ))}
                   </div>
@@ -504,7 +524,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
               )}
             </div>
 
-            <Button onClick={handleAddToCart} size="sm">
+            <Button onClick={handleAddToCart} size="sm" className="rounded-full px-4">
               Agregar
             </Button>
           </div>
@@ -517,18 +537,23 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="max-w-7xl mx-auto px-4 py-3 md:py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold">¡Hola, {resolvedName}!</h1>
-              <p className="text-sm text-muted-foreground">Código: {client.code}</p>
+              <h1 className="text-lg md:text-xl font-bold">¡Hola, {resolvedName}!</h1>
+              <p className="text-xs md:text-sm text-muted-foreground">Código: {client.code}</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setShowHistory(!showHistory)}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={() => setShowHistory(!showHistory)}
+              >
                 {showHistory ? "Ocultar historial" : "Ver historial"}
               </Button>
               {onLogout && (
-                <Button variant="outline" onClick={onLogout}>
+                <Button variant="outline" size="sm" className="rounded-full" onClick={onLogout}>
                   Salir
                 </Button>
               )}
@@ -537,10 +562,10 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-5 md:py-6">
         {/* Anuncios */}
         {announcements.length > 0 && (
-          <div className="mb-6">
+          <div className="mb-4 md:mb-6">
             <AnnouncementBanner announcements={announcements} />
           </div>
         )}
@@ -554,7 +579,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
 
         {/* Mensaje */}
         {message && (
-          <div className="mb-6">
+          <div className="mb-4 md:mb-6">
             <Card
               className={
                 message.includes("Error") || message.includes("No se")
@@ -562,7 +587,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
                   : "border-green-500"
               }
             >
-              <CardContent className="p-4">
+              <CardContent className="p-3 md:p-4">
                 <p
                   className={
                     message.includes("Error") || message.includes("No se")
@@ -577,24 +602,27 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
           </div>
         )}
 
-        <div className="grid lg:grid-cols-4 gap-6">
+        <div className="grid lg:grid-cols-4 gap-4 md:gap-6">
           {/* Menú */}
           <div className="lg:col-span-3">
-            <div className="flex gap-2 mb-6 overflow-x-auto">
+            {/* Categorías – chips redondos, scroll horizontal */}
+            <div className="flex gap-2 mb-4 md:mb-6 overflow-x-auto no-scrollbar snap-x snap-mandatory">
               {categories.map((cat) => (
                 <Button
                   key={cat.id}
+                  size="sm"
                   variant={activeCat === cat.id ? "default" : "outline"}
                   onClick={() => setActiveCat(cat.id)}
-                  className="whitespace-nowrap"
+                  className="rounded-full px-3 py-1 whitespace-nowrap snap-start"
                 >
                   {cat.name}
                 </Button>
               ))}
             </div>
 
+            {/* Productos */}
             {activeCat && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                 {(productsByCategory[activeCat] || []).map((product) => (
                   <ProductCard key={product.id} p={product} />
                 ))}
@@ -603,12 +631,12 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
           </div>
 
           {/* Carrito */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1" ref={cartRef}>
             <Card className="sticky top-4">
-              <CardHeader>
-                <CardTitle>Tu pedido</CardTitle>
+              <CardHeader className="pb-2 md:pb-3">
+                <CardTitle className="text-base md:text-lg">Tu pedido</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 {Object.keys(cart).length === 0 ? (
                   <p className="text-muted-foreground text-center py-4">
                     Tu carrito está vacío
@@ -618,8 +646,8 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
                     <div className="space-y-3">
                       {Object.entries(cart).map(([key, item]) => (
                         <div key={key} className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{item.name}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{item.name}</p>
                             <p className="text-xs text-muted-foreground">
                               {item.qty} × {PEN(item.price)}
                               {item.type === "varied" && item.selectedDays?.length ? (
@@ -655,7 +683,7 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
                       ))}
                     </div>
 
-                    <div className="border-t pt-4">
+                    <div className="border-t pt-3">
                       <div className="flex justify-between items-center font-bold">
                         <span>Total:</span>
                         <span>{PEN(total)}</span>
@@ -677,6 +705,26 @@ export default function FamilyMenuWithDays({ client, onLogout }: { client: Clien
           </div>
         </div>
       </div>
+
+      {/* FAB carrito (solo móvil) */}
+      {Object.keys(cart).length > 0 && (
+        <Button
+          onClick={() => cartRef.current?.scrollIntoView({ behavior: "smooth" })}
+          className="lg:hidden fixed bottom-20 right-4 rounded-full shadow-md px-4 h-11"
+        >
+          Ver carrito • {Object.keys(cart).length}
+        </Button>
+      )}
+
+      {/* Barra inferior fija (móvil) */}
+      {Object.keys(cart).length > 0 && (
+        <div className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t p-3 flex items-center justify-between">
+          <div className="font-semibold">Total: {PEN(total)}</div>
+          <Button size="sm" className="rounded-full px-5" onClick={openConfirm} disabled={posting}>
+            Confirmar
+          </Button>
+        </div>
+      )}
 
       {/* Modal de Agregados */}
       <AddonsSelectorDialog

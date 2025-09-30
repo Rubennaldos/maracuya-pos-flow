@@ -1,4 +1,33 @@
-/* Tailwind layers */
+/* ====== estilos existentes (NO TOCAR) ====== */
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover { filter: drop-shadow(0 0 2em #646cffaa); }
+.logo.react:hover { filter: drop-shadow(0 0 2em #61dafbaa); }
+
+@keyframes logo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+.card { padding: 2em; }
+.read-the-docs { color: #888; }
+
+/* ====== Tailwind layers ====== */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -69,9 +98,9 @@
     --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
 
     /* Sombras */
-    --shadow-soft: 0 2px 20px hsla(var(--primary), 0.1);
+    --shadow-soft: 0 2px 20px hsla(var(--primary), 0.10);
     --shadow-medium: 0 4px 30px hsla(var(--primary), 0.15);
-    --shadow-strong: 0 8px 40px hsla(var(--primary), 0.2);
+    --shadow-strong: 0 8px 40px hsla(var(--primary), 0.20);
 
     /* Sidebar */
     --sidebar-background: 120 25% 96%;
@@ -126,4 +155,143 @@
   /* Resets de base */
   * { @apply border-border; }
   body { @apply bg-background text-foreground; }
+
+  /* Tipografía responsiva base: 14 en móvil, 16 en >= md */
+  html { font-size: 14px; }
+  @media (min-width: 768px) {
+    html { font-size: 16px; }
+  }
 }
+
+/* ====== Componentes reutilizables para el look móvil ====== */
+@layer components {
+  /* Header compacto 48px */
+  .app-header-compact {
+    @apply h-12 flex items-center justify-between px-3 bg-white border-b;
+  }
+
+  /* Chips redondos (categorías, filtros) */
+  .chip {
+    @apply rounded-full border px-3 py-1 text-xs font-medium bg-white hover:bg-muted/50 transition;
+    box-shadow: var(--shadow-soft);
+  }
+  .chip--active {
+    @apply bg-primary text-primary-foreground border-primary;
+  }
+
+  /* Botón circular (32–44px) */
+  .btn-circle {
+    @apply rounded-full p-0 flex items-center justify-center border;
+    width: 44px; height: 44px;
+    box-shadow: var(--shadow-soft);
+  }
+  .btn-circle.btn-32 { width: 32px; height: 32px; }
+
+  /* Tarjeta compacta con 16:9 y sombras suaves */
+  .card-compact { @apply rounded-2xl border bg-white overflow-hidden shadow-sm; }
+  .card-compact:hover { box-shadow: var(--shadow-medium); }
+
+  /* Contenedor 16:9 para imágenes */
+  .ratio-16-9 { position: relative; width: 100%; padding-top: 56.25%; }
+  .ratio-16-9 > img, .ratio-16-9 > picture, .ratio-16-9 > video {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  }
+
+  /* FAB del carrito */
+  .fab-cart {
+    @apply fixed bottom-5 right-5 rounded-full bg-primary text-primary-foreground shadow-lg border;
+    width: 56px; height: 56px;
+  }
+  .fab-badge {
+    @apply absolute -top-1 -right-1 text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground border;
+  }
+
+  /* Footer sticky para modales (SelectDays/Addons) */
+  .modal-sticky-footer {
+    @apply sticky bottom-0 border-t px-4 py-3 bg-white/95 backdrop-blur;
+    /* fallback si no hay backdrop-filter */
+  }
+  @supports (backdrop-filter: blur(4px)) {
+    .modal-sticky-footer { @apply bg-white/60; }
+  }
+
+  /* Chips de agregados */
+  .addon-chip {
+    @apply rounded-full border px-3 py-2 text-sm bg-white shadow-sm flex items-center gap-2 select-none;
+  }
+  .addon-chip--active {
+    @apply border-primary bg-primary/5;
+  }
+
+  /* Botón de añadir dentro de card (bottom-right) */
+  .card-add-fab {
+    @apply absolute bottom-2 right-2 rounded-full border bg-white text-foreground;
+    width: 40px; height: 40px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  /* Sheet inferior (carrito móvil) */
+  .mobile-sheet {
+    @apply fixed inset-x-0 bottom-0 rounded-t-2xl bg-white border-t shadow-2xl;
+  }
+
+  /* Texto XS para carrito agrupado por fecha */
+  .cart-date-title {
+    @apply text-xs font-medium text-primary border-b pb-1;
+  }
+}
+
+/* ====== Utilities pequeñas que ayudan en móvil ====== */
+@layer utilities {
+  .shadow-soft { box-shadow: var(--shadow-soft); }
+  .shadow-medium { box-shadow: var(--shadow-medium); }
+  .shadow-strong { box-shadow: var(--shadow-strong); }
+
+  .tap-40 { min-height: 40px; min-width: 40px; } /* objetivo táctil */
+  .tap-44 { min-height: 44px; min-width: 44px; }
+
+  /* Clampeo de 2 líneas con fallback estándar */
+.text-2lines {
+  display: -webkit-box;           /* Safari/Chromium */
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;          /* prefijo */
+  line-clamp: 2;                   /* propiedad estándar (silencia el warning) */
+  overflow: hidden;
+}
+
+
+  .scroll-x-snap {
+    scroll-snap-type: x mandatory;
+  }
+  .snap-child { scroll-snap-align: start; }
+
+  /* Animaciones suaves por defecto, respetando reduced-motion */
+  .anim-soft { transition: all 160ms ease; }
+  @media (prefers-reduced-motion: reduce) {
+    .anim-soft { transition: none !important; }
+  }
+}
+
+/* ====== Accesibilidad ====== */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* ====== Rendimiento imágenes ====== */
+img {
+  image-rendering: auto;
+}
+
+/* Puedes usar estas clases en tus componentes:
+   - .app-header-compact
+   - .chip / .chip--active
+   - .btn-circle / .btn-32
+   - .card-compact, .ratio-16-9, .card-add-fab
+   - .fab-cart + .fab-badge
+   - .modal-sticky-footer
+   - .addon-chip / .addon-chip--active
+   - .mobile-sheet
+   - .cart-date-title
+   - .tap-40, .tap-44, .text-2lines, .scroll-x-snap, .snap-child, .anim-soft
+*/

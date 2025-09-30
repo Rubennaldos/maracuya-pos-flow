@@ -26,6 +26,9 @@ import {
 import { toast } from "@/hooks/use-toast";
 import type { SettingsT, MenuT, ProductT } from "@/components/modules/lunch/types";
 
+// Animaciones
+import { motion } from "framer-motion";
+
 // utils flexibles (con fallbacks)
 import * as DateUtils from "@/components/modules/lunch/utils/dateUtils";
 import SelectDaysDialog from "@/components/modules/lunch/preview/SelectDaysDialog";
@@ -54,6 +57,7 @@ const openWhatsAppNow = (url: string) => {
   window.location.href = url;
 };
 
+// Helpers de fecha (fallbacks)
 const _formatDateForPeru =
   (DateUtils as any)?.formatDateForPeru ??
   function (d: Date): string {
@@ -113,6 +117,10 @@ const WEEKDAY_KEY: Record<number, keyof NonNullable<SettingsT["disabledDays"]>> 
   6: "saturday",
 };
 
+// UX helpers
+const isMobile = () => (typeof window !== "undefined" ? window.innerWidth < 640 : true);
+const haptics = (ms = 10) => { if (navigator?.vibrate) navigator.vibrate(ms); };
+
 export default function FamilyPortalApp({
   mode,
   client,
@@ -142,6 +150,9 @@ export default function FamilyPortalApp({
   const [showLoadingAnimation, setShowLoadingAnimation] = useState(false); // compat opcional
   const [message, setMessage] = useState("");
 
+  // Sheet carrito móvil
+  const [showCartSheet, setShowCartSheet] = useState(false);
+
   // Carga inicial
   useEffect(() => {
     const loadData = async () => {
@@ -154,8 +165,8 @@ export default function FamilyPortalApp({
         setMenu(menuData || {});
         if (menuData?.categories) {
           const firstCat = Object.values(menuData.categories)
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
-          if (firstCat) setActiveCat(firstCat.id);
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0] as any;
+          if (firstCat?.id) setActiveCat(firstCat.id);
         }
       } catch (e) {
         console.error(e);
@@ -171,27 +182,27 @@ export default function FamilyPortalApp({
     () =>
       Object.values(menu.categories || {})
         .filter((c) => c && typeof c === "object")
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+        .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)),
     [menu]
-  );
+  ) as Array<{ id: string; name: string }>;
 
   // Productos por categoría
   const productsByCategory = useMemo(() => {
     return categories.reduce((acc, cat) => {
       const products = Object.values(menu.products || {})
-        .filter((p) => p && p.categoryId === cat.id && p.active !== false)
-        .sort((a, b) => {
+        .filter((p: any) => p && p.categoryId === cat.id && p.active !== false)
+        .sort((a: any, b: any) => {
           const pa =
-            typeof (a as any).position === "number"
-              ? (a as any).position
-              : typeof (a as any).position === "string"
-              ? parseInt((a as any).position)
+            typeof a.position === "number"
+              ? a.position
+              : typeof a.position === "string"
+              ? parseInt(a.position)
               : Number.POSITIVE_INFINITY;
           const pb =
-            typeof (b as any).position === "number"
-              ? (b as any).position
-              : typeof (b as any).position === "string"
-              ? parseInt((b as any).position)
+            typeof b.position === "number"
+              ? b.position
+              : typeof b.position === "string"
+              ? parseInt(b.position)
               : Number.POSITIVE_INFINITY;
           if (pa !== pb) return pa - pb;
           return a.name.localeCompare(b.name);
@@ -263,6 +274,7 @@ export default function FamilyPortalApp({
     setSelectedDays([]);
     setSelectedAddons({});
     toast({ title: `${selectedProduct.name} agregado al carrito` });
+    haptics();
   };
 
   const addToCart = (product: ProductT) => {
@@ -283,6 +295,7 @@ export default function FamilyPortalApp({
       return [...prev, { ...product, quantity: 1, subtotal: product.price ?? 0 }];
     });
     toast({ title: `${product.name} agregado al carrito` });
+    haptics();
   };
 
   const removeFromCart = (productId: string) => {
@@ -371,6 +384,7 @@ export default function FamilyPortalApp({
       return;
     }
 
+    haptics(15);
     const url = buildWaUrl(phoneDigits, makeWaMessage());
     openWhatsAppNow(url); // Navega a WhatsApp
 
@@ -405,12 +419,19 @@ export default function FamilyPortalApp({
   if (loading) {
     return (
       <Card>
-        <CardContent className="p-8 text-center">
-          <div className="text-muted-foreground">Cargando vista…</div>
+        <CardContent className="p-4">
+          {/* Skeletons de carga */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="animate-pulse rounded-2xl border bg-muted/30 h-44" />
+            ))}
+          </div>
         </CardContent>
       </Card>
     );
   }
+
+  const activeList = activeCat ? productsByCategory[activeCat] || [] : [];
 
   return (
     <Card>
@@ -433,6 +454,19 @@ export default function FamilyPortalApp({
           </div>
         )}
 
+        {/* FAB Carrito (móvil) */}
+        {isMobile() && cart.length > 0 && (
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowCartSheet(true)}
+            className="fixed bottom-20 right-4 z-30 h-12 px-4 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center gap-2"
+          >
+            <ShoppingCart className="h-5 w-5" />
+            <span>Carrito</span>
+            <span className="ml-1 rounded-full bg-white/20 px-2 text-sm">{cart.length}</span>
+          </motion.button>
+        )}
+
         <div className="rounded-lg p-4 border bg-white">
           {/* Encabezado compacto */}
           <div className="bg-green-50 border border-green-200 p-3 rounded-md mb-4 flex items-center justify-between">
@@ -447,34 +481,45 @@ export default function FamilyPortalApp({
             {/* Productos */}
             <div className="lg:col-span-2">
               {categories.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {categories.map((cat) => (
-                    <Button
-                      key={cat.id}
-                      variant={activeCat === cat.id ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setActiveCat(cat.id)}
-                      className="rounded-full"
-                    >
-                      {cat.name}
-                    </Button>
-                  ))}
+                <div className="mb-4 -mx-4 sm:mx-0">
+                  <div
+                    className="flex gap-2 px-4 overflow-x-auto snap-x snap-mandatory scrollbar-none"
+                    style={{ WebkitOverflowScrolling: "touch" }}
+                  >
+                    {categories.map((cat) => (
+                      <Button
+                        key={cat.id}
+                        variant={activeCat === cat.id ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setActiveCat(cat.id)}
+                        className="rounded-full snap-start px-3 py-2 text-sm"
+                      >
+                        {cat.name}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {activeCat && productsByCategory[activeCat]?.length ? (
+              {activeCat && activeList.length ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {productsByCategory[activeCat].map((product) => (
-                    <div
+                  {activeList.map((product) => (
+                    <motion.div
                       key={product.id}
-                      className="rounded-lg border bg-white overflow-hidden hover:shadow-sm transition"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.18 }}
+                      className="relative rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition"
                     >
-                      <div className="w-full h-40 bg-muted/40 overflow-hidden">
+                      {/* imagen 16:9 */}
+                      <div className="relative w-full aspect-video bg-muted/40">
                         {product.image ? (
                           <img
                             src={product.image}
                             alt={product.name}
                             className="w-full h-full object-cover"
+                            loading="lazy"
+                            decoding="async"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
@@ -484,41 +529,50 @@ export default function FamilyPortalApp({
                       </div>
 
                       <div className="p-3">
-                        <div className="text-sm font-medium mb-1 line-clamp-1">{product.name}</div>
+                        <div className="text-[15px] font-semibold leading-tight line-clamp-2 min-h-[2.5rem]">
+                          {product.name}
+                        </div>
 
                         {settings?.showPrices && typeof product.price === "number" && (
-                          <div className="text-sm font-semibold text-primary">
+                          <div className="mt-1 text-sm font-semibold text-primary">
                             {PEN(product.price)}
                             {product.type === "varied" && (
-                              <span className="ml-1 text-xs text-muted-foreground">por día</span>
+                              <span className="ml-1 text-[11px] text-muted-foreground">/día</span>
                             )}
                           </div>
                         )}
 
-                        {/* Agregados visibles en la tarjeta */}
-                        {product.addons && product.addons.length > 0 && (
-                          <div className="mt-2">
-                            <div className="text-[11px] font-medium text-muted-foreground mb-1">
-                              Agregados disponibles:
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              {product.addons.map((a, idx) => (
-                                <Badge key={`${a.id || idx}`} variant="outline" className="text-[11px]">
-                                  {a.name} (+{PEN(Number(a.price) || 0)})
-                                </Badge>
-                              ))}
-                            </div>
+                        {/* Agregados (chips acotados) */}
+                        {!!(product.addons?.length) && (
+                          <div className="mt-2 flex items-center gap-1 flex-wrap">
+                            {product.addons.slice(0, 2).map((a, idx) => (
+                              <Badge
+                                key={`${a.id || idx}`}
+                                variant="outline"
+                                className="text-[11px] px-2 py-0.5 rounded-full"
+                              >
+                                {a.name} (+{PEN(Number(a.price) || 0)})
+                              </Badge>
+                            ))}
+                            {product.addons.length > 2 && (
+                              <span className="text-[11px] text-muted-foreground">
+                                +{product.addons.length - 2}
+                              </span>
+                            )}
                           </div>
                         )}
-
-                        <div className="mt-2 flex justify-end">
-                          <Button size="sm" onClick={() => addToCart(product)}>
-                            <Plus className="h-4 w-4 mr-1" />
-                            Agregar
-                          </Button>
-                        </div>
                       </div>
-                    </div>
+
+                      {/* FAB “+” circular */}
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => { haptics(); addToCart(product); }}
+                        className="absolute bottom-3 right-3 h-10 w-10 rounded-full bg-primary text-primary-foreground shadow-md grid place-items-center"
+                        aria-label={`Agregar ${product.name}`}
+                      >
+                        <Plus className="h-5 w-5" />
+                      </motion.button>
+                    </motion.div>
                   ))}
                 </div>
               ) : (
@@ -528,8 +582,8 @@ export default function FamilyPortalApp({
               )}
             </div>
 
-            {/* Carrito */}
-            <div className="lg:col-span-1">
+            {/* Carrito (panel desktop permanece) */}
+            <div className="lg:col-span-1 hidden lg:block">
               <Card className="sticky top-4">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -545,6 +599,7 @@ export default function FamilyPortalApp({
                     </div>
                   ) : (
                     <>
+                      {/* Grupos por fecha (si aplica) */}
                       {(() => {
                         const groups = cart.reduce((acc, item) => {
                           if (item.selectedDays?.length) {
@@ -788,7 +843,7 @@ export default function FamilyPortalApp({
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="sticky bottom-0 bg-white pt-3">
               <Button variant="outline" onClick={() => setShowConfirm(false)}>
                 Cancelar
               </Button>
@@ -801,6 +856,73 @@ export default function FamilyPortalApp({
 
         {/* Animación opcional */}
         <OrderLoadingAnimation open={showLoadingAnimation} onComplete={handleAnimationComplete} />
+
+        {/* Bottom Sheet Carrito (móvil) */}
+        <Dialog open={showCartSheet} onOpenChange={setShowCartSheet}>
+          <DialogContent className="sm:max-w-lg sm:rounded-lg rounded-t-2xl p-0 gap-0 translate-y-0 bottom-0 left-0 right-0 sm:left-auto sm:right-auto sm:bottom-auto">
+            <div className="p-3 border-b text-center font-medium">Tu pedido</div>
+            <div className="max-h-[55vh] overflow-y-auto p-3 space-y-2 text-xs">
+              {cart.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">Tu carrito está vacío</div>
+              ) : (
+                <>
+                  {cart.map((it, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{it.name}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {PEN(it.price ?? 0)} × {it.quantity}
+                          {!!it.selectedDays?.length && <> • {it.selectedDays.join(", ")}</>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => removeFromCart(it.id)}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-6 text-center">{it.quantity}</span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => addToCart(it)}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+
+            <div className="p-3 border-t bg-primary/5">
+              <div className="flex items-center justify-between font-semibold text-sm mb-2">
+                <span>Total</span><span>{PEN(total)}</span>
+              </div>
+              <div className="flex items-center gap-2 text-green-800 text-xs mb-2">
+                <MessageCircle className="h-4 w-4" />
+                Se enviará confirmación por WhatsApp
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  onClick={() => { setShowCartSheet(false); confirmNow(); }}
+                  disabled={!cart.length || posting}
+                >
+                  Confirmar
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={clearCart}>
+                  Limpiar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
