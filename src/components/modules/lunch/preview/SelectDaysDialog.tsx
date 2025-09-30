@@ -113,14 +113,8 @@ export default function SelectDaysDialog({
 
         {/* contenido scrollable */}
         <div className="px-4 pb-24 pt-4 overflow-y-auto max-h-[70vh]">
-          {/* rejilla de botones circulares */}
-          <div
-            className={cn(
-              "grid gap-2",
-              // 7 en desktop, 5/6 en pantallas chicas para tacto cómodo
-              "grid-cols-6 sm:grid-cols-7"
-            )}
-          >
+          {/* rejilla de botones circulares estilo BCP */}
+          <div className="grid grid-cols-7 gap-2">
             {availableDays.map(({ date, dayName, dayNumber, month, isToday }) => {
               const isSelected = selectedDays.includes(date);
               return (
@@ -132,20 +126,20 @@ export default function SelectDaysDialog({
                   whileHover={{ y: -2 }}
                   aria-pressed={isSelected}
                   className={cn(
-                    "h-16 w-full rounded-full border-2 flex flex-col items-center justify-center",
+                    "btn-circle tap-44 text-[10px] flex-col gap-0",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary",
-                    "text-xs select-none",
+                    "select-none",
                     isSelected
                       ? "border-primary bg-primary text-primary-foreground shadow-sm"
                       : "border-border bg-white hover:bg-muted/40",
-                    isToday && !isSelected && "ring-1 ring-primary/20"
+                    isToday && !isSelected && "ring-2 ring-primary/20"
                   )}
                 >
-                  <span className="font-semibold leading-none capitalize">
+                  <span className="font-medium leading-none capitalize">
                     {dayName.slice(0, 3)}
                   </span>
-                  <span className="text-base font-bold leading-none">{dayNumber}</span>
-                  <span className="leading-none capitalize opacity-80">{month}</span>
+                  <span className="text-base font-bold leading-none mt-1">{dayNumber}</span>
+                  <span className="leading-none capitalize opacity-80 text-[9px]">{month.slice(0, 3)}</span>
                 </motion.button>
               );
             })}
@@ -167,14 +161,13 @@ export default function SelectDaysDialog({
         </div>
 
         {/* sticky total + acciones */}
-        <div className="sticky bottom-0 w-full border-t bg-white/95 backdrop-blur px-4 py-3">
+        <div className="modal-sticky-footer">
           {selectedDays.length > 0 && typeof pricePerDay === "number" ? (
-            <div className="mb-2 rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium">
-              Subtotal: {selectedDays.length} día
-              {selectedDays.length > 1 ? "s" : ""} × {PEN(pricePerDay)} = {PEN(subtotal)}
+            <div className="mb-3 rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium">
+              Subtotal: {selectedDays.length} día{selectedDays.length > 1 ? "s" : ""} × {PEN(pricePerDay)} = <span className="font-bold text-primary">{PEN(subtotal)}</span>
             </div>
           ) : null}
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>

@@ -118,7 +118,6 @@ const WEEKDAY_KEY: Record<number, keyof NonNullable<SettingsT["disabledDays"]>> 
 };
 
 // UX helpers
-const isMobile = () => (typeof window !== "undefined" ? window.innerWidth < 640 : true);
 const haptics = (ms = 10) => { if (navigator?.vibrate) navigator.vibrate(ms); };
 
 export default function FamilyPortalApp({
@@ -147,7 +146,7 @@ export default function FamilyPortalApp({
   const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("primero");
   const [confirmNote, setConfirmNote] = useState("");
   const [posting, setPosting] = useState(false);
-  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false); // compat opcional
+  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false);
   const [message, setMessage] = useState("");
 
   // Sheet carrito móvil
@@ -455,123 +454,122 @@ export default function FamilyPortalApp({
         )}
 
         {/* FAB Carrito (móvil) */}
-        {isMobile() && cart.length > 0 && (
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowCartSheet(true)}
-            className="fixed bottom-20 right-4 z-30 h-12 px-4 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center gap-2"
-          >
-            <ShoppingCart className="h-5 w-5" />
-            <span>Carrito</span>
-            <span className="ml-1 rounded-full bg-white/20 px-2 text-sm">{cart.length}</span>
-          </motion.button>
-        )}
+        <motion.button
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowCartSheet(true)}
+          className="fixed bottom-4 right-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-strong md:hidden flex items-center justify-center"
+          aria-label="Abrir carrito"
+        >
+          <ShoppingCart className="h-6 w-6" />
+          {cart.length > 0 && (
+            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-secondary text-secondary-foreground text-xs flex items-center justify-center">
+              {cart.length}
+            </span>
+          )}
+        </motion.button>
 
         <div className="rounded-lg p-4 border bg-white">
-          {/* Encabezado compacto */}
-          <div className="bg-green-50 border border-green-200 p-3 rounded-md mb-4 flex items-center justify-between">
-            <div>
-              <div className="text-sm">¡Hola, {clientName}!</div>
-              <div className="text-xs text-muted-foreground">Código: {clientId}</div>
+          {/* Encabezado compacto (móvil) */}
+          <div className="bg-green-50 border border-green-200 p-2 md:p-3 rounded-md mb-4 flex items-center justify-between h-12 md:h-auto">
+            <div className="flex items-center gap-3 md:flex-col md:items-start">
+              <div className="text-sm font-medium">Hola, {clientName}</div>
+              <div className="text-xs text-muted-foreground hidden md:block">Código: {clientId}</div>
+              <div className="text-xs text-muted-foreground md:hidden">• {clientId}</div>
             </div>
-            {isPreview && <Badge variant="secondary">Vista previa</Badge>}
+            {isPreview && <Badge variant="secondary" className="text-xs">Preview</Badge>}
           </div>
 
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Productos */}
             <div className="lg:col-span-2">
               {categories.length > 0 && (
-                <div className="mb-4 -mx-4 sm:mx-0">
-                  <div
-                    className="flex gap-2 px-4 overflow-x-auto snap-x snap-mandatory scrollbar-none"
-                    style={{ WebkitOverflowScrolling: "touch" }}
-                  >
+                <div className="mb-4 -mx-2 md:mx-0">
+                  <div className="flex gap-2 px-2 md:px-0 overflow-x-auto scroll-x-snap pb-1">
                     {categories.map((cat) => (
-                      <Button
+                      <motion.button
                         key={cat.id}
-                        variant={activeCat === cat.id ? "default" : "outline"}
-                        size="sm"
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => setActiveCat(cat.id)}
-                        className="rounded-full snap-start px-3 py-2 text-sm"
+                        className={`chip snap-child ${activeCat === cat.id ? 'chip--active' : ''} whitespace-nowrap`}
                       >
                         {cat.name}
-                      </Button>
+                      </motion.button>
                     ))}
                   </div>
                 </div>
               )}
 
               {activeCat && activeList.length ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                   {activeList.map((product) => (
                     <motion.div
                       key={product.id}
-                      initial={{ opacity: 0, y: 10 }}
+                      initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.18 }}
-                      className="relative rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition"
+                      transition={{ duration: 0.25 }}
+                      className="card-compact anim-soft"
                     >
                       {/* imagen 16:9 */}
-                      <div className="relative w-full aspect-video bg-muted/40">
+                      <div className="ratio-16-9 relative bg-muted/40">
                         {product.image ? (
                           <img
                             src={product.image}
                             alt={product.name}
-                            className="w-full h-full object-cover"
                             loading="lazy"
                             decoding="async"
+                            sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
+                          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
                             Sin imagen
                           </div>
                         )}
+                        
+                        {/* Botón + circular dentro de la imagen */}
+                        <motion.button
+                          whileTap={{ scale: 0.92 }}
+                          whileHover={{ y: -2 }}
+                          onClick={() => { haptics(); addToCart(product); }}
+                          className="card-add-fab tap-40"
+                          aria-label={`Agregar ${product.name}`}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </motion.button>
                       </div>
 
-                      <div className="p-3">
-                        <div className="text-[15px] font-semibold leading-tight line-clamp-2 min-h-[2.5rem]">
+                      <div className="p-3 md:p-4">
+                        <div className="text-2lines text-[15px] font-semibold leading-tight min-h-[2.5rem]">
                           {product.name}
                         </div>
 
                         {settings?.showPrices && typeof product.price === "number" && (
-                          <div className="mt-1 text-sm font-semibold text-primary">
+                          <div className="mt-1.5 text-sm font-bold text-primary">
                             {PEN(product.price)}
                             {product.type === "varied" && (
-                              <span className="ml-1 text-[11px] text-muted-foreground">/día</span>
+                              <span className="ml-1 text-[11px] text-muted-foreground font-normal">/día</span>
                             )}
                           </div>
                         )}
 
-                        {/* Agregados (chips acotados) */}
+                        {/* Agregados compactos */}
                         {!!(product.addons?.length) && (
-                          <div className="mt-2 flex items-center gap-1 flex-wrap">
-                            {product.addons.slice(0, 2).map((a, idx) => (
-                              <Badge
+                          <div className="mt-2 flex items-center gap-1 text-[11px]">
+                            {product.addons.slice(0, 3).map((a, idx) => (
+                              <span
                                 key={`${a.id || idx}`}
-                                variant="outline"
-                                className="text-[11px] px-2 py-0.5 rounded-full"
+                                className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
                               >
-                                {a.name} (+{PEN(Number(a.price) || 0)})
-                              </Badge>
+                                {a.name}
+                              </span>
                             ))}
-                            {product.addons.length > 2 && (
-                              <span className="text-[11px] text-muted-foreground">
-                                +{product.addons.length - 2}
+                            {product.addons.length > 3 && (
+                              <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                +{product.addons.length - 3}
                               </span>
                             )}
                           </div>
                         )}
                       </div>
-
-                      {/* FAB “+” circular */}
-                      <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => { haptics(); addToCart(product); }}
-                        className="absolute bottom-3 right-3 h-10 w-10 rounded-full bg-primary text-primary-foreground shadow-md grid place-items-center"
-                        aria-label={`Agregar ${product.name}`}
-                      >
-                        <Plus className="h-5 w-5" />
-                      </motion.button>
                     </motion.div>
                   ))}
                 </div>
@@ -859,67 +857,107 @@ export default function FamilyPortalApp({
 
         {/* Bottom Sheet Carrito (móvil) */}
         <Dialog open={showCartSheet} onOpenChange={setShowCartSheet}>
-          <DialogContent className="sm:max-w-lg sm:rounded-lg rounded-t-2xl p-0 gap-0 translate-y-0 bottom-0 left-0 right-0 sm:left-auto sm:right-auto sm:bottom-auto">
-            <div className="p-3 border-b text-center font-medium">Tu pedido</div>
-            <div className="max-h-[55vh] overflow-y-auto p-3 space-y-2 text-xs">
+          <DialogContent className="mobile-sheet sm:max-w-lg sm:rounded-lg sm:translate-y-0 sm:bottom-auto data-[state=open]:slide-in-from-bottom-full md:data-[state=open]:slide-in-from-bottom-0">
+            <div className="p-4 border-b text-center font-medium text-base">
+              <ShoppingCart className="h-5 w-5 inline mr-2" />
+              Tu pedido ({cart.length})
+            </div>
+            
+            <div className="max-h-[50vh] overflow-y-auto p-4 space-y-3">
               {cart.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8">Tu carrito está vacío</div>
+                <div className="text-center text-muted-foreground py-8 text-sm">Tu carrito está vacío</div>
               ) : (
                 <>
-                  {cart.map((it, idx) => (
-                    <div key={idx} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{it.name}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {PEN(it.price ?? 0)} × {it.quantity}
-                          {!!it.selectedDays?.length && <> • {it.selectedDays.join(", ")}</>}
-                        </div>
+                  {/* Agrupación por fecha */}
+                  {(() => {
+                    const groups = cart.reduce((acc, item) => {
+                      if (item.selectedDays?.length) {
+                        item.selectedDays.forEach((d) => {
+                          (acc[d] ||= []).push({ ...item, _d: d });
+                        });
+                      } else {
+                        const k = item.specificDate || "general";
+                        (acc[k] ||= []).push(item);
+                      }
+                      return acc;
+                    }, {} as Record<string, any[]>);
+
+                    return Object.entries(groups).map(([date, items]) => (
+                      <div key={date} className="space-y-2">
+                        {Object.keys(groups).length > 1 && (
+                          <div className="cart-date-title">
+                            📅 {date === "general" ? "General" : (() => {
+                              const [y, m, d] = date.split("-").map(Number);
+                              const dt = new Date(y, m - 1, d);
+                              const day = new Intl.DateTimeFormat("es-PE", { weekday: "short" }).format(dt);
+                              const ddmm = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "2-digit" }).format(dt);
+                              return `${day} ${ddmm}`;
+                            })()}
+                          </div>
+                        )}
+                        {items.map((it, idx) => (
+                          <div key={`${it.id}-${date}-${idx}`} className="flex items-center justify-between gap-3 text-xs">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-sm">{it.name}</div>
+                              <div className="text-muted-foreground">
+                                {PEN(it.price ?? 0)} × {it.quantity}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => removeFromCart(it.id)}>
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="w-8 text-center text-xs font-medium">{it.quantity}</span>
+                              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => addToCart(it)}>
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => removeFromCart(it.id)}
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="w-6 text-center">{it.quantity}</span>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => addToCart(it)}
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </>
               )}
             </div>
-
-            <div className="p-3 border-t bg-primary/5">
-              <div className="flex items-center justify-between font-semibold text-sm mb-2">
-                <span>Total</span><span>{PEN(total)}</span>
+            
+            <div className="modal-sticky-footer space-y-3">
+              <div className="flex justify-between items-center text-sm font-bold">
+                <span>Total</span>
+                <span className="text-primary">{PEN(total)}</span>
               </div>
-              <div className="flex items-center gap-2 text-green-800 text-xs mb-2">
-                <MessageCircle className="h-4 w-4" />
-                Se enviará confirmación por WhatsApp
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  onClick={() => { setShowCartSheet(false); confirmNow(); }}
-                  disabled={!cart.length || posting}
+              <div className="flex gap-3 items-center">
+                <Button 
+                  className="flex-1" 
+                  onClick={() => { 
+                    setShowCartSheet(false); 
+                    if (cart.length > 0) openConfirm();
+                  }}
+                  disabled={!cart.length}
                 >
                   Confirmar
                 </Button>
-                <Button variant="outline" className="flex-1" onClick={clearCart}>
-                  Limpiar
-                </Button>
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    haptics(10);
+                    const rawPhone = whatsappPhoneOverride ?? (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
+                    const phoneDigits = normalizePhone(rawPhone || "");
+                    if (phoneDigits && cart.length > 0) {
+                      const url = buildWaUrl(phoneDigits, makeWaMessage());
+                      openWhatsAppNow(url);
+                    }
+                  }}
+                  className="h-10 w-10 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md tap-44"
+                  aria-label="Enviar por WhatsApp"
+                  disabled={!cart.length}
+                >
+                  <MessageCircle className="h-5 w-5" />
+                </motion.button>
               </div>
+              <p className="text-[11px] text-muted-foreground text-center">
+                Se enviará por WhatsApp
+              </p>
             </div>
           </DialogContent>
         </Dialog>
