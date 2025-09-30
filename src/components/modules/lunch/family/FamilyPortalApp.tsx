@@ -22,14 +22,9 @@ import {
   Trash2,
   Eye,
   MessageCircle,
-  X,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type {
-  SettingsT,
-  MenuT,
-  ProductT,
-} from "@/components/modules/lunch/types";
+import type { SettingsT, MenuT, ProductT } from "@/components/modules/lunch/types";
 
 // Animaciones
 import { motion } from "framer-motion";
@@ -83,19 +78,13 @@ const getNextDaysPeru: (horizon?: number, includeToday?: boolean) => string[] =
       base.getDate() + (includeToday ? 0 : 1)
     );
     for (let i = 0; i < horizon; i++) {
-      const d = new Date(
-        start.getFullYear(),
-        start.getMonth(),
-        start.getDate() + i
-      );
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
       out.push(_formatDateForPeru(d));
     }
     return out;
   };
 
-const prettyDayEs: (
-  yyyy_mm_dd: string
-) => { dayName: string; ddmm: string; label: string } =
+const prettyDayEs: (yyyy_mm_dd: string) => { dayName: string; ddmm: string; label: string } =
   (DateUtils as any)?.prettyDayEs ??
   function (yyyy_mm_dd: string) {
     const [y, m, d] = (yyyy_mm_dd || "").split("-").map(Number);
@@ -103,10 +92,7 @@ const prettyDayEs: (
     const dayName = new Intl.DateTimeFormat("es-PE", { weekday: "long" })
       .format(date)
       .toLowerCase();
-    const ddmm = new Intl.DateTimeFormat("es-PE", {
-      day: "2-digit",
-      month: "2-digit",
-    }).format(date);
+    const ddmm = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "2-digit" }).format(date);
     return { dayName, ddmm, label: `${dayName} ${ddmm}` };
   };
 
@@ -119,15 +105,9 @@ type CartItem = ProductT & {
 };
 
 const PEN = (n: number) =>
-  new Intl.NumberFormat("es-PE", {
-    style: "currency",
-    currency: "PEN",
-  }).format(n || 0);
+  new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
 
-const WEEKDAY_KEY: Record<
-  number,
-  keyof NonNullable<SettingsT["disabledDays"]>
-> = {
+const WEEKDAY_KEY: Record<number, keyof NonNullable<SettingsT["disabledDays"]>> = {
   0: "sunday",
   1: "monday",
   2: "tuesday",
@@ -138,13 +118,8 @@ const WEEKDAY_KEY: Record<
 };
 
 // UX helpers
-const haptics = (ms = 10) => {
-  try {
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      (navigator as any).vibrate(ms);
-    }
-  } catch {}
-};
+const isMobile = () => (typeof window !== "undefined" ? window.innerWidth < 640 : true);
+const haptics = (ms = 10) => { if (navigator?.vibrate) navigator.vibrate(ms); };
 
 export default function FamilyPortalApp({
   mode,
@@ -167,15 +142,12 @@ export default function FamilyPortalApp({
   const [showAddonsSelection, setShowAddonsSelection] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductT | null>(null);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
-  const [selectedAddons, setSelectedAddons] = useState<{
-    [addonId: string]: number;
-  }>({});
+  const [selectedAddons, setSelectedAddons] = useState<{ [addonId: string]: number }>({});
   const [showConfirm, setShowConfirm] = useState(false);
-  const [confirmRecess, setConfirmRecess] =
-    useState<"primero" | "segundo">("primero");
+  const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("primero");
   const [confirmNote, setConfirmNote] = useState("");
   const [posting, setPosting] = useState(false);
-  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false);
+  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false); // compat opcional
   const [message, setMessage] = useState("");
 
   // Sheet carrito móvil
@@ -192,9 +164,8 @@ export default function FamilyPortalApp({
         setSettings(settingsData || {});
         setMenu(menuData || {});
         if (menuData?.categories) {
-          const firstCat = (
-            Object.values(menuData.categories) as any[]
-          ).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+          const firstCat = Object.values(menuData.categories)
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0] as any;
           if (firstCat?.id) setActiveCat(firstCat.id);
         }
       } catch (e) {
@@ -209,18 +180,18 @@ export default function FamilyPortalApp({
   // Categorías
   const categories = useMemo(
     () =>
-      (Object.values(menu.categories || {}) as any[])
+      Object.values(menu.categories || {})
         .filter((c) => c && typeof c === "object")
-        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+        .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)),
     [menu]
   ) as Array<{ id: string; name: string }>;
 
   // Productos por categoría
   const productsByCategory = useMemo(() => {
     return categories.reduce((acc, cat) => {
-      const products = (Object.values(menu.products || {}) as any[])
-        .filter((p) => p && p.categoryId === cat.id && p.active !== false)
-        .sort((a, b) => {
+      const products = Object.values(menu.products || {})
+        .filter((p: any) => p && p.categoryId === cat.id && p.active !== false)
+        .sort((a: any, b: any) => {
           const pa =
             typeof a.position === "number"
               ? a.position
@@ -279,13 +250,10 @@ export default function FamilyPortalApp({
 
   const addVariedToCart = () => {
     if (!selectedProduct || selectedDays.length === 0) return;
-    const addonsPrice = Object.entries(selectedAddons).reduce(
-      (t, [id, qty]) => {
-        const addon = selectedProduct.addons?.find((a) => a.id === id);
-        return t + (addon?.price || 0) * qty;
-      },
-      0
-    );
+    const addonsPrice = Object.entries(selectedAddons).reduce((t, [id, qty]) => {
+      const addon = selectedProduct.addons?.find((a) => a.id === id);
+      return t + (addon?.price || 0) * qty;
+    }, 0);
     const base = selectedProduct.price ?? 0;
     const perDay = base + addonsPrice;
     const subtotal = perDay * selectedDays.length;
@@ -295,9 +263,7 @@ export default function FamilyPortalApp({
       quantity: selectedDays.length,
       subtotal,
       selectedDays: [...selectedDays],
-      selectedAddons: Object.keys(selectedAddons).length
-        ? { ...selectedAddons }
-        : undefined,
+      selectedAddons: Object.keys(selectedAddons).length ? { ...selectedAddons } : undefined,
       addonsPrice,
     };
 
@@ -322,11 +288,7 @@ export default function FamilyPortalApp({
       if (existing) {
         return prev.map((i) =>
           i.id === product.id
-            ? {
-                ...i,
-                quantity: i.quantity + 1,
-                subtotal: (i.quantity + 1) * (i.price ?? 0),
-              }
+            ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * (i.price ?? 0) }
             : i
         );
       }
@@ -342,11 +304,7 @@ export default function FamilyPortalApp({
       if (ex && ex.quantity > 1) {
         return prev.map((i) =>
           i.id === productId
-            ? {
-                ...i,
-                quantity: i.quantity - 1,
-                subtotal: (i.quantity - 1) * (i.price ?? 0),
-              }
+            ? { ...i, quantity: i.quantity - 1, subtotal: (i.quantity - 1) * (i.price ?? 0) }
             : i
         );
       }
@@ -360,15 +318,11 @@ export default function FamilyPortalApp({
   };
 
   const openConfirm = () => {
-    if (!cart.length)
-      return toast({ title: "Tu carrito está vacío", variant: "destructive" });
+    if (!cart.length) return toast({ title: "Tu carrito está vacío", variant: "destructive" });
     setShowConfirm(true);
   };
 
-  const total = useMemo(
-    () => cart.reduce((s, i) => s + i.subtotal, 0),
-    [cart]
-  );
+  const total = cart.reduce((s, i) => s + i.subtotal, 0);
 
   const buildOrderPayload = () => ({
     clientCode: clientId,
@@ -418,8 +372,7 @@ export default function FamilyPortalApp({
     setShowConfirm(false);
 
     const rawPhone =
-      whatsappPhoneOverride ??
-      (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
+      whatsappPhoneOverride ?? (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
     const phoneDigits = normalizePhone(rawPhone || "");
     if (!phoneDigits) {
       setPosting(false);
@@ -470,10 +423,7 @@ export default function FamilyPortalApp({
           {/* Skeletons de carga */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="animate-pulse rounded-2xl border bg-muted/30 h-44"
-              />
+              <div key={i} className="animate-pulse rounded-2xl border bg-muted/30 h-44" />
             ))}
           </div>
         </CardContent>
@@ -481,18 +431,16 @@ export default function FamilyPortalApp({
     );
   }
 
-  const activeList: ProductT[] = activeCat
-    ? productsByCategory[activeCat] || []
-    : [];
+  const activeList = activeCat ? productsByCategory[activeCat] || [] : [];
 
   return (
     <Card>
-      <CardHeader className="py-3">
-        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-          <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Eye className="h-5 w-5" />
           {isPreview ? "Vista Previa del Portal de Familias" : "Portal de Familias"}
         </CardTitle>
-        <div className="text-xs sm:text-sm text-muted-foreground">
+        <div className="text-sm text-muted-foreground">
           {isPreview
             ? "Simulación completa. Puedes agregar productos, confirmar y enviar por WhatsApp (no guarda datos)."
             : `Sesión de ${clientName} (${clientId}).`}
@@ -507,148 +455,129 @@ export default function FamilyPortalApp({
         )}
 
         {/* FAB Carrito (móvil) */}
-        <motion.button
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowCartSheet(true)}
-          className="fixed bottom-4 right-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-strong md:hidden grid place-items-center"
-          aria-label="Abrir carrito"
-        >
-          <div className="relative">
-            <ShoppingCart className="h-6 w-6" />
-            {cart.length > 0 && (
-              <span
-                className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1.5 rounded-full bg-secondary text-secondary-foreground text-[11px] grid place-items-center"
-                aria-live="polite"
-              >
-                {cart.length}
-              </span>
-            )}
-          </div>
-        </motion.button>
+        {isMobile() && cart.length > 0 && (
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowCartSheet(true)}
+            className="fixed bottom-20 right-4 z-30 h-12 px-4 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center gap-2"
+          >
+            <ShoppingCart className="h-5 w-5" />
+            <span>Carrito</span>
+            <span className="ml-1 rounded-full bg-white/20 px-2 text-sm">{cart.length}</span>
+          </motion.button>
+        )}
 
         <div className="rounded-lg p-4 border bg-white">
-          {/* Encabezado compacto (móvil) */}
-          <div className="bg-green-50 border border-green-200 px-3 py-2 rounded-md mb-4 flex items-center justify-between h-12 md:h-auto">
-            <div className="flex items-center gap-2">
-              <div className="text-sm font-medium">Hola, {clientName}</div>
-              <div className="text-xs text-muted-foreground">• {clientId}</div>
+          {/* Encabezado compacto */}
+          <div className="bg-green-50 border border-green-200 p-3 rounded-md mb-4 flex items-center justify-between">
+            <div>
+              <div className="text-sm">¡Hola, {clientName}!</div>
+              <div className="text-xs text-muted-foreground">Código: {clientId}</div>
             </div>
-            {isPreview && (
-              <Badge variant="secondary" className="text-xs">
-                Preview
-              </Badge>
-            )}
+            {isPreview && <Badge variant="secondary">Vista previa</Badge>}
           </div>
 
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Productos */}
             <div className="lg:col-span-2">
               {categories.length > 0 && (
-                <div className="mb-4 -mx-2 md:mx-0">
-                  <div className="flex gap-2 px-2 md:px-0 overflow-x-auto scroll-x-snap pb-1">
+                <div className="mb-4 -mx-4 sm:mx-0">
+                  <div
+                    className="flex gap-2 px-4 overflow-x-auto snap-x snap-mandatory scrollbar-none"
+                    style={{ WebkitOverflowScrolling: "touch" }}
+                  >
                     {categories.map((cat) => (
-                      <motion.button
+                      <Button
                         key={cat.id}
-                        whileTap={{ scale: 0.95 }}
+                        variant={activeCat === cat.id ? "default" : "outline"}
+                        size="sm"
                         onClick={() => setActiveCat(cat.id)}
-                        className={`chip snap-child ${
-                          activeCat === cat.id ? "chip--active" : ""
-                        } whitespace-nowrap`}
-                        aria-pressed={activeCat === cat.id}
-                        aria-label={`Categoría ${cat.name}`}
+                        className="rounded-full snap-start px-3 py-2 text-sm"
                       >
                         {cat.name}
-                      </motion.button>
+                      </Button>
                     ))}
                   </div>
                 </div>
               )}
 
               {activeCat && activeList.length ? (
-                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {activeList.map((product) => (
                     <motion.div
                       key={product.id}
-                      initial={{ opacity: 0, y: 6 }}
+                      initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.25 }}
-                      className="card-compact anim-soft"
+                      transition={{ duration: 0.18 }}
+                      className="relative rounded-2xl border bg-white overflow-hidden shadow-sm hover:shadow-md transition"
                     >
                       {/* imagen 16:9 */}
-                      <div className="ratio-16-9 relative bg-muted/40 overflow-hidden rounded-t-2xl">
+                      <div className="relative w-full aspect-video bg-muted/40">
                         {product.image ? (
                           <img
                             src={product.image}
                             alt={product.name}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            className="w-full h-full object-cover"
                             loading="lazy"
                             decoding="async"
-                            sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                           />
                         ) : (
-                          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
+                          <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
                             Sin imagen
                           </div>
                         )}
-
-                        {/* Botón + circular dentro de la imagen */}
-                        <motion.button
-                          whileTap={{ scale: 0.92 }}
-                          onClick={() => {
-                            haptics();
-                            addToCart(product);
-                          }}
-                          className="card-add-fab tap-40"
-                          aria-label={`Agregar ${product.name}`}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </motion.button>
                       </div>
 
-                      <div className="p-3 md:p-4">
-                        <div className="text-2lines text-[15px] font-semibold leading-tight min-h-[2.5rem]">
+                      <div className="p-3">
+                        <div className="text-[15px] font-semibold leading-tight line-clamp-2 min-h-[2.5rem]">
                           {product.name}
                         </div>
 
-                        {settings?.showPrices &&
-                          typeof product.price === "number" && (
-                            <div className="mt-1.5 text-sm font-bold text-primary">
-                              {PEN(product.price)}
-                              {product.type === "varied" && (
-                                <span className="ml-1 text-[11px] text-muted-foreground font-normal">
-                                  /día
-                                </span>
-                              )}
-                            </div>
-                          )}
+                        {settings?.showPrices && typeof product.price === "number" && (
+                          <div className="mt-1 text-sm font-semibold text-primary">
+                            {PEN(product.price)}
+                            {product.type === "varied" && (
+                              <span className="ml-1 text-[11px] text-muted-foreground">/día</span>
+                            )}
+                          </div>
+                        )}
 
-                        {/* Agregados compactos */}
-                        {!!product.addons?.length && (
-                          <div className="mt-2 flex items-center gap-1 text-[11px]">
-                            {product.addons.slice(0, 3).map((a, idx) => (
-                              <span
+                        {/* Agregados (chips acotados) */}
+                        {!!(product.addons?.length) && (
+                          <div className="mt-2 flex items-center gap-1 flex-wrap">
+                            {product.addons.slice(0, 2).map((a, idx) => (
+                              <Badge
                                 key={`${a.id || idx}`}
-                                className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground"
+                                variant="outline"
+                                className="text-[11px] px-2 py-0.5 rounded-full"
                               >
-                                {a.name}
-                              </span>
+                                {a.name} (+{PEN(Number(a.price) || 0)})
+                              </Badge>
                             ))}
-                            {product.addons.length > 3 && (
-                              <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                                +{product.addons.length - 3}
+                            {product.addons.length > 2 && (
+                              <span className="text-[11px] text-muted-foreground">
+                                +{product.addons.length - 2}
                               </span>
                             )}
                           </div>
                         )}
                       </div>
+
+                      {/* FAB “+” circular */}
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => { haptics(); addToCart(product); }}
+                        className="absolute bottom-3 right-3 h-10 w-10 rounded-full bg-primary text-primary-foreground shadow-md grid place-items-center"
+                        aria-label={`Agregar ${product.name}`}
+                      >
+                        <Plus className="h-5 w-5" />
+                      </motion.button>
                     </motion.div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-10 text-muted-foreground">
-                  {categories.length
-                    ? "No hay productos en esta categoría"
-                    : "No hay categorías configuradas"}
+                  {categories.length ? "No hay productos en esta categoría" : "No hay categorías configuradas"}
                 </div>
               )}
             </div>
@@ -660,9 +589,7 @@ export default function FamilyPortalApp({
                   <CardTitle className="flex items-center gap-2 text-base">
                     <ShoppingCart className="h-4 w-4" />
                     Tu pedido
-                    <span className="text-muted-foreground font-normal">
-                      ({cart.length})
-                    </span>
+                    <span className="text-muted-foreground font-normal">({cart.length})</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -693,17 +620,10 @@ export default function FamilyPortalApp({
                               {date === "Sin fecha"
                                 ? "Fecha por definir"
                                 : (() => {
-                                    const [y, m, d] = date
-                                      .split("-")
-                                      .map(Number);
+                                    const [y, m, d] = date.split("-").map(Number);
                                     const dt = new Date(y, m - 1, d);
-                                    const day = new Intl.DateTimeFormat("es-PE", {
-                                      weekday: "long",
-                                    }).format(dt);
-                                    const ddmm = new Intl.DateTimeFormat("es-PE", {
-                                      day: "2-digit",
-                                      month: "2-digit",
-                                    }).format(dt);
+                                    const day = new Intl.DateTimeFormat("es-PE", { weekday: "long" }).format(dt);
+                                    const ddmm = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "2-digit" }).format(dt);
                                     return `${day} ${ddmm}`;
                                   })()}
                             </div>
@@ -732,7 +652,7 @@ export default function FamilyPortalApp({
                                     variant="outline"
                                     size="icon"
                                     className="h-6 w-6"
-                                    onClick={() => addToCart(it as ProductT)}
+                                    onClick={() => addToCart(it)}
                                   >
                                     <Plus className="h-3 w-3" />
                                   </Button>
@@ -791,11 +711,7 @@ export default function FamilyPortalApp({
                         </div>
 
                         {/* Abrimos WA sin bloqueo */}
-                        <Button
-                          className="w-full"
-                          onClick={confirmNow}
-                          disabled={!cart.length || posting}
-                        >
+                        <Button className="w-full" onClick={confirmNow} disabled={!cart.length || posting}>
                           {isPreview ? "Confirmar Pedido (Demo)" : "Confirmar Pedido"}
                         </Button>
 
@@ -836,16 +752,14 @@ export default function FamilyPortalApp({
           days={availableDayOptions}
           selectedDays={selectedDays}
           onToggleDay={(date, checked) =>
-            setSelectedDays((prev) =>
-              checked ? [...prev, date] : prev.filter((d) => d !== date)
-            )
+            setSelectedDays((prev) => (checked ? [...prev, date] : prev.filter((d) => d !== date)))
           }
           onConfirm={addVariedToCart}
           confirmDisabled={selectedDays.length === 0}
           disabledDays={settings?.disabledDays}
         />
 
-        {/* Confirmación */}
+        {/* Confirmación (si prefieres usar modal) */}
         <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
@@ -853,9 +767,7 @@ export default function FamilyPortalApp({
                 <ShoppingCart className="h-5 w-5" />
                 Confirmar pedido
               </DialogTitle>
-              <DialogDescription>
-                Revisa los detalles de tu pedido antes de enviarlo
-              </DialogDescription>
+              <DialogDescription>Revisa los detalles de tu pedido antes de enviarlo</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
@@ -864,9 +776,7 @@ export default function FamilyPortalApp({
                 {cart.map((item, idx) => (
                   <div key={idx} className="text-sm">
                     <div className="flex justify-between">
-                      <span>
-                        {item.name} (×{item.quantity})
-                      </span>
+                      <span>{item.name} (×{item.quantity})</span>
                       <span>{PEN(item.subtotal)}</span>
                     </div>
                     {item.selectedDays?.length ? (
@@ -937,11 +847,7 @@ export default function FamilyPortalApp({
               <Button variant="outline" onClick={() => setShowConfirm(false)}>
                 Cancelar
               </Button>
-              <Button
-                onClick={confirmNow}
-                disabled={posting}
-                className="bg-green-600 hover:bg-green-700"
-              >
+              <Button onClick={confirmNow} disabled={posting} className="bg-green-600 hover:bg-green-700">
                 {posting ? "Enviando pedido..." : "Enviar pedido"}
               </Button>
             </DialogFooter>
@@ -949,153 +855,71 @@ export default function FamilyPortalApp({
         </Dialog>
 
         {/* Animación opcional */}
-        <OrderLoadingAnimation
-          open={showLoadingAnimation}
-          onComplete={handleAnimationComplete}
-        />
+        <OrderLoadingAnimation open={showLoadingAnimation} onComplete={handleAnimationComplete} />
 
         {/* Bottom Sheet Carrito (móvil) */}
         <Dialog open={showCartSheet} onOpenChange={setShowCartSheet}>
-          <DialogContent className="mobile-sheet sm:max-w-lg sm:rounded-lg sm:translate-y-0 sm:bottom-auto">
-            {/* header sheet */}
-            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b bg-white">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <ShoppingCart className="h-4 w-4" />
-                Tu pedido ({cart.length})
-              </div>
-              <button
-                aria-label="Cerrar"
-                onClick={() => setShowCartSheet(false)}
-                className="p-2 rounded-md hover:bg-muted"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="max-h-[50vh] overflow-y-auto p-4 space-y-3">
+          <DialogContent className="sm:max-w-lg sm:rounded-lg rounded-t-2xl p-0 gap-0 translate-y-0 bottom-0 left-0 right-0 sm:left-auto sm:right-auto sm:bottom-auto">
+            <div className="p-3 border-b text-center font-medium">Tu pedido</div>
+            <div className="max-h-[55vh] overflow-y-auto p-3 space-y-2 text-xs">
               {cart.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8 text-sm">
-                  Tu carrito está vacío
-                </div>
+                <div className="text-center text-muted-foreground py-8">Tu carrito está vacío</div>
               ) : (
                 <>
-                  {/* Agrupación por fecha */}
-                  {(() => {
-                    const groups = cart.reduce((acc, item) => {
-                      if (item.selectedDays?.length) {
-                        item.selectedDays.forEach((d) => {
-                          (acc[d] ||= []).push({ ...item, _d: d });
-                        });
-                      } else {
-                        const k = item.specificDate || "general";
-                        (acc[k] ||= []).push(item);
-                      }
-                      return acc;
-                    }, {} as Record<string, any[]>);
-
-                    return Object.entries(groups).map(([date, items]) => (
-                      <div key={date} className="space-y-2">
-                        {Object.keys(groups).length > 1 && (
-                          <div className="cart-date-title">
-                            📅{" "}
-                            {date === "general"
-                              ? "General"
-                              : (() => {
-                                  const [y, m, d] = date.split("-").map(Number);
-                                  const dt = new Date(y, m - 1, d);
-                                  const day = new Intl.DateTimeFormat("es-PE", {
-                                    weekday: "short",
-                                  }).format(dt);
-                                  const ddmm = new Intl.DateTimeFormat("es-PE", {
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                  }).format(dt);
-                                  return `${day} ${ddmm}`;
-                                })()}
-                          </div>
-                        )}
-                        {items.map((it, idx) => (
-                          <div
-                            key={`${it.id}-${date}-${idx}`}
-                            className="flex items-center justify-between gap-3 text-xs"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium text-sm">{it.name}</div>
-                              <div className="text-muted-foreground">
-                                {PEN(it.price ?? 0)} × {it.quantity}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => removeFromCart(it.id)}
-                                aria-label="Quitar uno"
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className="w-8 text-center text-xs font-medium">
-                                {it.quantity}
-                              </span>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => addToCart(it as ProductT)}
-                                aria-label="Agregar uno"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
+                  {cart.map((it, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{it.name}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {PEN(it.price ?? 0)} × {it.quantity}
+                          {!!it.selectedDays?.length && <> • {it.selectedDays.join(", ")}</>}
+                        </div>
                       </div>
-                    ));
-                  })()}
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => removeFromCart(it.id)}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-6 text-center">{it.quantity}</span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => addToCart(it)}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </>
               )}
             </div>
 
-            <div className="modal-sticky-footer space-y-3">
-              <div className="flex justify-between items-center text-sm font-bold">
-                <span>Total</span>
-                <span className="text-primary">{PEN(total)}</span>
+            <div className="p-3 border-t bg-primary/5">
+              <div className="flex items-center justify-between font-semibold text-sm mb-2">
+                <span>Total</span><span>{PEN(total)}</span>
               </div>
-              <div className="flex gap-3 items-center">
+              <div className="flex items-center gap-2 text-green-800 text-xs mb-2">
+                <MessageCircle className="h-4 w-4" />
+                Se enviará confirmación por WhatsApp
+              </div>
+              <div className="flex gap-2">
                 <Button
                   className="flex-1"
-                  onClick={() => {
-                    setShowCartSheet(false);
-                    if (cart.length > 0) openConfirm();
-                  }}
-                  disabled={!cart.length}
+                  onClick={() => { setShowCartSheet(false); confirmNow(); }}
+                  disabled={!cart.length || posting}
                 >
                   Confirmar
                 </Button>
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => {
-                    haptics(10);
-                    const rawPhone =
-                      whatsappPhoneOverride ??
-                      (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
-                    const phoneDigits = normalizePhone(rawPhone || "");
-                    if (phoneDigits && cart.length > 0) {
-                      const url = buildWaUrl(phoneDigits, makeWaMessage());
-                      openWhatsAppNow(url);
-                    }
-                  }}
-                  className="h-10 w-10 rounded-full bg-green-500 text-white grid place-items-center shadow-md tap-44 disabled:opacity-50"
-                  aria-label="Enviar por WhatsApp"
-                  disabled={!cart.length}
-                >
-                  <MessageCircle className="h-5 w-5" />
-                </motion.button>
+                <Button variant="outline" className="flex-1" onClick={clearCart}>
+                  Limpiar
+                </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground text-center">
-                Se enviará por WhatsApp
-              </p>
             </div>
           </DialogContent>
         </Dialog>

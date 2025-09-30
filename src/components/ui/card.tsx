@@ -19,11 +19,11 @@ const cardVariants = cva(
     variants: {
       variant: {
         default: "",
-        elevated: "shadow-medium bg-white border-border/50",
+        elevated: "shadow-medium bg-white",
         glass:
           "backdrop-blur-md bg-white/70 border-white/60 shadow-soft dark:bg-zinc-900/50",
         pressable:
-          "transition-all duration-200 hover:shadow-md hover:-translate-y-[1px] will-change-transform cursor-pointer",
+          "transition-all hover:shadow-md hover:-translate-y-[1px] will-change-transform",
       },
       padding: {
         default: "",

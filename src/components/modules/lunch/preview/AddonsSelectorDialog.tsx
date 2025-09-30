@@ -109,7 +109,7 @@ export default function AddonsSelectorDialog({
           ) : (
             <div className="flex flex-wrap gap-2">
               {activeAddons.map((addon) => {
-                const id = addon.id as string;
+                const id = addon.id as string; // aseguramos id string
                 const qty = selectedAddons[id] || 0;
                 const selected = qty > 0;
 
@@ -118,49 +118,54 @@ export default function AddonsSelectorDialog({
                     key={id}
                     whileTap={{ scale: 0.97 }}
                     className={cn(
-                      "addon-chip",
-                      selected && "addon-chip--active"
+                      "relative border rounded-full px-3 py-2 text-sm",
+                      "flex items-center gap-2 select-none shadow-sm",
+                      selected
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-white hover:bg-muted/50"
                     )}
                   >
                     {/* chip principal: nombre + precio */}
                     <button
                       type="button"
                       onClick={() => toggleAddon(id)}
-                      className="flex items-center gap-2 tap-40"
+                      className="flex items-center gap-2"
                       aria-pressed={selected}
                     >
-                      <span className="font-medium text-sm">{addon.name}</span>
-                      <Badge variant="secondary" className="text-[11px] px-1.5 py-0.5">
+                      <span className="font-medium">{addon.name}</span>
+                      <Badge variant="secondary" className="text-[11px]">
                         {PEN(addon.price)}
                       </Badge>
                     </button>
 
-                    {/* Controles de cantidad compactos */}
+                    {/* Controles de cantidad (32px) solo si está seleccionado */}
                     {selected && (
-                      <div className="ml-2 flex items-center gap-1">
-                        <motion.button
-                          whileTap={{ scale: 0.9 }}
-                          className="btn-circle btn-32 border-border bg-white"
+                      <div className="ml-1 flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 p-0"
                           onClick={(e) => {
                             e.stopPropagation();
                             changeQty(id, -1);
                           }}
                           aria-label="Disminuir"
                         >
-                          <Minus className="h-3 w-3" />
-                        </motion.button>
-                        <span className="w-6 text-center text-sm font-medium">{qty}</span>
-                        <motion.button
-                          whileTap={{ scale: 0.9 }}
-                          className="btn-circle btn-32 border-border bg-white"
+                          <Minus className="h-3.5 w-3.5" />
+                        </Button>
+                        <span className="w-6 text-center text-sm">{qty}</span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 p-0"
                           onClick={(e) => {
                             e.stopPropagation();
                             changeQty(id, +1);
                           }}
                           aria-label="Aumentar"
                         >
-                          <Plus className="h-3 w-3" />
-                        </motion.button>
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     )}
                   </motion.div>
@@ -171,10 +176,10 @@ export default function AddonsSelectorDialog({
         </div>
 
         {/* Footer sticky: total + acciones */}
-        <div className="modal-sticky-footer">
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-t px-4 py-3">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium">Total agregados</span>
-            <span className="text-base font-bold text-primary">
+            <span className="text-sm font-semibold text-primary">
               {PEN(totalAddonsPrice)}
             </span>
           </div>

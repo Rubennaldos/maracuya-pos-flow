@@ -1,14 +1,46 @@
-/* src/index.css */
+/* ====== estilos existentes (NO TOCAR) ====== */
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
 
-/* Tailwind layers */
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover { filter: drop-shadow(0 0 2em #646cffaa); }
+.logo.react:hover { filter: drop-shadow(0 0 2em #61dafbaa); }
+
+@keyframes logo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+.card { padding: 2em; }
+.read-the-docs { color: #888; }
+
+/* ====== Tailwind layers ====== */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ================== THEME (Maracuyá) ================== */
+/*
+  Nota (solo editor):
+  - Si VS Code marca @tailwind o @apply como "Unknown at rule",
+    instala la extensión “Tailwind CSS IntelliSense”.
+*/
+
 @layer base {
   :root {
-    /* Brand HSL tokens */
+    /* Maracuyá Brand – Fresh & Natural (HSL) */
     --background: 120 20% 98%;
     --foreground: 140 25% 15%;
 
@@ -18,177 +50,248 @@
     --popover: 120 30% 96%;
     --popover-foreground: 140 25% 15%;
 
+    /* Primary - Fresh Green */
     --primary: 130 60% 35%;
     --primary-foreground: 120 20% 98%;
     --primary-light: 130 40% 45%;
     --primary-dark: 130 70% 25%;
 
+    /* Secondary - Warm Orange */
     --secondary: 25 85% 60%;
     --secondary-foreground: 120 20% 98%;
     --secondary-light: 25 70% 70%;
     --secondary-dark: 25 90% 50%;
 
+    /* Success / Warning */
     --success: 140 60% 40%;
     --success-foreground: 120 20% 98%;
     --warning: 35 90% 55%;
     --warning-foreground: 140 25% 15%;
 
+    /* Muted / Accent */
     --muted: 120 15% 90%;
     --muted-foreground: 140 10% 45%;
     --accent: 130 40% 85%;
     --accent-foreground: 140 25% 15%;
 
+    /* Destructive */
     --destructive: 0 70% 55%;
     --destructive-foreground: 120 20% 98%;
 
+    /* UI tokens */
     --border: 120 20% 85%;
     --input: 120 30% 94%;
     --ring: 130 60% 35%;
 
     --radius: 0.75rem;
 
+    /* POS específicos */
+    --pos-checkout: 130 50% 92%;
+    --pos-checkout-foreground: 140 25% 15%;
+    --pos-product: 120 30% 96%;
+    --pos-kitchen: 15 80% 88%;
+    --pos-credit: 210 60% 88%;
+
+    /* Gradientes */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-light)));
+    --gradient-secondary: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--secondary-light)));
+    --gradient-hero: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+
     /* Sombras */
-    --shadow-soft: 0 2px 20px hsla(var(--primary), 0.08);
-    --shadow-medium: 0 6px 24px hsla(var(--primary), 0.12);
-    --shadow-strong: 0 12px 40px hsla(var(--primary), 0.18);
+    --shadow-soft: 0 2px 20px hsla(var(--primary), 0.10);
+    --shadow-medium: 0 4px 30px hsla(var(--primary), 0.15);
+    --shadow-strong: 0 8px 40px hsla(var(--primary), 0.20);
+
+    /* Sidebar */
+    --sidebar-background: 120 25% 96%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
+
     --card: 222.2 84% 4.9%;
     --card-foreground: 210 40% 98%;
+
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
+
     --primary: 210 40% 98%;
     --primary-foreground: 222.2 47.4% 11.2%;
+
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
+
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
+
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
+
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
+
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
+  /* Resets de base */
   * { @apply border-border; }
-  body { @apply bg-background text-foreground antialiased; }
+  body { @apply bg-background text-foreground; }
+
+  /* Tipografía responsiva base: 14 en móvil, 16 en >= md */
+  html { font-size: 14px; }
+  @media (min-width: 768px) {
+    html { font-size: 16px; }
+  }
 }
 
-/* ================== UTILIDADES UI ================== */
+/* ====== Componentes reutilizables para el look móvil ====== */
 @layer components {
-  /* Chips para tabs/categorías */
+  /* Header compacto 48px */
+  .app-header-compact {
+    @apply h-12 flex items-center justify-between px-3 bg-white border-b;
+  }
+
+  /* Chips redondos (categorías, filtros) */
   .chip {
-    @apply inline-flex items-center rounded-full border px-3 py-1.5 text-xs md:text-sm bg-white text-foreground border-border shadow-sm;
+    @apply rounded-full border px-3 py-1 text-xs font-medium bg-white hover:bg-muted/50 transition;
+    box-shadow: var(--shadow-soft);
   }
   .chip--active {
-    @apply bg-primary text-primary-foreground border-transparent;
+    @apply bg-primary text-primary-foreground border-primary;
   }
 
-  /* Contenedor de scroll con snap */
-  .scroll-x-snap { scroll-snap-type: x mandatory; }
+  /* Botón circular (32–44px) */
+  .btn-circle {
+    @apply rounded-full p-0 flex items-center justify-center border;
+    width: 44px; height: 44px;
+    box-shadow: var(--shadow-soft);
+  }
+  .btn-circle.btn-32 { width: 32px; height: 32px; }
+
+  /* Tarjeta compacta con 16:9 y sombras suaves */
+  .card-compact { @apply rounded-2xl border bg-white overflow-hidden shadow-sm; }
+  .card-compact:hover { box-shadow: var(--shadow-medium); }
+
+  /* Contenedor 16:9 para imágenes */
+  .ratio-16-9 { position: relative; width: 100%; padding-top: 56.25%; }
+  .ratio-16-9 > img, .ratio-16-9 > picture, .ratio-16-9 > video {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  }
+
+  /* FAB del carrito */
+  .fab-cart {
+    @apply fixed bottom-5 right-5 rounded-full bg-primary text-primary-foreground shadow-lg border;
+    width: 56px; height: 56px;
+  }
+  .fab-badge {
+    @apply absolute -top-1 -right-1 text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground border;
+  }
+
+  /* Footer sticky para modales (SelectDays/Addons) */
+  .modal-sticky-footer {
+    @apply sticky bottom-0 border-t px-4 py-3 bg-white/95 backdrop-blur;
+    /* fallback si no hay backdrop-filter */
+  }
+  @supports (backdrop-filter: blur(4px)) {
+    .modal-sticky-footer { @apply bg-white/60; }
+  }
+
+  /* Chips de agregados */
+  .addon-chip {
+    @apply rounded-full border px-3 py-2 text-sm bg-white shadow-sm flex items-center gap-2 select-none;
+  }
+  .addon-chip--active {
+    @apply border-primary bg-primary/5;
+  }
+
+  /* Botón de añadir dentro de card (bottom-right) */
+  .card-add-fab {
+    @apply absolute bottom-2 right-2 rounded-full border bg-white text-foreground;
+    width: 40px; height: 40px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  /* Sheet inferior (carrito móvil) */
+  .mobile-sheet {
+    @apply fixed inset-x-0 bottom-0 rounded-t-2xl bg-white border-t shadow-2xl;
+  }
+
+  /* Texto XS para carrito agrupado por fecha */
+  .cart-date-title {
+    @apply text-xs font-medium text-primary border-b pb-1;
+  }
+}
+
+/* ====== Utilities pequeñas que ayudan en móvil ====== */
+@layer utilities {
+  .shadow-soft { box-shadow: var(--shadow-soft); }
+  .shadow-medium { box-shadow: var(--shadow-medium); }
+  .shadow-strong { box-shadow: var(--shadow-strong); }
+
+  .tap-40 { min-height: 40px; min-width: 40px; } /* objetivo táctil */
+  .tap-44 { min-height: 44px; min-width: 44px; }
+
+  /* Clampeo de 2 líneas con fallback estándar */
+.text-2lines {
+  display: -webkit-box;           /* Safari/Chromium */
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;          /* prefijo */
+  line-clamp: 2;                   /* propiedad estándar (silencia el warning) */
+  overflow: hidden;
+}
+
+
+  .scroll-x-snap {
+    scroll-snap-type: x mandatory;
+  }
   .snap-child { scroll-snap-align: start; }
 
-  /* Card compacta para productos */
-  .card-compact {
-    @apply rounded-2xl border bg-card text-card-foreground shadow-sm overflow-hidden;
-  }
-
-  /* Imagen 16:9 (usamos aspect-ratio con fallback) */
-  .ratio-16-9 { aspect-ratio: 16 / 9; }
-
-  /* Botón + flotante dentro de la tarjeta */
-  .card-add-fab {
-    @apply absolute bottom-2 right-2 h-9 w-9 rounded-full grid place-items-center bg-primary text-primary-foreground shadow-md;
-  }
-
-  /* Área táctil generosa */
-  .tap-40 { min-width: 40px; min-height: 40px; }
-  .tap-44 { min-width: 44px; min-height: 44px; }
-
-  /* Dos líneas máximo */
-  .text-2lines {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;             /* estándar para compat (warning resuelto) */
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  /* Footer sticky dentro de un modal/sheet */
-  .modal-sticky-footer {
-    @apply sticky bottom-0 left-0 right-0 bg-white border-t p-4;
-  }
-
-  /* Título de grupo de fecha del carrito móvil */
-  .cart-date-title {
-    @apply text-[11px] uppercase tracking-wide text-muted-foreground font-medium border-b pb-1;
-  }
-
-  /* Hoja inferior (Dialog como bottom-sheet) */
-  .mobile-sheet {
-    @apply fixed inset-x-0 bottom-0 m-0 rounded-t-2xl p-0 translate-y-0;
+  /* Animaciones suaves por defecto, respetando reduced-motion */
+  .anim-soft { transition: all 160ms ease; }
+  @media (prefers-reduced-motion: reduce) {
+    .anim-soft { transition: none !important; }
   }
 }
 
-/* ================== MÓVIL (≤768px) ================== */
-@media (max-width: 768px) {
-  :root { font-size: 14px; } /* base 14px en móvil */
-
-  .grid-products-mobile {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
-  }
-
-  .product-card {
-    border-radius: 1rem;
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    box-shadow: var(--shadow-soft);
-    overflow: hidden;
-  }
-
-  .product-media {
-    position: relative;
-    height: 140px;
-    background: hsl(var(--muted));
-  }
-  .product-media > img {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-  }
-
-  .product-add-fab {
-    position: absolute; right: 10px; bottom: 10px;
-    width: 36px; height: 36px; border-radius: 9999px;
-    display: inline-flex; align-items: center; justify-content: center;
-    background: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
-    box-shadow: var(--shadow-medium);
-  }
-
-  .product-body { padding: 10px; }
-  .product-title {
-    font-weight: 600; line-height: 1.2; font-size: 0.95rem;
-    min-height: 2.2em;
-    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
-    -webkit-box-orient: vertical; overflow: hidden;
-  }
-  .product-price { margin-top: .25rem; font-size: .9rem; font-weight: 700; color: hsl(var(--primary)); }
-
-  .addon-chips { margin-top: .35rem; display: flex; gap: 4px; flex-wrap: nowrap; overflow: hidden; }
-  .addon-chips > span {
-    font-size: 11px; padding: 2px 8px; border-radius: 9999px;
-    background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); white-space: nowrap;
-  }
-
-  .chip-tabs { display:flex; gap:8px; overflow-x:auto; scroll-snap-type:x mandatory; padding:0 8px 4px; }
-  .chip-tab { scroll-snap-align:start; padding:6px 12px; font-size:12px; border-radius:9999px; border:1px solid hsl(var(--border)); background:#fff; white-space:nowrap; }
-  .chip-tab--active { background:hsl(var(--primary)); color:hsl(var(--primary-foreground)); border-color:transparent; }
-
-  .fab-cart { width:54px; height:54px; right:12px; bottom:12px; }
+/* ====== Accesibilidad ====== */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
+
+/* ====== Rendimiento imágenes ====== */
+img {
+  image-rendering: auto;
+}
+
+/* Puedes usar estas clases en tus componentes:
+   - .app-header-compact
+   - .chip / .chip--active
+   - .btn-circle / .btn-32
+   - .card-compact, .ratio-16-9, .card-add-fab
+   - .fab-cart + .fab-badge
+   - .modal-sticky-footer
+   - .addon-chip / .addon-chip--active
+   - .mobile-sheet
+   - .cart-date-title
+   - .tap-40, .tap-44, .text-2lines, .scroll-x-snap, .snap-child, .anim-soft
+*/

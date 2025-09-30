@@ -54,12 +54,12 @@ export const buttonVariants = cva(
         lg: "h-11 rounded-md px-8",
         icon: "h-10 w-10",
 
-        // ——— nuevos tamaños BCP-optimized
-        xs: "h-8 px-3 text-xs min-w-[2rem]",
-        chip: "h-8 px-3 text-xs min-w-[2rem]",
-        "icon-sm": "h-8 w-8 min-w-[2rem] min-h-[2rem]",
-        "icon-lg": "h-12 w-12 min-w-[3rem] min-h-[3rem]",
-        fab: "h-14 w-14 text-base min-w-[3.5rem] min-h-[3.5rem]",
+        // ——— nuevos tamaños
+        xs: "h-8 px-3 text-xs",
+        chip: "h-8 px-3 text-xs",
+        "icon-sm": "h-8 w-8",
+        "icon-lg": "h-12 w-12",
+        fab: "h-14 w-14 text-base",
       },
     },
     compoundVariants: [
