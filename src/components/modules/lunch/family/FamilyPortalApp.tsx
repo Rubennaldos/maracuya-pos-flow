@@ -25,7 +25,11 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type { SettingsT, MenuT, ProductT } from "@/components/modules/lunch/types";
+import type {
+  SettingsT,
+  MenuT,
+  ProductT,
+} from "@/components/modules/lunch/types";
 
 // Animaciones
 import { motion } from "framer-motion";
@@ -79,13 +83,19 @@ const getNextDaysPeru: (horizon?: number, includeToday?: boolean) => string[] =
       base.getDate() + (includeToday ? 0 : 1)
     );
     for (let i = 0; i < horizon; i++) {
-      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      const d = new Date(
+        start.getFullYear(),
+        start.getMonth(),
+        start.getDate() + i
+      );
       out.push(_formatDateForPeru(d));
     }
     return out;
   };
 
-const prettyDayEs: (yyyy_mm_dd: string) => { dayName: string; ddmm: string; label: string } =
+const prettyDayEs: (
+  yyyy_mm_dd: string
+) => { dayName: string; ddmm: string; label: string } =
   (DateUtils as any)?.prettyDayEs ??
   function (yyyy_mm_dd: string) {
     const [y, m, d] = (yyyy_mm_dd || "").split("-").map(Number);
@@ -93,7 +103,10 @@ const prettyDayEs: (yyyy_mm_dd: string) => { dayName: string; ddmm: string; labe
     const dayName = new Intl.DateTimeFormat("es-PE", { weekday: "long" })
       .format(date)
       .toLowerCase();
-    const ddmm = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "2-digit" }).format(date);
+    const ddmm = new Intl.DateTimeFormat("es-PE", {
+      day: "2-digit",
+      month: "2-digit",
+    }).format(date);
     return { dayName, ddmm, label: `${dayName} ${ddmm}` };
   };
 
@@ -106,9 +119,15 @@ type CartItem = ProductT & {
 };
 
 const PEN = (n: number) =>
-  new Intl.NumberFormat("es-PE", { style: "currency", currency: "PEN" }).format(n || 0);
+  new Intl.NumberFormat("es-PE", {
+    style: "currency",
+    currency: "PEN",
+  }).format(n || 0);
 
-const WEEKDAY_KEY: Record<number, keyof NonNullable<SettingsT["disabledDays"]>> = {
+const WEEKDAY_KEY: Record<
+  number,
+  keyof NonNullable<SettingsT["disabledDays"]>
+> = {
   0: "sunday",
   1: "monday",
   2: "tuesday",
@@ -148,9 +167,12 @@ export default function FamilyPortalApp({
   const [showAddonsSelection, setShowAddonsSelection] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductT | null>(null);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
-  const [selectedAddons, setSelectedAddons] = useState<{ [addonId: string]: number }>({});
+  const [selectedAddons, setSelectedAddons] = useState<{
+    [addonId: string]: number;
+  }>({});
   const [showConfirm, setShowConfirm] = useState(false);
-  const [confirmRecess, setConfirmRecess] = useState<"primero" | "segundo">("primero");
+  const [confirmRecess, setConfirmRecess] =
+    useState<"primero" | "segundo">("primero");
   const [confirmNote, setConfirmNote] = useState("");
   const [posting, setPosting] = useState(false);
   const [showLoadingAnimation, setShowLoadingAnimation] = useState(false);
@@ -170,8 +192,9 @@ export default function FamilyPortalApp({
         setSettings(settingsData || {});
         setMenu(menuData || {});
         if (menuData?.categories) {
-          const firstCat = Object.values(menuData.categories)
-            .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))[0] as any;
+          const firstCat = (
+            Object.values(menuData.categories) as any[]
+          ).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
           if (firstCat?.id) setActiveCat(firstCat.id);
         }
       } catch (e) {
@@ -186,18 +209,18 @@ export default function FamilyPortalApp({
   // Categorías
   const categories = useMemo(
     () =>
-      Object.values(menu.categories || {})
+      (Object.values(menu.categories || {}) as any[])
         .filter((c) => c && typeof c === "object")
-        .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)),
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
     [menu]
   ) as Array<{ id: string; name: string }>;
 
   // Productos por categoría
   const productsByCategory = useMemo(() => {
     return categories.reduce((acc, cat) => {
-      const products = Object.values(menu.products || {})
-        .filter((p: any) => p && p.categoryId === cat.id && p.active !== false)
-        .sort((a: any, b: any) => {
+      const products = (Object.values(menu.products || {}) as any[])
+        .filter((p) => p && p.categoryId === cat.id && p.active !== false)
+        .sort((a, b) => {
           const pa =
             typeof a.position === "number"
               ? a.position
@@ -256,10 +279,13 @@ export default function FamilyPortalApp({
 
   const addVariedToCart = () => {
     if (!selectedProduct || selectedDays.length === 0) return;
-    const addonsPrice = Object.entries(selectedAddons).reduce((t, [id, qty]) => {
-      const addon = selectedProduct.addons?.find((a) => a.id === id);
-      return t + (addon?.price || 0) * qty;
-    }, 0);
+    const addonsPrice = Object.entries(selectedAddons).reduce(
+      (t, [id, qty]) => {
+        const addon = selectedProduct.addons?.find((a) => a.id === id);
+        return t + (addon?.price || 0) * qty;
+      },
+      0
+    );
     const base = selectedProduct.price ?? 0;
     const perDay = base + addonsPrice;
     const subtotal = perDay * selectedDays.length;
@@ -269,7 +295,9 @@ export default function FamilyPortalApp({
       quantity: selectedDays.length,
       subtotal,
       selectedDays: [...selectedDays],
-      selectedAddons: Object.keys(selectedAddons).length ? { ...selectedAddons } : undefined,
+      selectedAddons: Object.keys(selectedAddons).length
+        ? { ...selectedAddons }
+        : undefined,
       addonsPrice,
     };
 
@@ -294,7 +322,11 @@ export default function FamilyPortalApp({
       if (existing) {
         return prev.map((i) =>
           i.id === product.id
-            ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * (i.price ?? 0) }
+            ? {
+                ...i,
+                quantity: i.quantity + 1,
+                subtotal: (i.quantity + 1) * (i.price ?? 0),
+              }
             : i
         );
       }
@@ -310,7 +342,11 @@ export default function FamilyPortalApp({
       if (ex && ex.quantity > 1) {
         return prev.map((i) =>
           i.id === productId
-            ? { ...i, quantity: i.quantity - 1, subtotal: (i.quantity - 1) * (i.price ?? 0) }
+            ? {
+                ...i,
+                quantity: i.quantity - 1,
+                subtotal: (i.quantity - 1) * (i.price ?? 0),
+              }
             : i
         );
       }
@@ -324,11 +360,15 @@ export default function FamilyPortalApp({
   };
 
   const openConfirm = () => {
-    if (!cart.length) return toast({ title: "Tu carrito está vacío", variant: "destructive" });
+    if (!cart.length)
+      return toast({ title: "Tu carrito está vacío", variant: "destructive" });
     setShowConfirm(true);
   };
 
-  const total = cart.reduce((s, i) => s + i.subtotal, 0);
+  const total = useMemo(
+    () => cart.reduce((s, i) => s + i.subtotal, 0),
+    [cart]
+  );
 
   const buildOrderPayload = () => ({
     clientCode: clientId,
@@ -378,7 +418,8 @@ export default function FamilyPortalApp({
     setShowConfirm(false);
 
     const rawPhone =
-      whatsappPhoneOverride ?? (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
+      whatsappPhoneOverride ??
+      (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
     const phoneDigits = normalizePhone(rawPhone || "");
     if (!phoneDigits) {
       setPosting(false);
@@ -429,7 +470,10 @@ export default function FamilyPortalApp({
           {/* Skeletons de carga */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="animate-pulse rounded-2xl border bg-muted/30 h-44" />
+              <div
+                key={i}
+                className="animate-pulse rounded-2xl border bg-muted/30 h-44"
+              />
             ))}
           </div>
         </CardContent>
@@ -437,7 +481,9 @@ export default function FamilyPortalApp({
     );
   }
 
-  const activeList = activeCat ? productsByCategory[activeCat] || [] : [];
+  const activeList: ProductT[] = activeCat
+    ? productsByCategory[activeCat] || []
+    : [];
 
   return (
     <Card>
@@ -487,7 +533,11 @@ export default function FamilyPortalApp({
               <div className="text-sm font-medium">Hola, {clientName}</div>
               <div className="text-xs text-muted-foreground">• {clientId}</div>
             </div>
-            {isPreview && <Badge variant="secondary" className="text-xs">Preview</Badge>}
+            {isPreview && (
+              <Badge variant="secondary" className="text-xs">
+                Preview
+              </Badge>
+            )}
           </div>
 
           <div className="grid lg:grid-cols-3 gap-6">
@@ -501,7 +551,9 @@ export default function FamilyPortalApp({
                         key={cat.id}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setActiveCat(cat.id)}
-                        className={`chip snap-child ${activeCat === cat.id ? "chip--active" : ""} whitespace-nowrap`}
+                        className={`chip snap-child ${
+                          activeCat === cat.id ? "chip--active" : ""
+                        } whitespace-nowrap`}
                         aria-pressed={activeCat === cat.id}
                         aria-label={`Categoría ${cat.name}`}
                       >
@@ -542,7 +594,10 @@ export default function FamilyPortalApp({
                         {/* Botón + circular dentro de la imagen */}
                         <motion.button
                           whileTap={{ scale: 0.92 }}
-                          onClick={() => { haptics(); addToCart(product); }}
+                          onClick={() => {
+                            haptics();
+                            addToCart(product);
+                          }}
                           className="card-add-fab tap-40"
                           aria-label={`Agregar ${product.name}`}
                         >
@@ -555,17 +610,20 @@ export default function FamilyPortalApp({
                           {product.name}
                         </div>
 
-                        {settings?.showPrices && typeof product.price === "number" && (
-                          <div className="mt-1.5 text-sm font-bold text-primary">
-                            {PEN(product.price)}
-                            {product.type === "varied" && (
-                              <span className="ml-1 text-[11px] text-muted-foreground font-normal">/día</span>
-                            )}
-                          </div>
-                        )}
+                        {settings?.showPrices &&
+                          typeof product.price === "number" && (
+                            <div className="mt-1.5 text-sm font-bold text-primary">
+                              {PEN(product.price)}
+                              {product.type === "varied" && (
+                                <span className="ml-1 text-[11px] text-muted-foreground font-normal">
+                                  /día
+                                </span>
+                              )}
+                            </div>
+                          )}
 
                         {/* Agregados compactos */}
-                        {!!(product.addons?.length) && (
+                        {!!product.addons?.length && (
                           <div className="mt-2 flex items-center gap-1 text-[11px]">
                             {product.addons.slice(0, 3).map((a, idx) => (
                               <span
@@ -588,7 +646,9 @@ export default function FamilyPortalApp({
                 </div>
               ) : (
                 <div className="text-center py-10 text-muted-foreground">
-                  {categories.length ? "No hay productos en esta categoría" : "No hay categorías configuradas"}
+                  {categories.length
+                    ? "No hay productos en esta categoría"
+                    : "No hay categorías configuradas"}
                 </div>
               )}
             </div>
@@ -600,7 +660,9 @@ export default function FamilyPortalApp({
                   <CardTitle className="flex items-center gap-2 text-base">
                     <ShoppingCart className="h-4 w-4" />
                     Tu pedido
-                    <span className="text-muted-foreground font-normal">({cart.length})</span>
+                    <span className="text-muted-foreground font-normal">
+                      ({cart.length})
+                    </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -631,10 +693,17 @@ export default function FamilyPortalApp({
                               {date === "Sin fecha"
                                 ? "Fecha por definir"
                                 : (() => {
-                                    const [y, m, d] = date.split("-").map(Number);
+                                    const [y, m, d] = date
+                                      .split("-")
+                                      .map(Number);
                                     const dt = new Date(y, m - 1, d);
-                                    const day = new Intl.DateTimeFormat("es-PE", { weekday: "long" }).format(dt);
-                                    const ddmm = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "2-digit" }).format(dt);
+                                    const day = new Intl.DateTimeFormat("es-PE", {
+                                      weekday: "long",
+                                    }).format(dt);
+                                    const ddmm = new Intl.DateTimeFormat("es-PE", {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                    }).format(dt);
                                     return `${day} ${ddmm}`;
                                   })()}
                             </div>
@@ -663,7 +732,7 @@ export default function FamilyPortalApp({
                                     variant="outline"
                                     size="icon"
                                     className="h-6 w-6"
-                                    onClick={() => addToCart(it)}
+                                    onClick={() => addToCart(it as ProductT)}
                                   >
                                     <Plus className="h-3 w-3" />
                                   </Button>
@@ -722,7 +791,11 @@ export default function FamilyPortalApp({
                         </div>
 
                         {/* Abrimos WA sin bloqueo */}
-                        <Button className="w-full" onClick={confirmNow} disabled={!cart.length || posting}>
+                        <Button
+                          className="w-full"
+                          onClick={confirmNow}
+                          disabled={!cart.length || posting}
+                        >
                           {isPreview ? "Confirmar Pedido (Demo)" : "Confirmar Pedido"}
                         </Button>
 
@@ -763,7 +836,9 @@ export default function FamilyPortalApp({
           days={availableDayOptions}
           selectedDays={selectedDays}
           onToggleDay={(date, checked) =>
-            setSelectedDays((prev) => (checked ? [...prev, date] : prev.filter((d) => d !== date)))
+            setSelectedDays((prev) =>
+              checked ? [...prev, date] : prev.filter((d) => d !== date)
+            )
           }
           onConfirm={addVariedToCart}
           confirmDisabled={selectedDays.length === 0}
@@ -778,7 +853,9 @@ export default function FamilyPortalApp({
                 <ShoppingCart className="h-5 w-5" />
                 Confirmar pedido
               </DialogTitle>
-              <DialogDescription>Revisa los detalles de tu pedido antes de enviarlo</DialogDescription>
+              <DialogDescription>
+                Revisa los detalles de tu pedido antes de enviarlo
+              </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
@@ -787,7 +864,9 @@ export default function FamilyPortalApp({
                 {cart.map((item, idx) => (
                   <div key={idx} className="text-sm">
                     <div className="flex justify-between">
-                      <span>{item.name} (×{item.quantity})</span>
+                      <span>
+                        {item.name} (×{item.quantity})
+                      </span>
                       <span>{PEN(item.subtotal)}</span>
                     </div>
                     {item.selectedDays?.length ? (
@@ -858,7 +937,11 @@ export default function FamilyPortalApp({
               <Button variant="outline" onClick={() => setShowConfirm(false)}>
                 Cancelar
               </Button>
-              <Button onClick={confirmNow} disabled={posting} className="bg-green-600 hover:bg-green-700">
+              <Button
+                onClick={confirmNow}
+                disabled={posting}
+                className="bg-green-600 hover:bg-green-700"
+              >
                 {posting ? "Enviando pedido..." : "Enviar pedido"}
               </Button>
             </DialogFooter>
@@ -866,7 +949,10 @@ export default function FamilyPortalApp({
         </Dialog>
 
         {/* Animación opcional */}
-        <OrderLoadingAnimation open={showLoadingAnimation} onComplete={handleAnimationComplete} />
+        <OrderLoadingAnimation
+          open={showLoadingAnimation}
+          onComplete={handleAnimationComplete}
+        />
 
         {/* Bottom Sheet Carrito (móvil) */}
         <Dialog open={showCartSheet} onOpenChange={setShowCartSheet}>
@@ -888,7 +974,9 @@ export default function FamilyPortalApp({
 
             <div className="max-h-[50vh] overflow-y-auto p-4 space-y-3">
               {cart.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8 text-sm">Tu carrito está vacío</div>
+                <div className="text-center text-muted-foreground py-8 text-sm">
+                  Tu carrito está vacío
+                </div>
               ) : (
                 <>
                   {/* Agrupación por fecha */}
@@ -909,17 +997,28 @@ export default function FamilyPortalApp({
                       <div key={date} className="space-y-2">
                         {Object.keys(groups).length > 1 && (
                           <div className="cart-date-title">
-                            📅 {date === "general" ? "General" : (() => {
-                              const [y, m, d] = date.split("-").map(Number);
-                              const dt = new Date(y, m - 1, d);
-                              const day = new Intl.DateTimeFormat("es-PE", { weekday: "short" }).format(dt);
-                              const ddmm = new Intl.DateTimeFormat("es-PE", { day: "2-digit", month: "2-digit" }).format(dt);
-                              return `${day} ${ddmm}`;
-                            })()}
+                            📅{" "}
+                            {date === "general"
+                              ? "General"
+                              : (() => {
+                                  const [y, m, d] = date.split("-").map(Number);
+                                  const dt = new Date(y, m - 1, d);
+                                  const day = new Intl.DateTimeFormat("es-PE", {
+                                    weekday: "short",
+                                  }).format(dt);
+                                  const ddmm = new Intl.DateTimeFormat("es-PE", {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                  }).format(dt);
+                                  return `${day} ${ddmm}`;
+                                })()}
                           </div>
                         )}
                         {items.map((it, idx) => (
-                          <div key={`${it.id}-${date}-${idx}`} className="flex items-center justify-between gap-3 text-xs">
+                          <div
+                            key={`${it.id}-${date}-${idx}`}
+                            className="flex items-center justify-between gap-3 text-xs"
+                          >
                             <div className="min-w-0 flex-1">
                               <div className="font-medium text-sm">{it.name}</div>
                               <div className="text-muted-foreground">
@@ -927,11 +1026,25 @@ export default function FamilyPortalApp({
                               </div>
                             </div>
                             <div className="flex items-center gap-1">
-                              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => removeFromCart(it.id)} aria-label="Quitar uno">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => removeFromCart(it.id)}
+                                aria-label="Quitar uno"
+                              >
                                 <Minus className="h-3 w-3" />
                               </Button>
-                              <span className="w-8 text-center text-xs font-medium">{it.quantity}</span>
-                              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => addToCart(it)} aria-label="Agregar uno">
+                              <span className="w-8 text-center text-xs font-medium">
+                                {it.quantity}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => addToCart(it as ProductT)}
+                                aria-label="Agregar uno"
+                              >
                                 <Plus className="h-3 w-3" />
                               </Button>
                             </div>
@@ -964,7 +1077,9 @@ export default function FamilyPortalApp({
                   whileTap={{ scale: 0.9 }}
                   onClick={() => {
                     haptics(10);
-                    const rawPhone = whatsappPhoneOverride ?? (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
+                    const rawPhone =
+                      whatsappPhoneOverride ??
+                      (settings?.whatsapp?.enabled ? settings?.whatsapp?.phone : "");
                     const phoneDigits = normalizePhone(rawPhone || "");
                     if (phoneDigits && cart.length > 0) {
                       const url = buildWaUrl(phoneDigits, makeWaMessage());
