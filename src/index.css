@@ -1,17 +1,150 @@
-/* ====== Compact Mobile Look (solo móvil) ====== */
-@media (max-width: 768px) {
+/* src/index.css */
+
+/* Tailwind layers */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================== THEME (Maracuyá) ================== */
+@layer base {
   :root {
-    font-size: 14px; /* base 14 en móvil */
+    /* Brand HSL tokens */
+    --background: 120 20% 98%;
+    --foreground: 140 25% 15%;
+
+    --card: 120 30% 96%;
+    --card-foreground: 140 25% 15%;
+
+    --popover: 120 30% 96%;
+    --popover-foreground: 140 25% 15%;
+
+    --primary: 130 60% 35%;
+    --primary-foreground: 120 20% 98%;
+    --primary-light: 130 40% 45%;
+    --primary-dark: 130 70% 25%;
+
+    --secondary: 25 85% 60%;
+    --secondary-foreground: 120 20% 98%;
+    --secondary-light: 25 70% 70%;
+    --secondary-dark: 25 90% 50%;
+
+    --success: 140 60% 40%;
+    --success-foreground: 120 20% 98%;
+    --warning: 35 90% 55%;
+    --warning-foreground: 140 25% 15%;
+
+    --muted: 120 15% 90%;
+    --muted-foreground: 140 10% 45%;
+    --accent: 130 40% 85%;
+    --accent-foreground: 140 25% 15%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 120 20% 98%;
+
+    --border: 120 20% 85%;
+    --input: 120 30% 94%;
+    --ring: 130 60% 35%;
+
+    --radius: 0.75rem;
+
+    /* Sombras */
+    --shadow-soft: 0 2px 20px hsla(var(--primary), 0.08);
+    --shadow-medium: 0 6px 24px hsla(var(--primary), 0.12);
+    --shadow-strong: 0 12px 40px hsla(var(--primary), 0.18);
   }
 
-  /* Contenedor de productos estilo "tiles" */
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground antialiased; }
+}
+
+/* ================== UTILIDADES UI ================== */
+@layer components {
+  /* Chips para tabs/categorías */
+  .chip {
+    @apply inline-flex items-center rounded-full border px-3 py-1.5 text-xs md:text-sm bg-white text-foreground border-border shadow-sm;
+  }
+  .chip--active {
+    @apply bg-primary text-primary-foreground border-transparent;
+  }
+
+  /* Contenedor de scroll con snap */
+  .scroll-x-snap { scroll-snap-type: x mandatory; }
+  .snap-child { scroll-snap-align: start; }
+
+  /* Card compacta para productos */
+  .card-compact {
+    @apply rounded-2xl border bg-card text-card-foreground shadow-sm overflow-hidden;
+  }
+
+  /* Imagen 16:9 (usamos aspect-ratio con fallback) */
+  .ratio-16-9 { aspect-ratio: 16 / 9; }
+
+  /* Botón + flotante dentro de la tarjeta */
+  .card-add-fab {
+    @apply absolute bottom-2 right-2 h-9 w-9 rounded-full grid place-items-center bg-primary text-primary-foreground shadow-md;
+  }
+
+  /* Área táctil generosa */
+  .tap-40 { min-width: 40px; min-height: 40px; }
+  .tap-44 { min-width: 44px; min-height: 44px; }
+
+  /* Dos líneas máximo */
+  .text-2lines {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;             /* estándar para compat (warning resuelto) */
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Footer sticky dentro de un modal/sheet */
+  .modal-sticky-footer {
+    @apply sticky bottom-0 left-0 right-0 bg-white border-t p-4;
+  }
+
+  /* Título de grupo de fecha del carrito móvil */
+  .cart-date-title {
+    @apply text-[11px] uppercase tracking-wide text-muted-foreground font-medium border-b pb-1;
+  }
+
+  /* Hoja inferior (Dialog como bottom-sheet) */
+  .mobile-sheet {
+    @apply fixed inset-x-0 bottom-0 m-0 rounded-t-2xl p-0 translate-y-0;
+  }
+}
+
+/* ================== MÓVIL (≤768px) ================== */
+@media (max-width: 768px) {
+  :root { font-size: 14px; } /* base 14px en móvil */
+
   .grid-products-mobile {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem; /* 12px */
+    gap: 0.75rem;
   }
 
-  /* Tarjeta compacta */
   .product-card {
     border-radius: 1rem;
     background: hsl(var(--card));
@@ -20,102 +153,42 @@
     overflow: hidden;
   }
 
-  /* Imagen 16:9 con altura fija (no gigante) */
   .product-media {
     position: relative;
-    height: 140px;           /* <= clave: ya no ocupa toda la pantalla */
+    height: 140px;
     background: hsl(var(--muted));
   }
   .product-media > img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+    width: 100%; height: 100%; object-fit: cover; display: block;
   }
 
-  /* Botón + circular dentro de la tarjeta */
   .product-add-fab {
-    position: absolute;
-    right: 10px;
-    bottom: 10px;
-    width: 36px;
-    height: 36px;
-    border-radius: 9999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    position: absolute; right: 10px; bottom: 10px;
+    width: 36px; height: 36px; border-radius: 9999px;
+    display: inline-flex; align-items: center; justify-content: center;
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
     box-shadow: var(--shadow-medium);
   }
 
-  /* Contenido compacto */
-  .product-body {
-    padding: 10px; /* p-2.5 */
-  }
+  .product-body { padding: 10px; }
   .product-title {
-    font-weight: 600;
-    line-height: 1.2;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;  /* standard */
-    line-clamp: 2;          /* aviso de compat */
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    min-height: 2.2em; /* mantiene altura pareja */
-    font-size: 0.95rem;
+    font-weight: 600; line-height: 1.2; font-size: 0.95rem;
+    min-height: 2.2em;
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
   }
-  .product-price {
-    margin-top: 0.25rem;
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: hsl(var(--primary));
-  }
+  .product-price { margin-top: .25rem; font-size: .9rem; font-weight: 700; color: hsl(var(--primary)); }
 
-  /* Chips de agregados (solo 1 línea) */
-  .addon-chips {
-    margin-top: 0.35rem;
-    display: flex;
-    gap: 4px;
-    flex-wrap: nowrap;
-    overflow: hidden;
-  }
+  .addon-chips { margin-top: .35rem; display: flex; gap: 4px; flex-wrap: nowrap; overflow: hidden; }
   .addon-chips > span {
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 9999px;
-    background: hsl(var(--muted));
-    color: hsl(var(--muted-foreground));
-    white-space: nowrap;
+    font-size: 11px; padding: 2px 8px; border-radius: 9999px;
+    background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); white-space: nowrap;
   }
 
-  /* Tabs tipo chip (scroll + snapping) */
-  .chip-tabs {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    padding: 0 8px 4px;
-  }
-  .chip-tab {
-    scroll-snap-align: start;
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 9999px;
-    border: 1px solid hsl(var(--border));
-    background: #fff;
-    white-space: nowrap;
-  }
-  .chip-tab--active {
-    background: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
-    border-color: transparent;
-  }
+  .chip-tabs { display:flex; gap:8px; overflow-x:auto; scroll-snap-type:x mandatory; padding:0 8px 4px; }
+  .chip-tab { scroll-snap-align:start; padding:6px 12px; font-size:12px; border-radius:9999px; border:1px solid hsl(var(--border)); background:#fff; white-space:nowrap; }
+  .chip-tab--active { background:hsl(var(--primary)); color:hsl(var(--primary-foreground)); border-color:transparent; }
 
-  /* FAB carrito más pequeño */
-  .fab-cart {
-    width: 54px;
-    height: 54px;
-    right: 12px;
-    bottom: 12px;
-  }
+  .fab-cart { width:54px; height:54px; right:12px; bottom:12px; }
 }
