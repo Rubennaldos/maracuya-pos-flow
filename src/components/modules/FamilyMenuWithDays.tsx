@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 import FamilyOrderHistory from "@/components/modules/lunch/FamilyOrderHistory";
@@ -443,10 +444,15 @@ export default function FamilyMenuWithDays({
     };
 
     return (
-      <Card key={p.id} className="h-full shadow-sm hover:shadow-md transition-shadow">
-        {/* Imagen compacta en móvil (16:9) */}
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+      >
+        <Card key={p.id} className="relative overflow-hidden md:h-full shadow-md hover:shadow-lg transition-shadow duration-200 rounded-2xl">
+        {/* Imagen BCP-style 16:9 */}
         {p.image && (
-          <div className="w-full overflow-hidden rounded-t-lg aspect-[16/9] md:aspect-[4/3]">
+          <div className="relative w-full overflow-hidden aspect-video">
             <img
               src={p.image}
               alt={p.name}
@@ -454,12 +460,23 @@ export default function FamilyMenuWithDays({
               loading="lazy"
               decoding="async"
             />
+            {/* Botón circular "+" dentro de la imagen (mobile) */}
+            <motion.div whileTap={{ scale: 0.95 }}>
+              <Button
+                onClick={handleAddToCart}
+                size="icon"
+                className="md:hidden absolute bottom-2 right-2 h-10 w-10 rounded-full shadow-md hover:shadow-lg transition-shadow"
+                aria-label={`Agregar ${p.name} al carrito`}
+              >
+                +
+              </Button>
+            </motion.div>
           </div>
         )}
 
-        <CardContent className="p-3 md:p-4 space-y-3">
+        <CardContent className="p-3 md:p-4 space-y-2 md:space-y-3">
           <div>
-            <h3 className="font-semibold text-sm md:text-base line-clamp-2">{p.name}</h3>
+            <h3 className="font-semibold text-[15px] md:text-base line-clamp-2 leading-tight">{p.name}</h3>
             {p.description && (
               <p className="text-xs md:text-sm text-muted-foreground mt-1 line-clamp-2">
                 {p.description}
@@ -468,8 +485,8 @@ export default function FamilyMenuWithDays({
           </div>
 
           <div className="flex items-end justify-between gap-2">
-            <div className="min-w-0">
-              <span className="font-bold text-base md:text-lg">{PEN(p.price)}</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-bold text-sm md:text-lg text-primary">{PEN(p.price)}</div>
               {p.type === "varied" && (
                 <p className="text-[11px] md:text-xs text-muted-foreground">por día</p>
               )}
@@ -501,59 +518,81 @@ export default function FamilyMenuWithDays({
                 </ul>
               )}
 
-              {/* Agregados visibles en la tarjeta */}
+              {/* Agregados como chips compactos */}
               {p.addons && p.addons.length > 0 && (
                 <div className="mt-2">
-                  <div className="text-[11px] font-medium text-muted-foreground mb-1">
-                    Agregados disponibles:
-                  </div>
                   <div className="flex flex-wrap gap-1">
                     {p.addons
                       .filter((a) => a && a.active !== false)
+                      .slice(0, 3)
                       .map((a, idx) => (
                         <Badge
                           key={`${a.id || idx}`}
                           variant="outline"
-                          className="text-[10px] md:text-[11px] rounded-full"
+                          className="text-[10px] md:text-[11px] rounded-full px-2 py-0.5"
                         >
-                          {a.name} (+{PEN(Number(a.price) || 0)})
+                          {a.name}
                         </Badge>
                       ))}
+                    {p.addons.filter((a) => a && a.active !== false).length > 3 && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] md:text-[11px] rounded-full px-2 py-0.5"
+                      >
+                        +{p.addons.filter((a) => a && a.active !== false).length - 3}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               )}
             </div>
 
-            <Button onClick={handleAddToCart} size="sm" className="rounded-full px-4">
+            {/* Botón desktop */}
+            <Button onClick={handleAddToCart} size="sm" className="hidden md:inline-flex rounded-full px-4">
               Agregar
             </Button>
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      </motion.div>
     );
   };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Header compacto BCP-style */}
       <div className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-3 md:py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-lg md:text-xl font-bold">¡Hola, {resolvedName}!</h1>
-              <p className="text-xs md:text-sm text-muted-foreground">Código: {client.code}</p>
+        <div className="max-w-7xl mx-auto px-4 py-2 md:py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              {/* Mobile: una línea compacta */}
+              <div className="md:hidden">
+                <h1 className="text-sm font-semibold truncate">
+                  Hola, {resolvedName} – Código {client.code}
+                </h1>
+              </div>
+              {/* Desktop: layout original */}
+              <div className="hidden md:block">
+                <h1 className="text-lg md:text-xl font-bold">¡Hola, {resolvedName}!</h1>
+                <p className="text-xs md:text-sm text-muted-foreground">Código: {client.code}</p>
+              </div>
             </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full"
+                className="rounded-full text-xs md:text-sm px-2 md:px-3"
                 onClick={() => setShowHistory(!showHistory)}
               >
-                {showHistory ? "Ocultar historial" : "Ver historial"}
+                {showHistory ? "Ocultar" : "Historial"}
               </Button>
               {onLogout && (
-                <Button variant="outline" size="sm" className="rounded-full" onClick={onLogout}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-full text-xs md:text-sm px-2 md:px-3" 
+                  onClick={onLogout}
+                >
                   Salir
                 </Button>
               )}
@@ -605,22 +644,22 @@ export default function FamilyMenuWithDays({
         <div className="grid lg:grid-cols-4 gap-4 md:gap-6">
           {/* Menú */}
           <div className="lg:col-span-3">
-            {/* Categorías – chips redondos, scroll horizontal */}
-            <div className="flex gap-2 mb-4 md:mb-6 overflow-x-auto no-scrollbar snap-x snap-mandatory">
+            {/* Categorías BCP-style – chips redondos, scroll horizontal */}
+            <div className="flex gap-2 mb-4 md:mb-6 overflow-x-auto px-2 md:px-0 -mx-2 md:mx-0 snap-x snap-mandatory">
               {categories.map((cat) => (
                 <Button
                   key={cat.id}
-                  size="sm"
+                  size="chip"
                   variant={activeCat === cat.id ? "default" : "outline"}
                   onClick={() => setActiveCat(cat.id)}
-                  className="rounded-full px-3 py-1 whitespace-nowrap snap-start"
+                  className="rounded-full text-xs px-3 whitespace-nowrap snap-start flex-shrink-0 hover:bg-muted transition-colors"
                 >
                   {cat.name}
                 </Button>
               ))}
             </div>
 
-            {/* Productos */}
+            {/* Productos con grid responsive */}
             {activeCat && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                 {(productsByCategory[activeCat] || []).map((product) => (
@@ -630,8 +669,8 @@ export default function FamilyMenuWithDays({
             )}
           </div>
 
-          {/* Carrito */}
-          <div className="lg:col-span-1" ref={cartRef}>
+          {/* Carrito desktop */}
+          <div className="hidden lg:block lg:col-span-1" ref={cartRef}>
             <Card className="sticky top-4">
               <CardHeader className="pb-2 md:pb-3">
                 <CardTitle className="text-base md:text-lg">Tu pedido</CardTitle>
@@ -706,23 +745,50 @@ export default function FamilyMenuWithDays({
         </div>
       </div>
 
-      {/* FAB carrito (solo móvil) */}
+      {/* FAB carrito móvil BCP-style */}
       {Object.keys(cart).length > 0 && (
-        <Button
-          onClick={() => cartRef.current?.scrollIntoView({ behavior: "smooth" })}
-          className="lg:hidden fixed bottom-20 right-4 rounded-full shadow-md px-4 h-11"
-        >
-          Ver carrito • {Object.keys(cart).length}
-        </Button>
+        <motion.div whileTap={{ scale: 0.95 }}>
+          <Button
+            variant="fab"
+            className="lg:hidden fixed bottom-4 right-4 rounded-full shadow-lg h-14 px-4 font-semibold text-sm"
+            onClick={openConfirm}
+            disabled={posting}
+            aria-label="Abrir carrito"
+          >
+            <div className="flex items-center gap-2">
+              <div className="bg-white/20 rounded-full h-6 w-6 flex items-center justify-center text-xs font-bold">
+                {Object.keys(cart).length}
+              </div>
+              <span>Ver carrito</span>
+            </div>
+          </Button>
+        </motion.div>
       )}
 
-      {/* Barra inferior fija (móvil) */}
+      {/* Bottom sheet móvil para carrito */}
       {Object.keys(cart).length > 0 && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t p-3 flex items-center justify-between">
-          <div className="font-semibold">Total: {PEN(total)}</div>
-          <Button size="sm" className="rounded-full px-5" onClick={openConfirm} disabled={posting}>
-            Confirmar
-          </Button>
+        <div className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t p-3 safe-bottom">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex-1">
+              <div className="text-xs text-muted-foreground">
+                {Object.values(cart).reduce((sum, item) => sum + item.qty, 0)} productos
+              </div>
+              <div className="font-semibold">Total: {PEN(total)}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                size="sm" 
+                className="rounded-full px-5" 
+                onClick={openConfirm} 
+                disabled={posting}
+              >
+                {posting ? "Enviando..." : "Confirmar"}
+              </Button>
+              <div className="flex items-center text-xs text-muted-foreground">
+                📱 WhatsApp
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
