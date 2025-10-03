@@ -664,21 +664,21 @@ export default function FamilyMenuWithDays({
         <div className="grid lg:grid-cols-4 gap-3 lg:gap-6">
           {/* Menú */}
           <div className="lg:col-span-3">
-            {/* Carrusel de categorías */}
-            <div className="relative mb-4 sm:mb-5">
+            {/* Carrusel de categorías mejorado */}
+            <div className="relative mb-4 sm:mb-5 bg-muted/30 rounded-2xl p-2">
               {/* Botón scroll izquierda */}
               <button
                 onClick={() => scrollCategories("left")}
-                className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 items-center justify-center rounded-full bg-background/80 backdrop-blur border shadow-sm hover:bg-background transition-colors"
+                className="hidden sm:flex absolute left-1 top-1/2 -translate-y-1/2 z-20 h-9 w-9 items-center justify-center rounded-full bg-background border-2 border-primary/20 shadow-lg hover:bg-primary hover:text-primary-foreground transition-all"
                 aria-label="Scroll izquierda"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-5 w-5" />
               </button>
 
               {/* Contenedor de categorías */}
               <div
                 ref={categoriesScrollRef}
-                className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth px-1 py-2"
+                className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth px-10 sm:px-12 py-1"
                 style={{
                   scrollbarWidth: "none",
                   msOverflowStyle: "none",
@@ -692,12 +692,12 @@ export default function FamilyMenuWithDays({
                     variant={activeCat === cat.id ? "default" : "outline"}
                     onClick={() => setActiveCat(cat.id)}
                     className={`
-                      rounded-full px-4 h-9 text-xs font-medium whitespace-nowrap flex-shrink-0
-                      transition-all duration-200
+                      rounded-full px-5 h-10 text-sm font-semibold whitespace-nowrap flex-shrink-0
+                      transition-all duration-300 ease-out
                       ${
                         activeCat === cat.id
-                          ? "shadow-md scale-105"
-                          : "hover:scale-105 hover:shadow-sm"
+                          ? "shadow-lg scale-110 bg-gradient-to-r from-primary to-primary-light"
+                          : "hover:scale-105 hover:shadow-md hover:border-primary/40"
                       }
                     `}
                   >
@@ -709,22 +709,24 @@ export default function FamilyMenuWithDays({
               {/* Botón scroll derecha */}
               <button
                 onClick={() => scrollCategories("right")}
-                className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 items-center justify-center rounded-full bg-background/80 backdrop-blur border shadow-sm hover:bg-background transition-colors"
+                className="hidden sm:flex absolute right-1 top-1/2 -translate-y-1/2 z-20 h-9 w-9 items-center justify-center rounded-full bg-background border-2 border-primary/20 shadow-lg hover:bg-primary hover:text-primary-foreground transition-all"
                 aria-label="Scroll derecha"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-5 w-5" />
               </button>
 
               {/* Indicador de scroll (móvil) */}
-              <div className="sm:hidden flex justify-center gap-1 mt-2">
-                {categories.map((cat, idx) => (
-                  <div
+              <div className="sm:hidden flex justify-center gap-1.5 mt-3 pb-1">
+                {categories.map((cat) => (
+                  <button
                     key={cat.id}
-                    className={`h-1 rounded-full transition-all duration-200 ${
+                    onClick={() => setActiveCat(cat.id)}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
                       activeCat === cat.id
-                        ? "w-6 bg-primary"
-                        : "w-1.5 bg-muted-foreground/30"
+                        ? "w-8 bg-primary shadow-sm"
+                        : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
                     }`}
+                    aria-label={`Ir a ${cat.name}`}
                   />
                 ))}
               </div>
