@@ -602,7 +602,18 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                           >
                             <Minus className="w-2 h-2 sm:w-3 sm:h-3" />
                           </Button>
-                          <span className="w-6 sm:w-8 text-center font-medium text-sm">{item.quantity}</span>
+                          <Input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 1;
+                              updateQuantity(item.id, val);
+                            }}
+                            onFocus={(e) => e.target.select()}
+                            className="h-6 w-12 sm:w-14 text-center text-sm font-medium p-1"
+                          />
                           <Button
                             variant="outline"
                             size="sm"
