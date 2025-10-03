@@ -88,7 +88,7 @@ export default function AddonsSelectorDialog({
         className={cn(
           "p-0 overflow-hidden",
           // ancho contenido y altura
-          "w-[360px] sm:max-w-[420px] max-h-[80vh] rounded-lg"
+          "w-[360px] sm:max-w-[420px] max-h-[26vh] rounded-lg"
         )}
       >
         {/* Header más compacto */}
