@@ -40,17 +40,6 @@ export default function FamilyDashboard({
         </CardHeader>
       </Card>
 
-      {/* Acceso rápido a historial */}
-      <div className="flex justify-end">
-        <Button
-          variant="outline"
-          onClick={onViewHistory}
-          className="gap-2"
-        >
-          <History className="h-4 w-4" />
-          Ver historial de pedidos
-        </Button>
-      </div>
 
       {/* Módulos disponibles */}
       <div>
