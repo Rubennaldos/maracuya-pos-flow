@@ -1294,115 +1294,202 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* CXC Dialog */}
+      {/* CXC Dialog - Estilo Excel con selección múltiple */}
       <Dialog open={showCXCDialog} onOpenChange={setShowCXCDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Cuentas por Cobrar - {selectedDebtor?.name}</DialogTitle>
-            <DialogDescription>Selecciona las boletas a cancelar. Se marcarán como pagadas.</DialogDescription>
+            <DialogDescription>Selecciona las facturas y procesa el pago</DialogDescription>
           </DialogHeader>
 
           {selectedDebtor && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Selecciona las boletas que deseas marcar como pagadas:
-              </p>
+            <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+              {/* Botones de acción rápida */}
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const allEntryIds = selectedDebtor.invoices.map((inv: any) => inv.entryId);
+                    setSelectedInvoices(allEntryIds);
+                    setPaymentAmount(selectedDebtor.totalDebt);
+                  }}
+                >
+                  <CheckCircle className="w-4 h-4 mr-1" />
+                  Seleccionar Todo
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedInvoices([]);
+                    setPaymentAmount(0);
+                  }}
+                >
+                  Deseleccionar
+                </Button>
+              </div>
 
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {selectedDebtor.invoices
-                  .sort((a: any, b: any) => a.dateSort - b.dateSort)
-                  .map((invoice: any) => (
-                    <div key={invoice.entryId} className="flex items-center justify-between p-3 border rounded">
-                      <div className="flex items-center space-x-2">
+              {/* Tabla estilo Excel */}
+              <div className="border rounded-lg overflow-hidden flex-1 overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-muted z-10">
+                    <TableRow>
+                      <TableHead className="w-12">
                         <Checkbox
-                          id={`cxc-${invoice.entryId}`}
-                          checked={selectedInvoices.includes(invoice.entryId)}
+                          checked={selectedInvoices.length === selectedDebtor.invoices.length}
                           onCheckedChange={(checked) => {
                             if (checked) {
-                              setSelectedInvoices(prev => [...prev, invoice.entryId]);
-                              setPaymentAmount(prev => prev + invoice.amount);
+                              const allEntryIds = selectedDebtor.invoices.map((inv: any) => inv.entryId);
+                              setSelectedInvoices(allEntryIds);
+                              setPaymentAmount(selectedDebtor.totalDebt);
                             } else {
-                              setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
-                              setPaymentAmount(prev => prev - invoice.amount);
+                              setSelectedInvoices([]);
+                              setPaymentAmount(0);
                             }
                           }}
                         />
-                        <div>
-                          <p className="font-medium">{invoice.correlative}</p>
-                          <p className="text-sm text-muted-foreground">{invoice.date}</p>
-                        </div>
-                      </div>
-                      <p className="font-semibold">S/ {invoice.amount.toFixed(2)}</p>
-                    </div>
-                  ))
-                }
+                      </TableHead>
+                      <TableHead>Correlativo</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead>Productos</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedDebtor.invoices
+                      .sort((a: any, b: any) => a.dateSort - b.dateSort)
+                      .map((invoice: any) => (
+                        <TableRow
+                          key={invoice.entryId}
+                          className={cn(
+                            "cursor-pointer hover:bg-muted/50",
+                            selectedInvoices.includes(invoice.entryId) && "bg-primary/5"
+                          )}
+                          onClick={() => {
+                            if (selectedInvoices.includes(invoice.entryId)) {
+                              setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
+                              setPaymentAmount(prev => prev - invoice.amount);
+                            } else {
+                              setSelectedInvoices(prev => [...prev, invoice.entryId]);
+                              setPaymentAmount(prev => prev + invoice.amount);
+                            }
+                          }}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedInvoices.includes(invoice.entryId)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedInvoices(prev => [...prev, invoice.entryId]);
+                                  setPaymentAmount(prev => prev + invoice.amount);
+                                } else {
+                                  setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
+                                  setPaymentAmount(prev => prev - invoice.amount);
+                                }
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">{invoice.correlative}</TableCell>
+                          <TableCell>{invoice.date}</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            S/ {invoice.amount.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
+                            {invoice.products.join(", ") || "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    }
+                  </TableBody>
+                </Table>
               </div>
 
-              <div className="bg-muted p-4 rounded">
-                <p className="text-lg font-semibold">
-                  Total seleccionado: S/ {paymentAmount.toFixed(2)}
-                </p>
-              </div>
+              {/* Resumen y opciones de pago */}
+              <div className="space-y-4 border-t pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Método de Pago</label>
+                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="efectivo">Efectivo</SelectItem>
+                        <SelectItem value="transferencia">Transferencia</SelectItem>
+                        <SelectItem value="yape">Yape</SelectItem>
+                        <SelectItem value="plin">Plin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Método de Pago</label>
-                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="efectivo">Efectivo</SelectItem>
-                      <SelectItem value="transferencia">Transferencia</SelectItem>
-                      <SelectItem value="yape">Yape</SelectItem>
-                      <SelectItem value="plin">Plin</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Fecha de Pago</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !paymentDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {paymentDate ? format(paymentDate, "dd/MM/yyyy", { locale: es }) : <span>Fecha</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={paymentDate}
+                          onSelect={(date) => date && setPaymentDate(date)}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium">Fecha de Pago</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !paymentDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {paymentDate ? format(paymentDate, "dd/MM", { locale: es }) : <span>Fecha</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={paymentDate}
-                        onSelect={(date) => date && setPaymentDate(date)}
-                        initialFocus
-                        className={cn("p-3 pointer-events-auto")}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                {/* Totales y acciones */}
+                <div className="bg-muted p-4 rounded-lg space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Facturas seleccionadas:</span>
+                    <span className="font-semibold">{selectedInvoices.length}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Total a pagar:</span>
+                    <span className="text-2xl font-bold text-primary">
+                      S/ {paymentAmount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm text-muted-foreground">
+                    <span>Deuda total del cliente:</span>
+                    <span>S/ {selectedDebtor.totalDebt.toFixed(2)}</span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex space-x-2 pt-4">
-                <Button
-                  onClick={processPayment}
-                  className="flex-1"
-                  disabled={selectedInvoices.length === 0}
-                >
-                  Procesar Pago
-                </Button>
-                <Button variant="outline" onClick={() => {
-                  setShowCXCDialog(false);
-                  setSelectedInvoices([]);
-                  setPaymentAmount(0);
-                }}>
-                  Cancelar
-                </Button>
+                {/* Botones de acción */}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={processPayment}
+                    className="flex-1"
+                    disabled={selectedInvoices.length === 0}
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Pagar Completo (S/ {paymentAmount.toFixed(2)})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowCXCDialog(false);
+                      setSelectedInvoices([]);
+                      setPaymentAmount(0);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
               </div>
             </div>
           )}
