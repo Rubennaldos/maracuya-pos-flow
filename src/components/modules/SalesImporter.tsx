@@ -22,8 +22,9 @@ interface SalesImporterProps {
 interface ImportRow {
   fecha: string;
   cliente: string;
-  items: string; // JSON o formato "nombre1:cantidad1:precio1;nombre2:cantidad2:precio2"
-  total: number;
+  producto: string;
+  cantidad: number;
+  precio: number;
   metodoPago: string;
   tipo?: string;
   vendedor?: string;
@@ -50,8 +51,9 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
       {
         fecha: "2024-01-15",
         cliente: "Juan Pérez",
-        items: '[{"name":"Producto 1","quantity":2,"price":10.50}]',
-        total: 21.00,
+        producto: "Chisito",
+        cantidad: 2,
+        precio: 3.00,
         metodoPago: "efectivo",
         tipo: "normal",
         vendedor: "Sistema"
@@ -59,8 +61,19 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
       {
         fecha: "2024-01-15",
         cliente: "María González",
-        items: '[{"name":"Producto 2","quantity":1,"price":15.00},{"name":"Producto 3","quantity":3,"price":5.00}]',
-        total: 30.00,
+        producto: "Galleta",
+        cantidad: 1,
+        precio: 2.50,
+        metodoPago: "credito",
+        tipo: "normal",
+        vendedor: "Sistema"
+      },
+      {
+        fecha: "2024-01-15",
+        cliente: "María González",
+        producto: "Jugo",
+        cantidad: 3,
+        precio: 4.00,
         metodoPago: "credito",
         tipo: "normal",
         vendedor: "Sistema"
@@ -75,8 +88,9 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
     ws['!cols'] = [
       { wch: 12 }, // fecha
       { wch: 20 }, // cliente
-      { wch: 60 }, // items
-      { wch: 10 }, // total
+      { wch: 30 }, // producto
+      { wch: 10 }, // cantidad
+      { wch: 10 }, // precio
       { wch: 12 }, // metodoPago
       { wch: 10 }, // tipo
       { wch: 15 }  // vendedor
@@ -122,12 +136,16 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
           validationErrors.push({ row: rowNum, field: "cliente", message: "Cliente es requerido" });
         }
         
-        if (!row.items) {
-          validationErrors.push({ row: rowNum, field: "items", message: "Items son requeridos" });
+        if (!row.producto) {
+          validationErrors.push({ row: rowNum, field: "producto", message: "Producto es requerido" });
         }
         
-        if (!row.total || isNaN(Number(row.total))) {
-          validationErrors.push({ row: rowNum, field: "total", message: "Total debe ser un número válido" });
+        if (!row.cantidad || isNaN(Number(row.cantidad))) {
+          validationErrors.push({ row: rowNum, field: "cantidad", message: "Cantidad debe ser un número válido" });
+        }
+        
+        if (!row.precio || isNaN(Number(row.precio))) {
+          validationErrors.push({ row: rowNum, field: "precio", message: "Precio debe ser un número válido" });
         }
         
         if (!row.metodoPago) {
@@ -140,30 +158,6 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
           const parsedDate = new Date(dateStr);
           if (isNaN(parsedDate.getTime())) {
             validationErrors.push({ row: rowNum, field: "fecha", message: "Formato de fecha inválido (use YYYY-MM-DD)" });
-          }
-        }
-
-        // Validación de items (debe ser JSON válido)
-        if (row.items) {
-          try {
-            const items = typeof row.items === 'string' ? JSON.parse(row.items) : row.items;
-            if (!Array.isArray(items) || items.length === 0) {
-              validationErrors.push({ row: rowNum, field: "items", message: "Items debe ser un array no vacío" });
-            } else {
-              items.forEach((item: any, itemIndex: number) => {
-                if (!item.name) {
-                  validationErrors.push({ row: rowNum, field: `items[${itemIndex}].name`, message: "Nombre del item es requerido" });
-                }
-                if (!item.quantity || isNaN(Number(item.quantity))) {
-                  validationErrors.push({ row: rowNum, field: `items[${itemIndex}].quantity`, message: "Cantidad debe ser un número" });
-                }
-                if (!item.price || isNaN(Number(item.price))) {
-                  validationErrors.push({ row: rowNum, field: `items[${itemIndex}].price`, message: "Precio debe ser un número" });
-                }
-              });
-            }
-          } catch (error) {
-            validationErrors.push({ row: rowNum, field: "items", message: "Items debe ser un JSON válido" });
           }
         }
 
@@ -181,8 +175,9 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
           validRows.push({
             fecha: String(row.fecha),
             cliente: String(row.cliente),
-            items: String(row.items),
-            total: Number(row.total),
+            producto: String(row.producto),
+            cantidad: Number(row.cantidad),
+            precio: Number(row.precio),
             metodoPago: String(row.metodoPago).toLowerCase(),
             tipo: row.tipo ? String(row.tipo) : "normal",
             vendedor: row.vendedor ? String(row.vendedor) : user?.id || "Sistema"
@@ -223,23 +218,44 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
         });
       }
 
-      for (const row of preview) {
+      // Agrupar filas por fecha + cliente + metodoPago para crear ventas consolidadas
+      const salesGroups = new Map<string, ImportRow[]>();
+      
+      preview.forEach(row => {
+        const key = `${row.fecha}|${row.cliente}|${row.metodoPago}`;
+        if (!salesGroups.has(key)) {
+          salesGroups.set(key, []);
+        }
+        salesGroups.get(key)!.push(row);
+      });
+
+      for (const [key, rows] of salesGroups) {
         try {
+          const firstRow = rows[0];
+          
           // Obtener correlativo
           const correlative = await RTDBHelper.getNextCorrelative("sale");
 
-          // Parsear items
-          const items = JSON.parse(row.items);
+          // Crear items array - usar productos tal cual sin buscar en sistema
+          const items = rows.map(row => ({
+            name: row.producto,
+            quantity: row.cantidad,
+            price: row.precio,
+            id: `imported-${Date.now()}-${Math.random()}` // ID temporal para items importados
+          }));
+
+          // Calcular total
+          const total = rows.reduce((sum, row) => sum + (row.cantidad * row.precio), 0);
 
           // Buscar cliente
           let clientData = null;
-          const clientMatch = clientsMap.get(row.cliente.toLowerCase());
+          const clientMatch = clientsMap.get(firstRow.cliente.toLowerCase());
           
           // Si es venta a crédito, el cliente debe existir
-          if (row.metodoPago === "credito") {
+          if (firstRow.metodoPago === "credito") {
             if (!clientMatch) {
               failedCount++;
-              console.error(`Cliente no encontrado para venta a crédito: ${row.cliente}`);
+              console.error(`Cliente no encontrado para venta a crédito: ${firstRow.cliente}`);
               continue;
             }
             clientData = { id: clientMatch.id, name: clientMatch.fullName || clientMatch.name };
@@ -250,20 +266,20 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
           }
 
           // Crear objeto de venta
-          const saleDate = new Date(row.fecha).toISOString();
+          const saleDate = new Date(firstRow.fecha).toISOString();
           const saleBase = {
             correlative,
             date: saleDate,
-            cashier: row.vendedor || user.id,
+            cashier: firstRow.vendedor || user.id,
             client: clientData,
             items: items,
-            subtotal: row.total,
+            subtotal: total,
             tax: 0,
-            total: row.total,
-            paymentMethod: row.metodoPago,
-            type: row.tipo || "normal",
+            total: total,
+            paymentMethod: firstRow.metodoPago,
+            type: firstRow.tipo || "normal",
             status: "completed",
-            paid: row.metodoPago !== "credito" ? row.total : 0,
+            paid: firstRow.metodoPago !== "credito" ? total : 0,
             createdBy: user.id,
             createdAt: saleDate,
             origin: "IMPORT",
@@ -275,13 +291,13 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
           const saleId = await RTDBHelper.pushData(RTDB_PATHS.sales, saleBase);
 
           // Si es crédito, crear entrada en cuentas por cobrar
-          if (row.metodoPago === "credito" && clientData) {
+          if (firstRow.metodoPago === "credito" && clientData) {
             const arEntry = {
               saleId,
               correlative,
               clientId: clientData.id,
               clientName: clientData.name || "Cliente",
-              amount: row.total,
+              amount: total,
               date: saleDate,
               status: "pending",
               type: "sale",
@@ -301,10 +317,10 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
             {
               saleId,
               correlative,
-              total: row.total,
-              paymentMethod: row.metodoPago,
+              total: total,
+              paymentMethod: firstRow.metodoPago,
               itemCount: items.length,
-              cliente: row.cliente
+              cliente: firstRow.cliente
             },
             "sale",
             saleId
@@ -312,7 +328,7 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
 
           successCount++;
         } catch (error) {
-          console.error(`Error importing sale for client ${row.cliente}:`, error);
+          console.error(`Error importing sale:`, error);
           failedCount++;
         }
       }
@@ -363,10 +379,11 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
               <strong>Instrucciones:</strong>
               <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
                 <li>Descargue la plantilla Excel para ver el formato correcto</li>
-                <li>Complete los datos: fecha (YYYY-MM-DD), cliente, items (JSON), total, metodoPago</li>
+                <li>Complete una fila por cada producto: fecha (YYYY-MM-DD), cliente, producto, cantidad, precio, metodoPago</li>
                 <li>Métodos de pago válidos: efectivo, tarjeta, credito, yape, plin, transferencia</li>
                 <li>Para ventas a crédito, el cliente debe existir en el sistema</li>
-                <li>Items debe ser un array JSON: [{"{"}"name":"Producto","quantity":1,"price":10.50{"}"}]</li>
+                <li>Los productos se agruparán automáticamente por fecha, cliente y método de pago</li>
+                <li>No necesita crear los productos en el sistema previamente - se guardarán solo para detalle de venta</li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -441,8 +458,11 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
                         <div>
                           <strong>Fecha:</strong> {row.fecha}
                         </div>
+                        <div className="col-span-2">
+                          <strong>Producto:</strong> {row.producto} x{row.cantidad} @ S/ {row.precio.toFixed(2)}
+                        </div>
                         <div>
-                          <strong>Total:</strong> S/ {row.total.toFixed(2)}
+                          <strong>Subtotal:</strong> S/ {(row.cantidad * row.precio).toFixed(2)}
                         </div>
                         <div>
                           <strong>Método:</strong> 
