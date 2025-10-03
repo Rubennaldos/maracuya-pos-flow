@@ -122,9 +122,8 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
   const productRefs = useRef<HTMLDivElement[]>([]);
   const [activeProductIdx, setActiveProductIdx] = useState<number>(-1);
 
-  // 🔹 NUEVO: estado de borrador por ítem para permitir escritura libre con decimales
+  // ===== NUEVO: estado de borrador por ítem para permitir escritura libre con decimales
   const [priceDraft, setPriceDraft] = useState<Record<string, string>>({});
-  const priceRegex = /^\d{0,7}([.,]\d{0,2})?$/;
 
   // 🔹 Helper para devolver el foco al buscador
   const focusSearch = () => {
@@ -310,20 +309,20 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
 
   const clearCart = () => setCart([]);
 
-  // (Se deja la función original para no remover nada; ya no se usa)
+  // (Se deja la función original para no remover nada; ya no se usa en el input)
   const updatePrice = (id: string, raw: string) => {
     const newPrice = parseFloat(raw.replace(",", ".")) || 0;
     setCart((prev) => prev.map((i) => (i.id === id ? { ...i, price: newPrice } : i)));
   };
 
-  // 🔹 NUEVO: tecleo libre (guarda string si pasa regex)
+  // ===== NUEVO: tecleo libre (guarda string, permite un solo separador . o ,)
   const handlePriceTyping = (id: string, raw: string) => {
-    if (raw === "" || priceRegex.test(raw)) {
-      setPriceDraft(prev => ({ ...prev, [id]: raw }));
-    }
+    let cleaned = raw.replace(/[^\d.,]/g, "");      // sólo dígitos y . ,
+    cleaned = cleaned.replace(/([.,].*)[.,]/g, "$1"); // un solo separador decimal
+    setPriceDraft(prev => ({ ...prev, [id]: cleaned }));
   };
 
-  // 🔹 NUEVO: confirmar precio en blur/Enter (parsea y guarda en el carrito)
+  // ===== NUEVO: confirmar precio (blur/Enter) → parsea y guarda en carrito
   const commitPrice = (id: string) => {
     const raw = priceDraft[id];
     const normalized = (raw ?? "").replace(",", ".");
@@ -430,7 +429,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             Ventas Históricas (Crédito)
           </h2>
 
-        {/* Fecha + Cliente */}
+          {/* Fecha + Cliente */}
           <div className="flex items-center gap-3">
             <Popover>
               <PopoverTrigger asChild>
@@ -541,11 +540,11 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                         <p className="font-medium text-sm">{item.name}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs text-muted-foreground">S/</span>
-                          {/* input sin spinners, más grande y editable con teclado (con borrador y commit) */}
+                          {/* Input con borrador de texto y confirmación en blur/Enter */}
                           <Input
                             type="text"
                             inputMode="decimal"
-                            value={priceDraft[item.id] ?? item.price.toFixed(2)}
+                            value={priceDraft[item.id] ?? String(item.price)}
                             onChange={(e) => handlePriceTyping(item.id, e.target.value)}
                             onBlur={() => commitPrice(item.id)}
                             onKeyDown={(e) => {
@@ -557,7 +556,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                             onFocus={(e) => {
                               setPriceDraft(prev => ({
                                 ...prev,
-                                [item.id]: prev[item.id] ?? item.price.toFixed(2),
+                                [item.id]: prev[item.id] ?? String(item.price),
                               }));
                               e.currentTarget.select();
                             }}
