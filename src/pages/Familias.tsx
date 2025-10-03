@@ -69,13 +69,46 @@ export default function Familias() {
     
     const resolveName = async () => {
       try {
-        const clientData = await RTDBHelper.getData<any>(`clients/${client.code}`);
-        if (clientData?.name) {
-          setResolvedName(clientData.name);
-        } else {
-          setResolvedName(client.name || client.code);
+        console.log('[Familias] Resolviendo nombre para código:', client.code);
+        
+        // Intentar múltiples rutas posibles
+        const paths = [
+          `clients/${client.code}`,
+          `students/${client.code}`,
+          `alumnos/${client.code}`,
+          `${RTDB_PATHS.clients}/${client.code}`,
+        ];
+        
+        for (const path of paths) {
+          try {
+            const data = await RTDBHelper.getData<any>(path);
+            console.log(`[Familias] Datos en ${path}:`, data);
+            
+            if (data?.name) {
+              console.log('[Familias] Nombre encontrado:', data.name);
+              setResolvedName(data.name);
+              return;
+            }
+            
+            // Intentar combinación de nombres y apellidos
+            if (data?.names || data?.lastNames) {
+              const fullName = `${data.names || ''} ${data.lastNames || ''}`.trim();
+              if (fullName) {
+                console.log('[Familias] Nombre completo construido:', fullName);
+                setResolvedName(fullName);
+                return;
+              }
+            }
+          } catch (err) {
+            console.log(`[Familias] No se encontró en ${path}`);
+          }
         }
-      } catch {
+        
+        // Si no se encuentra en ninguna ruta, usar el nombre del login o código
+        console.log('[Familias] Usando fallback:', client.name || client.code);
+        setResolvedName(client.name || client.code);
+      } catch (error) {
+        console.error('[Familias] Error resolviendo nombre:', error);
         setResolvedName(client.name || client.code);
       }
     };
