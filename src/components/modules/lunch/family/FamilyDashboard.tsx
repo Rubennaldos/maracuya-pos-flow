@@ -49,12 +49,8 @@ export default function FamilyDashboard({
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {/* Módulo de Pedidos */}
           <Card 
-            className={`${
-              availableModules.pedidos?.enabled !== false
-                ? "cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-200 group"
-                : "opacity-60"
-            }`}
-            onClick={() => availableModules.pedidos?.enabled !== false && onModuleSelect("pedidos")}
+            className="cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-200 group"
+            onClick={() => onModuleSelect("pedidos")}
           >
             <CardHeader>
               {availableModules.pedidos?.enabled !== false ? (
@@ -94,12 +90,8 @@ export default function FamilyDashboard({
 
           {/* Módulo de Detalle de Consumo */}
           <Card 
-            className={`${
-              availableModules.consumo?.enabled !== false
-                ? "cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-200 group"
-                : "opacity-60"
-            }`}
-            onClick={() => availableModules.consumo?.enabled !== false && onModuleSelect("consumo")}
+            className="cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-200 group"
+            onClick={() => onModuleSelect("consumo")}
           >
             <CardHeader>
               {availableModules.consumo?.enabled !== false ? (
@@ -139,12 +131,8 @@ export default function FamilyDashboard({
 
           {/* Módulo de Pagos */}
           <Card 
-            className={`${
-              availableModules.pagos?.enabled !== false
-                ? "cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-200 group"
-                : "opacity-60"
-            }`}
-            onClick={() => availableModules.pagos?.enabled !== false && onModuleSelect("pagos")}
+            className="cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-200 group"
+            onClick={() => onModuleSelect("pagos")}
           >
             <CardHeader>
               {availableModules.pagos?.enabled !== false ? (
