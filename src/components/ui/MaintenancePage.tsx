@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MessageCircle, Wrench } from "lucide-react";
-import maintenanceImage from "@/assets/maintenance-worker.jpg";
+import maintenanceKid from "@/assets/maintenance-kid.jpg";
 
 type MaintenancePageProps = {
   whatsappPhone?: string;
@@ -23,21 +23,18 @@ export default function MaintenancePage({ whatsappPhone }: MaintenancePageProps)
       <Card className="max-w-md w-full shadow-lg">
         <CardContent className="p-8 text-center space-y-6">
           {/* Imagen de mantenimiento */}
-          <div className="relative">
+          <div className="flex justify-center">
             <img 
-              src={maintenanceImage} 
-              alt="Página en mantenimiento" 
-              className="w-full h-48 object-cover rounded-lg shadow-md"
+              src={maintenanceKid} 
+              alt="Niño arreglando la computadora" 
+              className="w-full max-w-sm h-auto object-contain rounded-lg"
             />
-            <div className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground p-2 rounded-full shadow-lg">
-              <Wrench className="h-6 w-6" />
-            </div>
           </div>
 
           {/* Título y mensaje */}
           <div className="space-y-3">
             <h1 className="text-2xl font-bold text-primary">
-              🔧 Página en Mantenimiento
+              Papito y mamita, ya pronto arreglaré esta computadora
             </h1>
             <p className="text-muted-foreground leading-relaxed">
               Estamos trabajando para mejorar tu experiencia. 
