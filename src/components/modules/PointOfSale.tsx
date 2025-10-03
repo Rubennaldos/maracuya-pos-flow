@@ -580,11 +580,26 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs sm:text-sm text-muted-foreground">S/</span>
                           <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
+                            type="text"
+                            inputMode="decimal"
                             value={item.price.toFixed(2)}
-                            onChange={(e) => updatePrice(item.id, parseFloat(e.target.value) || 0)}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9.]/g, '');
+                              const num = parseFloat(val);
+                              if (!isNaN(num) && num >= 0) {
+                                updatePrice(item.id, num);
+                              } else if (val === '' || val === '.') {
+                                updatePrice(item.id, 0);
+                              }
+                            }}
+                            onFocus={(e) => {
+                              e.target.value = item.price.toString();
+                              e.target.select();
+                            }}
+                            onBlur={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              updatePrice(item.id, val);
+                            }}
                             className="h-6 w-16 text-xs text-center"
                           />
                           <span className="text-xs sm:text-sm text-muted-foreground">c/u</span>
