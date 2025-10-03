@@ -480,64 +480,87 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted p-2 sm:p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         <Card>
-          <CardHeader className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {onBack && (
-                <Button
-                  variant="ghost"
-                  onClick={onBack}
-                  className="flex items-center gap-2 px-2"
-                  title="Volver al dashboard"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  <span className="hidden sm:inline">Volver</span>
-                </Button>
-              )}
-              <CardTitle className="text-2xl font-bold">Administración de Almuerzos</CardTitle>
+          <CardHeader className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {onBack && (
+                  <Button
+                    variant="ghost"
+                    onClick={onBack}
+                    size="sm"
+                    className="flex items-center gap-1 sm:gap-2 px-2"
+                    title="Volver al dashboard"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="hidden sm:inline">Volver</span>
+                  </Button>
+                )}
+                <CardTitle className="text-xl sm:text-2xl font-bold">
+                  Administración de Almuerzos
+                </CardTitle>
+              </div>
+              <p className="text-sm text-muted-foreground hidden md:block">
+                Configura el portal, categorías y productos.
+              </p>
             </div>
-            <p className="text-muted-foreground hidden sm:block">
-              Configura el portal, categorías y productos.
-            </p>
           </CardHeader>
         </Card>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="space-y-6">
-          <TabsList className="grid grid-cols-7">
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" /> Configuración
-            </TabsTrigger>
-            <TabsTrigger value="modules" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" /> Módulos
-            </TabsTrigger>
-            <TabsTrigger value="cats" className="flex items-center gap-2">
-              <Package className="h-4 w-4" /> Categorías
-            </TabsTrigger>
-            <TabsTrigger value="products" className="flex items-center gap-2">
-              <Package className="h-4 w-4" /> Productos
-            </TabsTrigger>
-            <TabsTrigger value="orders" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Historial de Pedidos ({ordersCount})
-            </TabsTrigger>
-            <TabsTrigger value="announcements" className="flex items-center gap-2">
-              <Megaphone className="h-4 w-4" /> Anuncios ({announcements.length})
-            </TabsTrigger>
-            <TabsTrigger value="preview" className="flex items-center gap-2">
-              <Eye className="h-4 w-4" /> Vista Previa
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="space-y-4 sm:space-y-6">
+          {/* Tabs optimizadas para móvil con scroll horizontal */}
+          <div className="w-full overflow-x-auto -mx-2 px-2 sm:mx-0 sm:px-0">
+            <TabsList className="inline-flex w-full sm:w-auto min-w-max sm:grid sm:grid-cols-7 h-auto">
+              <TabsTrigger value="settings" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs sm:text-sm whitespace-nowrap">
+                <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Configuración</span>
+                <span className="sm:hidden">Config</span>
+              </TabsTrigger>
+              <TabsTrigger value="modules" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs sm:text-sm whitespace-nowrap">
+                <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Módulos</span>
+                <span className="sm:hidden">Mód</span>
+              </TabsTrigger>
+              <TabsTrigger value="cats" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs sm:text-sm whitespace-nowrap">
+                <Package className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Categorías</span>
+                <span className="sm:hidden">Cats</span>
+              </TabsTrigger>
+              <TabsTrigger value="products" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs sm:text-sm whitespace-nowrap">
+                <Package className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Productos</span>
+                <span className="sm:hidden">Prods</span>
+              </TabsTrigger>
+              <TabsTrigger value="orders" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs sm:text-sm whitespace-nowrap">
+                <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Historial ({ordersCount})</span>
+                <span className="sm:hidden">Hist ({ordersCount})</span>
+              </TabsTrigger>
+              <TabsTrigger value="announcements" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs sm:text-sm whitespace-nowrap">
+                <Megaphone className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Anuncios ({announcements.length})</span>
+                <span className="sm:hidden">Anun ({announcements.length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="preview" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs sm:text-sm whitespace-nowrap">
+                <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">Vista Previa</span>
+                <span className="sm:hidden">Vista</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* ================= Configuración ================= */}
           <TabsContent value="settings">
             <Card>
-              <CardHeader>
-                <CardTitle>Configuración del portal de familias</CardTitle>
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-lg sm:text-xl">Configuración del portal de familias</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="flex items-center gap-2">
+              <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+                {/* Switches principales - stack en móvil */}
+                <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 md:grid-cols-3">
+                  <div className="flex items-center gap-3 p-3 border rounded-lg">
                     <Switch
                       checked={settings.isOpen ?? false}
                       onCheckedChange={async (v) => {
@@ -551,9 +574,9 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                         }
                       }}
                     />
-                    <Label>Portal abierto</Label>
+                    <Label className="text-sm sm:text-base">Portal abierto</Label>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3 p-3 border rounded-lg">
                     <Switch
                       checked={settings.showPrices ?? true}
                       onCheckedChange={async (v) => {
@@ -567,77 +590,80 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                         }
                       }}
                     />
-                    <Label>Mostrar precios a familias</Label>
+                    <Label className="text-sm sm:text-base">Mostrar precios a familias</Label>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label>Hora límite</Label>
+                  <div className="flex items-center gap-3 p-3 border rounded-lg">
+                    <Switch
+                      checked={settings.allowSameDay ?? true}
+                      onCheckedChange={(v) => setSettings({ ...settings, allowSameDay: v })}
+                    />
+                    <Label className="text-sm sm:text-base">Permitir mismo día</Label>
+                  </div>
+                </div>
+
+                {/* Hora límite */}
+                <div className="space-y-2">
+                  <Label className="text-sm sm:text-base">Hora límite</Label>
+                  <Input
+                    type="time"
+                    value={settings.cutoffTime || "11:00"}
+                    onChange={(e) => setSettings({ ...settings, cutoffTime: e.target.value })}
+                    className="max-w-xs"
+                  />
+                </div>
+
+                {/* Ventana de pedidos */}
+                <div className="space-y-3">
+                  <Label className="text-sm sm:text-base font-medium">Ventana de pedidos</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs sm:text-sm text-muted-foreground">Desde</Label>
                       <Input
                         type="time"
-                        value={settings.cutoffTime || "11:00"}
-                        onChange={(e) => setSettings({ ...settings, cutoffTime: e.target.value })}
+                        value={settings.orderWindow?.start || ""}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            orderWindow: { ...settings.orderWindow, start: e.target.value },
+                          })
+                        }
                       />
                     </div>
-                    <div>
-                      <Label>Permitir mismo día</Label>
-                      <div className="flex items-center gap-2 h-9">
-                        <Switch
-                          checked={settings.allowSameDay ?? true}
-                          onCheckedChange={(v) => setSettings({ ...settings, allowSameDay: v })}
-                        />
-                      </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs sm:text-sm text-muted-foreground">Hasta</Label>
+                      <Input
+                        type="time"
+                        value={settings.orderWindow?.end || ""}
+                        onChange={(e) =>
+                          setSettings({
+                            ...settings,
+                            orderWindow: { ...settings.orderWindow, end: e.target.value },
+                          })
+                        }
+                      />
                     </div>
                   </div>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Ventana desde</Label>
-                    <Input
-                      type="time"
-                      value={settings.orderWindow?.start || ""}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          orderWindow: { ...settings.orderWindow, start: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label>Ventana hasta</Label>
-                    <Input
-                      type="time"
-                      value={settings.orderWindow?.end || ""}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          orderWindow: { ...settings.orderWindow, end: e.target.value },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
-                {/* Días no habilitados para productos variados */}
+                {/* Días no habilitados */}
                 <div className="space-y-3 border-t pt-4">
                   <div>
-                    <Label className="text-base font-medium">Días no habilitados para productos variados</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Selecciona qué días NO estarán disponibles para elegir en productos variados
+                    <Label className="text-sm sm:text-base font-medium">Días no habilitados para productos variados</Label>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                      Selecciona qué días NO estarán disponibles
                     </p>
                   </div>
-                  <div className="grid grid-cols-4 md:grid-cols-7 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2 sm:gap-3">
                     {[
-                      { key: 'monday', label: 'Lunes' },
-                      { key: 'tuesday', label: 'Martes' },
-                      { key: 'wednesday', label: 'Miércoles' },
-                      { key: 'thursday', label: 'Jueves' },
-                      { key: 'friday', label: 'Viernes' },
-                      { key: 'saturday', label: 'Sábado' },
-                      { key: 'sunday', label: 'Domingo' },
-                    ].map(({ key, label }) => (
-                      <div key={key} className="flex items-center gap-2">
+                      { key: 'monday', label: 'Lun', fullLabel: 'Lunes' },
+                      { key: 'tuesday', label: 'Mar', fullLabel: 'Martes' },
+                      { key: 'wednesday', label: 'Mié', fullLabel: 'Miércoles' },
+                      { key: 'thursday', label: 'Jue', fullLabel: 'Jueves' },
+                      { key: 'friday', label: 'Vie', fullLabel: 'Viernes' },
+                      { key: 'saturday', label: 'Sáb', fullLabel: 'Sábado' },
+                      { key: 'sunday', label: 'Dom', fullLabel: 'Domingo' },
+                    ].map(({ key, label, fullLabel }) => (
+                      <div key={key} className="flex items-center gap-2 p-2 border rounded-lg">
                         <Switch
                           checked={settings.disabledDays?.[key as keyof typeof settings.disabledDays] ?? false}
                           onCheckedChange={(v) =>
@@ -650,15 +676,18 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                             })
                           }
                         />
-                        <Label className="text-sm">{label}</Label>
+                        <Label className="text-xs sm:text-sm">
+                          <span className="sm:hidden">{label}</span>
+                          <span className="hidden sm:inline">{fullLabel}</span>
+                        </Label>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* WhatsApp */}
-                <div className="grid md:grid-cols-3 gap-4 border-t pt-4">
-                  <div className="flex items-center gap-2 col-span-1">
+                <div className="space-y-3 border-t pt-4">
+                  <div className="flex items-center gap-3 p-3 border rounded-lg">
                     <Switch
                       checked={!!settings.whatsapp?.enabled}
                       onCheckedChange={(v) =>
@@ -668,10 +697,10 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                         })
                       }
                     />
-                    <Label>Enviar confirmación a WhatsApp</Label>
+                    <Label className="text-sm sm:text-base">Enviar confirmación a WhatsApp</Label>
                   </div>
-                  <div className="md:col-span-2">
-                    <Label>Número de WhatsApp (con código de país, solo dígitos)</Label>
+                  <div className="space-y-2">
+                    <Label className="text-sm sm:text-base">Número de WhatsApp</Label>
                     <Input
                       inputMode="numeric"
                       placeholder="Ej. 51987654321"
@@ -686,13 +715,13 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                         })
                       }
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Ejemplo Perú: <code>51</code> + número — <strong>51987654321</strong>.
+                    <p className="text-xs text-muted-foreground">
+                      Con código de país. Ejemplo Perú: <strong>51987654321</strong>
                     </p>
                   </div>
                 </div>
 
-                <Button type="button" onClick={saveSettings} disabled={loading}>
+                <Button type="button" onClick={saveSettings} disabled={loading} className="w-full sm:w-auto">
                   <Save className="h-4 w-4 mr-2" />
                   Guardar configuración
                 </Button>
@@ -702,24 +731,26 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
 
           {/* ================= Categorías ================= */}
           <TabsContent value="cats">
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <Card>
-                <CardHeader>
-                  <CardTitle>{catEditing ? "Editar categoría" : "Nueva categoría"}</CardTitle>
+                <CardHeader className="p-4 sm:p-6">
+                  <CardTitle className="text-lg sm:text-xl">
+                    {catEditing ? "Editar categoría" : "Nueva categoría"}
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-3 p-4 sm:p-6">
                   <Input
                     placeholder="Ej. Almuerzos"
                     value={catName}
                     onChange={(e) => setCatName(e.target.value)}
                   />
-                  <div className="flex gap-2">
-                    <Button onClick={saveCategory} disabled={loading}>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button onClick={saveCategory} disabled={loading} className="w-full sm:w-auto">
                       <Save className="h-4 w-4 mr-2" />
                       {catEditing ? "Guardar cambios" : "Crear"}
                     </Button>
                     {catEditing && (
-                      <Button variant="outline" onClick={resetCatForm}>
+                      <Button variant="outline" onClick={resetCatForm} className="w-full sm:w-auto">
                         Cancelar
                       </Button>
                     )}
@@ -728,26 +759,27 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Categorías</CardTitle>
+                <CardHeader className="p-4 sm:p-6">
+                  <CardTitle className="text-lg sm:text-xl">Categorías</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-2 p-4 sm:p-6">
                   {categories.length === 0 && (
-                    <p className="text-muted-foreground">No hay categorías.</p>
+                    <p className="text-sm text-muted-foreground">No hay categorías.</p>
                   )}
                   {categories.map((c, i) => (
                     <div
                       key={c.id}
-                      className="flex items-center justify-between border rounded p-2"
+                      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border rounded p-3"
                     >
-                      <div>
-                        <div className="font-medium">{c.name}</div>
+                      <div className="flex-1">
+                        <div className="font-medium text-sm sm:text-base">{c.name}</div>
                         <div className="text-xs text-muted-foreground">
                           Orden: {c.order ?? 0}
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => moveCategory(c, -1)}
                           disabled={i === 0}
@@ -756,6 +788,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                           ↑
                         </Button>
                         <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => moveCategory(c, +1)}
                           disabled={i === categories.length - 1}
@@ -763,10 +796,11 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                         >
                           ↓
                         </Button>
-                        <Button variant="outline" onClick={() => editCategory(c)} title="Editar">
+                        <Button size="sm" variant="outline" onClick={() => editCategory(c)} title="Editar">
                           <Edit className="h-3 w-3" />
                         </Button>
                         <Button
+                          size="sm"
                           variant="destructive"
                           onClick={() => deleteCategory(c)}
                           title="Eliminar"
