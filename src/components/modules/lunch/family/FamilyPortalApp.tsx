@@ -4,6 +4,7 @@ import { RTDB_PATHS } from "@/lib/rtdb";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -22,9 +23,12 @@ import {
   Trash2,
   Eye,
   MessageCircle,
+  DollarSign,
+  Receipt,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { SettingsT, MenuT, ProductT } from "@/components/modules/lunch/types";
+import PaymentsModule from "./PaymentsModule";
 
 // Animaciones
 import { motion } from "framer-motion";
@@ -467,17 +471,30 @@ export default function FamilyPortalApp({
           </motion.button>
         )}
 
-        <div className="rounded-lg p-4 border bg-white">
-          {/* Encabezado compacto */}
-          <div className="bg-green-50 border border-green-200 p-3 rounded-md mb-4 flex items-center justify-between">
-            <div>
-              <div className="text-sm">¡Hola, {clientName}!</div>
-              <div className="text-xs text-muted-foreground">Código: {clientId}</div>
-            </div>
-            {isPreview && <Badge variant="secondary">Vista previa</Badge>}
-          </div>
+        <Tabs defaultValue="menu" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="menu" className="gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              Menú de Almuerzos
+            </TabsTrigger>
+            <TabsTrigger value="payments" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              Mis Pagos
+            </TabsTrigger>
+          </TabsList>
 
-          <div className="grid lg:grid-cols-3 gap-6">
+          <TabsContent value="menu">
+            <div className="rounded-lg p-4 border bg-white">
+              {/* Encabezado compacto */}
+              <div className="bg-green-50 border border-green-200 p-3 rounded-md mb-4 flex items-center justify-between">
+                <div>
+                  <div className="text-sm">¡Hola, {clientName}!</div>
+                  <div className="text-xs text-muted-foreground">Código: {clientId}</div>
+                </div>
+                {isPreview && <Badge variant="secondary">Vista previa</Badge>}
+              </div>
+
+              <div className="grid lg:grid-cols-3 gap-6">
             {/* Productos */}
             <div className="lg:col-span-2">
               {categories.length > 0 && (
@@ -727,10 +744,20 @@ export default function FamilyPortalApp({
             </div>
           </div>
 
-          <div className="text-center mt-6 pt-4 border-t text-xs text-muted-foreground">
-            Maracuyá • Portal de Almuerzos {isPreview && "• Vista Previa de Administrador"}
-          </div>
-        </div>
+              <div className="text-center mt-6 pt-4 border-t text-xs text-muted-foreground">
+                Maracuyá • Portal de Almuerzos {isPreview && "• Vista Previa de Administrador"}
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="payments">
+            <PaymentsModule
+              clientId={clientId}
+              clientName={clientName}
+              whatsappPhone={whatsappPhoneOverride ?? settings?.whatsapp?.phone}
+            />
+          </TabsContent>
+        </Tabs>
 
         {/* Modales */}
         <AddonsSelectorDialog
