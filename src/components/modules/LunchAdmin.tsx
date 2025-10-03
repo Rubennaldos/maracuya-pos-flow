@@ -69,6 +69,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
     portalEnabled: true,
     pedidos: { enabled: true, name: "Pedidos de Almuerzo" },
     consumo: { enabled: true, name: "Detalle de Consumo" },
+    pagos: { enabled: true, name: "Mis Pagos" },
   });
   const [loading, setLoading] = useState(false);
 
@@ -1110,6 +1111,33 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                             ...portalModules,
                             consumo: {
                               ...portalModules.consumo,
+                              enabled: v,
+                            },
+                          })
+                        }
+                        disabled={!portalModules.portalEnabled}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Módulo de Pagos */}
+                  <div className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-base font-medium">
+                          {portalModules.pagos?.name || "Mis Pagos"}
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Permite a las familias gestionar sus pagos y ver deudas pendientes
+                        </p>
+                      </div>
+                      <Switch
+                        checked={portalModules.pagos?.enabled ?? true}
+                        onCheckedChange={(v) =>
+                          setPortalModules({
+                            ...portalModules,
+                            pagos: {
+                              ...portalModules.pagos,
                               enabled: v,
                             },
                           })
