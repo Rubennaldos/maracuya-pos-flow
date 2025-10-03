@@ -1,10 +1,13 @@
 // src/pages/Familias.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import FamilyLogin from "@/components/modules/FamilyLogin";
+import FamilyDashboard from "@/components/modules/lunch/family/FamilyDashboard";
 import PedidosModule from "@/components/modules/lunch/family/PedidosModule";
+import FamilyOrderHistory from "@/components/modules/lunch/FamilyOrderHistory";
 import MaintenancePage from "@/components/ui/MaintenancePage";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 
@@ -29,6 +32,11 @@ export default function Familias() {
     portalEnabled: true,
     pedidos: { enabled: true, name: "Pedidos de Almuerzo" },
   });
+  
+  // Control de navegación entre dashboard y módulos
+  const [activeModule, setActiveModule] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [resolvedName, setResolvedName] = useState<string>("");
 
   // Cargar configuración del portal
   useEffect(() => {
@@ -52,6 +60,26 @@ export default function Familias() {
     };
     loadPortalSettings();
   }, []);
+
+  // Resolver nombre del cliente desde RTDB
+  useEffect(() => {
+    if (!client?.code) return;
+    
+    const resolveName = async () => {
+      try {
+        const clientData = await RTDBHelper.getData<any>(`clients/${client.code}`);
+        if (clientData?.name) {
+          setResolvedName(clientData.name);
+        } else {
+          setResolvedName(client.name || client.code);
+        }
+      } catch {
+        setResolvedName(client.name || client.code);
+      }
+    };
+    
+    resolveName();
+  }, [client]);
 
   // Cargar sesión guardada del dispositivo (no aceptamos ?code= en URL)
   useEffect(() => {
@@ -81,7 +109,15 @@ export default function Familias() {
   // Logout (botón "Salir de perfil")
   const handleLogout = () => {
     setClient(null);
+    setActiveModule(null);
+    setShowHistory(false);
     if (isBrowser()) localStorage.removeItem(STORAGE_KEY);
+  };
+
+  // Volver al dashboard
+  const handleBackToDashboard = () => {
+    setActiveModule(null);
+    setShowHistory(false);
   };
 
   const headingText = useMemo(() => "Portal de Familias", []);
@@ -143,13 +179,31 @@ export default function Familias() {
       {!client ? (
         <FamilyLogin onLogged={handleLogged} />
       ) : (
-        // Mostrar módulos habilitados según configuración
         <div className="space-y-4">
-          {portalModules.pedidos?.enabled ? (
-            <PedidosModule client={{ code: client.code }} onLogout={handleLogout} />
-          ) : (
-            <div className="flex items-center justify-center min-h-[60vh]">
-              <Card className="w-full max-w-md">
+          {/* Botón de volver cuando está en un módulo o historial */}
+          {(activeModule || showHistory) && (
+            <Button
+              variant="ghost"
+              onClick={handleBackToDashboard}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Volver al inicio
+            </Button>
+          )}
+
+          {/* Historial de pedidos */}
+          {showHistory ? (
+            <FamilyOrderHistory clientCode={client.code} />
+          ) : activeModule === "pedidos" ? (
+            /* Módulo de Pedidos */
+            portalModules.pedidos?.enabled ? (
+              <PedidosModule 
+                client={{ code: client.code, name: resolvedName }} 
+                onLogout={handleLogout} 
+              />
+            ) : (
+              <Card className="w-full max-w-md mx-auto">
                 <CardHeader>
                   <CardTitle>Módulo no disponible</CardTitle>
                 </CardHeader>
@@ -158,15 +212,24 @@ export default function Familias() {
                     El módulo de pedidos no está disponible en este momento.
                   </p>
                   <Button
-                    onClick={handleLogout}
+                    onClick={handleBackToDashboard}
                     variant="outline"
                     className="w-full"
                   >
-                    Salir de perfil
+                    Volver al inicio
                   </Button>
                 </CardContent>
               </Card>
-            </div>
+            )
+          ) : (
+            /* Dashboard principal con módulos disponibles */
+            <FamilyDashboard
+              clientName={resolvedName || client.name || client.code}
+              clientCode={client.code}
+              availableModules={portalModules}
+              onModuleSelect={(moduleId) => setActiveModule(moduleId)}
+              onViewHistory={() => setShowHistory(true)}
+            />
           )}
         </div>
       )}
