@@ -122,6 +122,10 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
   const productRefs = useRef<HTMLDivElement[]>([]);
   const [activeProductIdx, setActiveProductIdx] = useState<number>(-1);
 
+  // 🔹 NUEVO: estado de borrador por ítem para permitir escritura libre con decimales
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({});
+  const priceRegex = /^\d{0,7}([.,]\d{0,2})?$/;
+
   // 🔹 Helper para devolver el foco al buscador
   const focusSearch = () => {
     requestAnimationFrame(() => searchRef.current?.focus());
@@ -306,9 +310,33 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
 
   const clearCart = () => setCart([]);
 
+  // (Se deja la función original para no remover nada; ya no se usa)
   const updatePrice = (id: string, raw: string) => {
     const newPrice = parseFloat(raw.replace(",", ".")) || 0;
     setCart((prev) => prev.map((i) => (i.id === id ? { ...i, price: newPrice } : i)));
+  };
+
+  // 🔹 NUEVO: tecleo libre (guarda string si pasa regex)
+  const handlePriceTyping = (id: string, raw: string) => {
+    if (raw === "" || priceRegex.test(raw)) {
+      setPriceDraft(prev => ({ ...prev, [id]: raw }));
+    }
+  };
+
+  // 🔹 NUEVO: confirmar precio en blur/Enter (parsea y guarda en el carrito)
+  const commitPrice = (id: string) => {
+    const raw = priceDraft[id];
+    const normalized = (raw ?? "").replace(",", ".");
+    const n = normalized === "" ? NaN : Number(normalized);
+
+    setCart(prev =>
+      prev.map(i => (i.id === id ? { ...i, price: Number.isFinite(n) ? n : i.price } : i))
+    );
+
+    setPriceDraft(prev => {
+      const { [id]: _omit, ...rest } = prev;
+      return rest;
+    });
   };
 
   /* 🔹 Cuando NO haya modales abiertos, volver a enfocar el buscador */
@@ -402,7 +430,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             Ventas Históricas (Crédito)
           </h2>
 
-          {/* Fecha + Cliente */}
+        {/* Fecha + Cliente */}
           <div className="flex items-center gap-3">
             <Popover>
               <PopoverTrigger asChild>
@@ -513,14 +541,26 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
                         <p className="font-medium text-sm">{item.name}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs text-muted-foreground">S/</span>
-                          {/* input sin spinners, más grande y editable con teclado */}
+                          {/* input sin spinners, más grande y editable con teclado (con borrador y commit) */}
                           <Input
                             type="text"
                             inputMode="decimal"
-                            pattern="[0-9]*[.,]?[0-9]*"
-                            value={item.price.toFixed(2)}
-                            onChange={(e) => updatePrice(item.id, e.target.value)}
-                            onFocus={(e) => e.currentTarget.select()}
+                            value={priceDraft[item.id] ?? item.price.toFixed(2)}
+                            onChange={(e) => handlePriceTyping(item.id, e.target.value)}
+                            onBlur={() => commitPrice(item.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.currentTarget.blur(); // dispara onBlur -> commitPrice
+                                e.preventDefault();
+                              }
+                            }}
+                            onFocus={(e) => {
+                              setPriceDraft(prev => ({
+                                ...prev,
+                                [item.id]: prev[item.id] ?? item.price.toFixed(2),
+                              }));
+                              e.currentTarget.select();
+                            }}
                             className="h-9 w-24 text-sm text-center"
                           />
                           <span className="text-xs text-muted-foreground">x {item.quantity}</span>
