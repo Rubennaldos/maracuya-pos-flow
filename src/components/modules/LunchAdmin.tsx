@@ -62,7 +62,13 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const [menu, setMenu] = useState<MenuT>({});
   const [ordersCount, setOrdersCount] = useState<number>(0); // para mostrar en la pestaña
   const [announcements, setAnnouncements] = useState<AnnouncementT[]>([]);
-  const [tab, setTab] = useState<"settings" | "cats" | "products" | "orders" | "announcements" | "preview">("settings");
+  const [tab, setTab] = useState<"settings" | "cats" | "products" | "orders" | "announcements" | "preview" | "modules">("settings");
+  
+  // Estado de módulos del portal
+  const [portalModules, setPortalModules] = useState({
+    portalEnabled: true,
+    pedidos: { enabled: true, name: "Pedidos de Almuerzo" },
+  });
   const [loading, setLoading] = useState(false);
 
   // ---------- Estado Categorías ----------
@@ -125,6 +131,12 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
             .filter(Boolean)
             .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
           setAnnouncements(announcementsList);
+        }
+
+        // Cargar módulos del portal
+        const modulesData = await RTDBHelper.getData<any>("family_portal_modules");
+        if (modulesData) {
+          setPortalModules(modulesData);
         }
       } catch {
         toast({
@@ -439,6 +451,19 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
     }
   };
 
+  // ================== Acciones: Módulos del Portal ==================
+  const savePortalModules = async () => {
+    setLoading(true);
+    try {
+      await RTDBHelper.setData("family_portal_modules", portalModules);
+      toast({ title: "✅ Configuración de módulos guardada" });
+    } catch {
+      toast({ title: "❌ Error al guardar módulos", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ---------- Guard de admin ----------
   if (!user || user.role !== "admin") {
     return (
@@ -479,9 +504,12 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
         </Card>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="space-y-6">
-          <TabsList className="grid grid-cols-6">
+          <TabsList className="grid grid-cols-7">
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" /> Configuración
+            </TabsTrigger>
+            <TabsTrigger value="modules" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" /> Módulos
             </TabsTrigger>
             <TabsTrigger value="cats" className="flex items-center gap-2">
               <Package className="h-4 w-4" /> Categorías
@@ -970,6 +998,81 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* ================= Módulos del Portal ================= */}
+          <TabsContent value="modules">
+            <Card>
+              <CardHeader>
+                <CardTitle>Control de Módulos del Portal de Familias</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Administra qué módulos están activos en el portal de familias
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Switch general del portal */}
+                <div className="border-b pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-base font-semibold">Portal de Familias</Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Controla si el portal completo está disponible o en mantenimiento
+                      </p>
+                    </div>
+                    <Switch
+                      checked={portalModules.portalEnabled}
+                      onCheckedChange={(v) =>
+                        setPortalModules({ ...portalModules, portalEnabled: v })
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Módulo de Pedidos */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Módulos Disponibles</h3>
+                  
+                  <div className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-base font-medium">
+                          {portalModules.pedidos?.name || "Pedidos de Almuerzo"}
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Permite a las familias realizar pedidos de almuerzo
+                        </p>
+                      </div>
+                      <Switch
+                        checked={portalModules.pedidos?.enabled ?? true}
+                        onCheckedChange={(v) =>
+                          setPortalModules({
+                            ...portalModules,
+                            pedidos: {
+                              ...portalModules.pedidos,
+                              enabled: v,
+                            },
+                          })
+                        }
+                        disabled={!portalModules.portalEnabled}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Aquí se pueden agregar más módulos en el futuro */}
+                  <div className="border-2 border-dashed rounded-lg p-6 text-center text-muted-foreground">
+                    <p className="text-sm">Más módulos próximamente...</p>
+                  </div>
+                </div>
+
+                {/* Botón guardar */}
+                <div className="pt-4 border-t">
+                  <Button onClick={savePortalModules} disabled={loading}>
+                    <Save className="h-4 w-4 mr-2" />
+                    Guardar configuración de módulos
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ================= Vista Previa ================= */}

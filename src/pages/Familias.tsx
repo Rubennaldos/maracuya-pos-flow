@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import FamilyLogin from "@/components/modules/FamilyLogin";
 import FamilyMenuWithDays from "@/components/modules/FamilyMenuWithDays";
 import MaintenancePage from "@/components/ui/MaintenancePage";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 
@@ -23,6 +25,10 @@ export default function Familias() {
   const [portalOpen, setPortalOpen] = useState(true);
   const [whatsappPhone, setWhatsappPhone] = useState<string>("");
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [portalModules, setPortalModules] = useState({
+    portalEnabled: true,
+    pedidos: { enabled: true, name: "Pedidos de Almuerzo" },
+  });
 
   // Cargar configuración del portal
   useEffect(() => {
@@ -31,6 +37,12 @@ export default function Familias() {
         const settings = await RTDBHelper.getData<any>(RTDB_PATHS.lunch_settings);
         setPortalOpen(settings?.isOpen ?? true);
         setWhatsappPhone(settings?.whatsapp?.phone || "");
+        
+        // Cargar módulos del portal
+        const modulesData = await RTDBHelper.getData<any>("family_portal_modules");
+        if (modulesData) {
+          setPortalModules(modulesData);
+        }
       } catch (error) {
         console.error("Error loading portal settings:", error);
         setPortalOpen(true);
@@ -76,7 +88,8 @@ export default function Familias() {
 
   if (!hydrated || !settingsLoaded) return null;
 
-  if (!portalOpen) {
+  // Mostrar página de mantenimiento si el portal está cerrado o deshabilitado
+  if (!portalOpen || !portalModules.portalEnabled) {
     return <MaintenancePage whatsappPhone={whatsappPhone} />;
   }
 
@@ -130,8 +143,30 @@ export default function Familias() {
       {!client ? (
         <FamilyLogin onLogged={handleLogged} />
       ) : (
-        // bloqueamos cambio de perfil: solo con "Salir de perfil"
-        <FamilyMenuWithDays client={{ code: client.code }} onLogout={handleLogout} />
+        // Mostrar módulos habilitados
+        portalModules.pedidos?.enabled ? (
+          <FamilyMenuWithDays client={{ code: client.code }} onLogout={handleLogout} />
+        ) : (
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Módulo no disponible</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground mb-4">
+                  El módulo de pedidos no está disponible en este momento.
+                </p>
+                <Button
+                  onClick={handleLogout}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Salir de perfil
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        )
       )}
 
       <footer style={{ textAlign: "center", marginTop: 28, color: "#6b7280", fontSize: 12 }}>
