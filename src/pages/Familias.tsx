@@ -1,7 +1,7 @@
 // src/pages/Familias.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import FamilyLogin from "@/components/modules/FamilyLogin";
-import FamilyMenuWithDays from "@/components/modules/FamilyMenuWithDays";
+import PedidosModule from "@/components/modules/lunch/family/PedidosModule";
 import MaintenancePage from "@/components/ui/MaintenancePage";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -143,30 +143,32 @@ export default function Familias() {
       {!client ? (
         <FamilyLogin onLogged={handleLogged} />
       ) : (
-        // Mostrar módulos habilitados
-        portalModules.pedidos?.enabled ? (
-          <FamilyMenuWithDays client={{ code: client.code }} onLogout={handleLogout} />
-        ) : (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <Card className="w-full max-w-md">
-              <CardHeader>
-                <CardTitle>Módulo no disponible</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground mb-4">
-                  El módulo de pedidos no está disponible en este momento.
-                </p>
-                <Button
-                  onClick={handleLogout}
-                  variant="outline"
-                  className="w-full"
-                >
-                  Salir de perfil
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )
+        // Mostrar módulos habilitados según configuración
+        <div className="space-y-4">
+          {portalModules.pedidos?.enabled ? (
+            <PedidosModule client={{ code: client.code }} onLogout={handleLogout} />
+          ) : (
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <Card className="w-full max-w-md">
+                <CardHeader>
+                  <CardTitle>Módulo no disponible</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground mb-4">
+                    El módulo de pedidos no está disponible en este momento.
+                  </p>
+                  <Button
+                    onClick={handleLogout}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Salir de perfil
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
       )}
 
       <footer style={{ textAlign: "center", marginTop: 28, color: "#6b7280", fontSize: 12 }}>
