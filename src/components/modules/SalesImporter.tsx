@@ -21,6 +21,7 @@ interface SalesImporterProps {
 
 interface ImportRow {
   fecha: string;
+  codigoCliente: string;
   cliente: string;
   producto: string;
   cantidad: number;
@@ -50,7 +51,8 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
     const template = [
       {
         fecha: "2024-01-15",
-        cliente: "Juan Pérez",
+        codigoCliente: "C040989",
+        cliente: "Miss Joselyn",
         producto: "Chisito",
         cantidad: 2,
         precio: 3.00,
@@ -60,6 +62,7 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
       },
       {
         fecha: "2024-01-15",
+        codigoCliente: "C040990",
         cliente: "María González",
         producto: "Galleta",
         cantidad: 1,
@@ -70,6 +73,7 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
       },
       {
         fecha: "2024-01-15",
+        codigoCliente: "C040990",
         cliente: "María González",
         producto: "Jugo",
         cantidad: 3,
@@ -87,7 +91,8 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
     // Ajustar anchos de columna
     ws['!cols'] = [
       { wch: 12 }, // fecha
-      { wch: 20 }, // cliente
+      { wch: 15 }, // codigoCliente
+      { wch: 25 }, // cliente
       { wch: 30 }, // producto
       { wch: 10 }, // cantidad
       { wch: 10 }, // precio
@@ -132,8 +137,12 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
           validationErrors.push({ row: rowNum, field: "fecha", message: "Fecha es requerida" });
         }
         
+        if (!row.codigoCliente) {
+          validationErrors.push({ row: rowNum, field: "codigoCliente", message: "Código de cliente es requerido" });
+        }
+        
         if (!row.cliente) {
-          validationErrors.push({ row: rowNum, field: "cliente", message: "Cliente es requerido" });
+          validationErrors.push({ row: rowNum, field: "cliente", message: "Nombre de cliente es requerido" });
         }
         
         if (!row.producto) {
@@ -174,6 +183,7 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
         if (validationErrors.filter(e => e.row === rowNum).length === 0) {
           validRows.push({
             fecha: String(row.fecha),
+            codigoCliente: String(row.codigoCliente),
             cliente: String(row.cliente),
             producto: String(row.producto),
             cantidad: Number(row.cantidad),
@@ -205,24 +215,24 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
     let failedCount = 0;
 
     try {
-      // Cargar clientes para buscar por nombre
+      // Cargar clientes para buscar por código único
       const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
-      const clientsMap = new Map<string, any>();
+      const clientsByCode = new Map<string, any>();
       
       if (clientsData) {
         Object.entries(clientsData).forEach(([id, client]) => {
-          const fullName = client?.fullName || client?.names || client?.name || "";
-          if (fullName) {
-            clientsMap.set(fullName.toLowerCase(), { id, ...client });
+          const code = client?.code || client?.id || "";
+          if (code) {
+            clientsByCode.set(String(code).toUpperCase(), { id, ...client });
           }
         });
       }
 
-      // Agrupar filas por fecha + cliente + metodoPago para crear ventas consolidadas
+      // Agrupar filas por fecha + codigoCliente + metodoPago para crear ventas consolidadas
       const salesGroups = new Map<string, ImportRow[]>();
       
       preview.forEach(row => {
-        const key = `${row.fecha}|${row.cliente}|${row.metodoPago}`;
+        const key = `${row.fecha}|${row.codigoCliente}|${row.metodoPago}`;
         if (!salesGroups.has(key)) {
           salesGroups.set(key, []);
         }
@@ -247,22 +257,22 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
           // Calcular total
           const total = rows.reduce((sum, row) => sum + (row.cantidad * row.precio), 0);
 
-          // Buscar cliente
+          // Buscar cliente por código
           let clientData = null;
-          const clientMatch = clientsMap.get(firstRow.cliente.toLowerCase());
+          const clientMatch = clientsByCode.get(firstRow.codigoCliente.toUpperCase());
           
           // Si es venta a crédito, el cliente debe existir
           if (firstRow.metodoPago === "credito") {
             if (!clientMatch) {
               failedCount++;
-              console.error(`Cliente no encontrado para venta a crédito: ${firstRow.cliente}`);
+              console.error(`Cliente no encontrado para venta a crédito: ${firstRow.codigoCliente} - ${firstRow.cliente}`);
               continue;
             }
-            clientData = { id: clientMatch.id, name: clientMatch.fullName || clientMatch.name };
+            clientData = { id: clientMatch.id, name: clientMatch.fullName || clientMatch.name || firstRow.cliente };
           } else {
             clientData = clientMatch 
-              ? { id: clientMatch.id, name: clientMatch.fullName || clientMatch.name }
-              : null;
+              ? { id: clientMatch.id, name: clientMatch.fullName || clientMatch.name || firstRow.cliente }
+              : { id: null, name: firstRow.cliente }; // Para ventas no crédito, guardar el nombre aunque no exista
           }
 
           // Crear objeto de venta
@@ -379,11 +389,12 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
               <strong>Instrucciones:</strong>
               <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
                 <li>Descargue la plantilla Excel para ver el formato correcto</li>
-                <li>Complete una fila por cada producto: fecha (YYYY-MM-DD), cliente, producto, cantidad, precio, metodoPago</li>
+                <li>Complete una fila por cada producto: fecha (YYYY-MM-DD), codigoCliente, cliente, producto, cantidad, precio, metodoPago</li>
+                <li><strong>Importante:</strong> El código de cliente debe coincidir con el código en el sistema (ej: C040989)</li>
                 <li>Métodos de pago válidos: efectivo, tarjeta, credito, yape, plin, transferencia</li>
-                <li>Para ventas a crédito, el cliente debe existir en el sistema</li>
-                <li>Los productos se agruparán automáticamente por fecha, cliente y método de pago</li>
-                <li>No necesita crear los productos en el sistema previamente - se guardarán solo para detalle de venta</li>
+                <li>Para ventas a crédito, el cliente DEBE existir en el sistema con su código correcto</li>
+                <li>Los productos se agruparán automáticamente por fecha, código cliente y método de pago</li>
+                <li>Los productos no necesitan estar creados previamente - se guardarán solo para detalle de venta</li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -453,7 +464,7 @@ export const SalesImporter = ({ open, onClose, onSuccess }: SalesImporterProps) 
                     <div key={idx} className="p-3 border rounded-lg bg-muted/50">
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
-                          <strong>Cliente:</strong> {row.cliente}
+                          <strong>Cliente:</strong> {row.cliente} ({row.codigoCliente})
                         </div>
                         <div>
                           <strong>Fecha:</strong> {row.fecha}
