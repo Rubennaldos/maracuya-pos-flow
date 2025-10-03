@@ -584,10 +584,10 @@ export default function FamilyMenuWithDays({
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 lg:pb-0">
+    <div className="min-h-screen bg-background pb-20 lg:pb-0 overflow-x-hidden">
       {/* Header compacto */}
       <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-7xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
+        <div className="w-full max-w-7xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
               <h1 className="text-lg sm:text-xl font-bold">
@@ -601,7 +601,7 @@ export default function FamilyMenuWithDays({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-9 px-3 sm:px-4 text-xs sm:text-sm" 
+                className="h-9 px-3 sm:px-4 text-xs sm:text-sm flex-shrink-0" 
                 onClick={onLogout}
               >
                 Salir
@@ -611,7 +611,7 @@ export default function FamilyMenuWithDays({
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
+      <div className="w-full max-w-7xl mx-auto px-0 py-3 sm:px-4 sm:py-4">
         {/* Anuncios */}
         {announcements.length > 0 && (
           <div className="mb-4 md:mb-6">
@@ -651,74 +651,76 @@ export default function FamilyMenuWithDays({
           </div>
         )}
 
-        <div className="grid lg:grid-cols-4 gap-3 lg:gap-6">
+        <div className="grid lg:grid-cols-4 gap-3 lg:gap-6 px-3 sm:px-0">
           {/* Menú */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3 w-full overflow-hidden">
             {/* Carrusel de categorías mejorado */}
-            <div className="relative mb-4 sm:mb-5 bg-muted/30 rounded-2xl p-2">
-              {/* Botón scroll izquierda */}
-              <button
-                onClick={() => scrollCategories("left")}
-                className="hidden sm:flex absolute left-1 top-1/2 -translate-y-1/2 z-20 h-9 w-9 items-center justify-center rounded-full bg-background border-2 border-primary/20 shadow-lg hover:bg-primary hover:text-primary-foreground transition-all"
-                aria-label="Scroll izquierda"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
+            <div className="relative mb-4 sm:mb-5 -mx-3 sm:mx-0">
+              <div className="bg-muted/30 rounded-none sm:rounded-2xl p-2 overflow-hidden">
+                {/* Botón scroll izquierda */}
+                <button
+                  onClick={() => scrollCategories("left")}
+                  className="hidden sm:flex absolute left-1 top-1/2 -translate-y-1/2 z-20 h-9 w-9 items-center justify-center rounded-full bg-background border-2 border-primary/20 shadow-lg hover:bg-primary hover:text-primary-foreground transition-all"
+                  aria-label="Scroll izquierda"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
 
-              {/* Contenedor de categorías */}
-              <div
-                ref={categoriesScrollRef}
-                className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth px-10 sm:px-12 py-1"
-                style={{
-                  scrollbarWidth: "none",
-                  msOverflowStyle: "none",
-                }}
-              >
-                {categories.map((cat) => (
-                  <Button
-                    key={cat.id}
-                    data-category={cat.id}
-                    size="sm"
-                    variant={activeCat === cat.id ? "default" : "outline"}
-                    onClick={() => setActiveCat(cat.id)}
-                    className={`
-                      rounded-full px-5 h-10 text-sm font-semibold whitespace-nowrap flex-shrink-0
-                      transition-all duration-300 ease-out
-                      ${
+                {/* Contenedor de categorías con overflow controlado */}
+                <div
+                  ref={categoriesScrollRef}
+                  className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth px-2 sm:px-12 py-1"
+                  style={{
+                    scrollbarWidth: "none",
+                    msOverflowStyle: "none",
+                  }}
+                >
+                  {categories.map((cat) => (
+                    <Button
+                      key={cat.id}
+                      data-category={cat.id}
+                      size="sm"
+                      variant={activeCat === cat.id ? "default" : "outline"}
+                      onClick={() => setActiveCat(cat.id)}
+                      className={`
+                        rounded-full px-4 h-10 text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0
+                        transition-all duration-300 ease-out
+                        ${
+                          activeCat === cat.id
+                            ? "shadow-lg scale-105 sm:scale-110 bg-gradient-to-r from-primary to-primary-light"
+                            : "hover:scale-105 hover:shadow-md hover:border-primary/40"
+                        }
+                      `}
+                    >
+                      {cat.name}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Botón scroll derecha */}
+                <button
+                  onClick={() => scrollCategories("right")}
+                  className="hidden sm:flex absolute right-1 top-1/2 -translate-y-1/2 z-20 h-9 w-9 items-center justify-center rounded-full bg-background border-2 border-primary/20 shadow-lg hover:bg-primary hover:text-primary-foreground transition-all"
+                  aria-label="Scroll derecha"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+
+                {/* Indicador de scroll (móvil) - más pequeño */}
+                <div className="sm:hidden flex justify-center gap-1.5 mt-2 pb-1">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setActiveCat(cat.id)}
+                      className={`h-1 rounded-full transition-all duration-300 ${
                         activeCat === cat.id
-                          ? "shadow-lg scale-110 bg-gradient-to-r from-primary to-primary-light"
-                          : "hover:scale-105 hover:shadow-md hover:border-primary/40"
-                      }
-                    `}
-                  >
-                    {cat.name}
-                  </Button>
-                ))}
-              </div>
-
-              {/* Botón scroll derecha */}
-              <button
-                onClick={() => scrollCategories("right")}
-                className="hidden sm:flex absolute right-1 top-1/2 -translate-y-1/2 z-20 h-9 w-9 items-center justify-center rounded-full bg-background border-2 border-primary/20 shadow-lg hover:bg-primary hover:text-primary-foreground transition-all"
-                aria-label="Scroll derecha"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-
-              {/* Indicador de scroll (móvil) */}
-              <div className="sm:hidden flex justify-center gap-1.5 mt-3 pb-1">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setActiveCat(cat.id)}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
-                      activeCat === cat.id
-                        ? "w-8 bg-primary shadow-sm"
-                        : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                    }`}
-                    aria-label={`Ir a ${cat.name}`}
-                  />
-                ))}
+                          ? "w-6 bg-primary shadow-sm"
+                          : "w-1 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                      }`}
+                      aria-label={`Ir a ${cat.name}`}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 
