@@ -443,117 +443,145 @@ export default function FamilyMenuWithDays({
     };
 
     return (
-      <Card key={p.id} className="h-full shadow-sm hover:shadow-md transition-shadow">
-        {/* Imagen compacta en móvil (16:9) */}
-        {p.image && (
-          <div className="w-full overflow-hidden rounded-t-lg aspect-[16/9] md:aspect-[4/3]">
-            <img
-              src={p.image}
-              alt={p.name}
-              className="h-full w-full object-cover"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-        )}
+      <Card key={p.id} className="overflow-hidden hover:shadow-lg transition-all border-border/40">
+        <div className="flex gap-3 p-3">
+          {/* Imagen pequeña y cuadrada en móvil */}
+          {p.image && (
+            <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-muted">
+              <img
+                src={p.image}
+                alt={p.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+          )}
 
-        <CardContent className="p-3 md:p-4 space-y-3">
-          <div>
-            <h3 className="font-semibold text-sm md:text-base line-clamp-2">{p.name}</h3>
-            {p.description && (
-              <p className="text-xs md:text-sm text-muted-foreground mt-1 line-clamp-2">
-                {p.description}
-              </p>
-            )}
-          </div>
+          {/* Contenido */}
+          <div className="flex-1 min-w-0 flex flex-col justify-between">
+            <div className="space-y-1">
+              <h3 className="font-semibold text-sm leading-tight line-clamp-1">{p.name}</h3>
+              
+              {/* Precio y fecha */}
+              <div className="flex items-baseline gap-2">
+                <span className="font-bold text-primary text-base">{PEN(p.price)}</span>
+                {p.type === "varied" && (
+                  <span className="text-[10px] text-muted-foreground">/ día</span>
+                )}
+              </div>
 
-          <div className="flex items-end justify-between gap-2">
-            <div className="min-w-0">
-              <span className="font-bold text-base md:text-lg">{PEN(p.price)}</span>
-              {p.type === "varied" && (
-                <p className="text-[11px] md:text-xs text-muted-foreground">por día</p>
-              )}
               {p.type === "lunch" && p.specificDate && (
-                <p className="text-[11px] md:text-xs text-muted-foreground">
+                <p className="text-[10px] text-muted-foreground">
                   {new Date(p.specificDate + "T12:00:00").toLocaleDateString("es-PE", {
-                    weekday: "long",
+                    weekday: "short",
                     day: "numeric",
                     month: "short",
                   })}
                 </p>
               )}
 
-              {/* Detalle de almuerzo */}
-              {p.type === "lunch" && (
-                <ul className="mt-2 text-[12px] md:text-sm text-muted-foreground space-y-0.5">
-                  {(p as any).entrada && (
-                    <li>🥗 <span className="font-medium">Entrada:</span> {(p as any).entrada}</li>
-                  )}
-                  {(p as any).segundo && (
-                    <li>🍽️ <span className="font-medium">Segundo:</span> {(p as any).segundo}</li>
-                  )}
-                  {(p as any).postre && (
-                    <li>🍰 <span className="font-medium">Postre:</span> {(p as any).postre}</li>
-                  )}
-                  {(p as any).refresco && (
-                    <li>🥤 <span className="font-medium">Refresco:</span> {(p as any).refresco}</li>
-                  )}
-                </ul>
-              )}
-
-              {/* Agregados visibles en la tarjeta */}
-              {p.addons && p.addons.length > 0 && (
-                <div className="mt-2">
-                  <div className="text-[11px] font-medium text-muted-foreground mb-1">
-                    Agregados disponibles:
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {p.addons
-                      .filter((a) => a && a.active !== false)
-                      .map((a, idx) => (
-                        <Badge
-                          key={`${a.id || idx}`}
-                          variant="outline"
-                          className="text-[10px] md:text-[11px] rounded-full"
-                        >
-                          {a.name} (+{PEN(Number(a.price) || 0)})
-                        </Badge>
-                      ))}
-                  </div>
-                </div>
+              {/* Descripción breve solo en desktop */}
+              {p.description && (
+                <p className="hidden sm:block text-xs text-muted-foreground line-clamp-1">
+                  {p.description}
+                </p>
               )}
             </div>
 
-            <Button onClick={handleAddToCart} size="sm" className="rounded-full px-4">
-              Agregar
+            {/* Botón de acción */}
+            <Button 
+              onClick={handleAddToCart} 
+              size="sm" 
+              className="mt-2 w-full sm:w-auto rounded-full text-xs h-8"
+            >
+              + Agregar
             </Button>
           </div>
-        </CardContent>
+        </div>
+
+        {/* Detalles expandibles del almuerzo */}
+        {p.type === "lunch" && (
+          <div className="px-3 pb-3 pt-0 space-y-1 text-[11px] text-muted-foreground">
+            {(p as any).entrada && (
+              <div className="flex gap-1.5">
+                <span className="text-[10px]">🥗</span>
+                <span className="line-clamp-1">{(p as any).entrada}</span>
+              </div>
+            )}
+            {(p as any).segundo && (
+              <div className="flex gap-1.5">
+                <span className="text-[10px]">🍽️</span>
+                <span className="line-clamp-1">{(p as any).segundo}</span>
+              </div>
+            )}
+            {(p as any).postre && (
+              <div className="flex gap-1.5">
+                <span className="text-[10px]">🍰</span>
+                <span className="line-clamp-1">{(p as any).postre}</span>
+              </div>
+            )}
+            {(p as any).refresco && (
+              <div className="flex gap-1.5">
+                <span className="text-[10px]">🥤</span>
+                <span className="line-clamp-1">{(p as any).refresco}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Agregados disponibles */}
+        {p.addons && p.addons.length > 0 && (
+          <div className="px-3 pb-3 pt-0">
+            <div className="flex flex-wrap gap-1">
+              {p.addons
+                .filter((a) => a && a.active !== false)
+                .map((a, idx) => (
+                  <Badge
+                    key={`${a.id || idx}`}
+                    variant="secondary"
+                    className="text-[9px] h-5 px-2 rounded-full"
+                  >
+                    +{a.name}
+                  </Badge>
+                ))}
+            </div>
+          </div>
+        )}
       </Card>
     );
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-3 md:py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-lg md:text-xl font-bold">¡Hola, {resolvedName}!</h1>
-              <p className="text-xs md:text-sm text-muted-foreground">Código: {client.code}</p>
+    <div className="min-h-screen bg-background pb-20 lg:pb-0">
+      {/* Header compacto */}
+      <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="max-w-7xl mx-auto px-3 py-2.5 sm:px-4 sm:py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base sm:text-lg font-bold truncate">
+                ¡Hola, {resolvedName}!
+              </h1>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                Código: {client.code}
+              </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 sm:gap-2">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="rounded-full"
+                className="h-8 px-2 sm:px-3 text-xs"
                 onClick={() => setShowHistory(!showHistory)}
               >
-                {showHistory ? "Ocultar historial" : "Ver historial"}
+                {showHistory ? "Ocultar" : "Historial"}
               </Button>
               {onLogout && (
-                <Button variant="outline" size="sm" className="rounded-full" onClick={onLogout}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 sm:px-3 text-xs" 
+                  onClick={onLogout}
+                >
                   Salir
                 </Button>
               )}
@@ -562,7 +590,7 @@ export default function FamilyMenuWithDays({
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-5 md:py-6">
+      <div className="max-w-7xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
         {/* Anuncios */}
         {announcements.length > 0 && (
           <div className="mb-4 md:mb-6">
@@ -602,27 +630,27 @@ export default function FamilyMenuWithDays({
           </div>
         )}
 
-        <div className="grid lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="grid lg:grid-cols-4 gap-3 lg:gap-6">
           {/* Menú */}
           <div className="lg:col-span-3">
-            {/* Categorías – chips redondos, scroll horizontal */}
-            <div className="flex gap-2 mb-4 md:mb-6 overflow-x-auto no-scrollbar snap-x snap-mandatory">
+            {/* Categorías optimizadas */}
+            <div className="flex gap-1.5 mb-3 sm:mb-4 overflow-x-auto pb-2 scrollbar-hide">
               {categories.map((cat) => (
                 <Button
                   key={cat.id}
                   size="sm"
                   variant={activeCat === cat.id ? "default" : "outline"}
                   onClick={() => setActiveCat(cat.id)}
-                  className="rounded-full px-3 py-1 whitespace-nowrap snap-start"
+                  className="rounded-full px-3 h-8 text-xs whitespace-nowrap flex-shrink-0"
                 >
                   {cat.name}
                 </Button>
               ))}
             </div>
 
-            {/* Productos */}
+            {/* Productos en lista compacta */}
             {activeCat && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+              <div className="space-y-2 sm:space-y-3">
                 {(productsByCategory[activeCat] || []).map((product) => (
                   <ProductCard key={product.id} p={product} />
                 ))}
@@ -630,52 +658,41 @@ export default function FamilyMenuWithDays({
             )}
           </div>
 
-          {/* Carrito */}
-          <div className="lg:col-span-1" ref={cartRef}>
-            <Card className="sticky top-4">
-              <CardHeader className="pb-2 md:pb-3">
-                <CardTitle className="text-base md:text-lg">Tu pedido</CardTitle>
+          {/* Carrito lateral (desktop) */}
+          <div className="hidden lg:block lg:col-span-1" ref={cartRef}>
+            <Card className="sticky top-20">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Tu pedido</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {Object.keys(cart).length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">
-                    Tu carrito está vacío
+                  <p className="text-muted-foreground text-center py-8 text-sm">
+                    Carrito vacío
                   </p>
                 ) : (
                   <>
-                    <div className="space-y-3">
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
                       {Object.entries(cart).map(([key, item]) => (
-                        <div key={key} className="flex justify-between items-start">
+                        <div key={key} className="flex gap-2 items-start p-2 rounded-lg bg-muted/30">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm truncate">{item.name}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-[11px] text-muted-foreground">
                               {item.qty} × {PEN(item.price)}
                               {item.type === "varied" && item.selectedDays?.length ? (
-                                <>
-                                  <span> × {item.selectedDays.length} días</span>
-                                  {item.addonsPrice ? (
-                                    <span> + agregados ({PEN(item.addonsPrice)}/día)</span>
-                                  ) : null}
-                                </>
+                                <span> × {item.selectedDays.length}d</span>
                               ) : null}
                             </p>
-                            {item.selectedDays && (
-                              <p className="text-xs text-muted-foreground">
-                                Días:{" "}
-                                {item.selectedDays
-                                  .map((date) =>
-                                    new Date(date + "T12:00:00").toLocaleDateString("es-PE", {
-                                      weekday: "short",
-                                      day: "numeric",
-                                    })
-                                  )
-                                  .join(", ")}
-                              </p>
-                            )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">{PEN(item.subtotal)}</span>
-                            <Button variant="outline" size="sm" onClick={() => removeFromCart(key)}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-sm whitespace-nowrap">
+                              {PEN(item.subtotal)}
+                            </span>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => removeFromCart(key)}
+                              className="h-7 w-7 p-0 rounded-full"
+                            >
                               -
                             </Button>
                           </div>
@@ -686,7 +703,7 @@ export default function FamilyMenuWithDays({
                     <div className="border-t pt-3">
                       <div className="flex justify-between items-center font-bold">
                         <span>Total:</span>
-                        <span>{PEN(total)}</span>
+                        <span className="text-primary">{PEN(total)}</span>
                       </div>
                     </div>
 
@@ -695,7 +712,7 @@ export default function FamilyMenuWithDays({
                         {posting ? "Enviando..." : "Confirmar pedido"}
                       </Button>
                       <Button variant="outline" className="w-full" onClick={clearCart}>
-                        Limpiar carrito
+                        Limpiar
                       </Button>
                     </div>
                   </>
@@ -706,23 +723,35 @@ export default function FamilyMenuWithDays({
         </div>
       </div>
 
-      {/* FAB carrito (solo móvil) */}
-      {Object.keys(cart).length > 0 && (
-        <Button
-          onClick={() => cartRef.current?.scrollIntoView({ behavior: "smooth" })}
-          className="lg:hidden fixed bottom-20 right-4 rounded-full shadow-md px-4 h-11"
-        >
-          Ver carrito • {Object.keys(cart).length}
-        </Button>
-      )}
-
       {/* Barra inferior fija (móvil) */}
       {Object.keys(cart).length > 0 && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 bg-white border-t p-3 flex items-center justify-between">
-          <div className="font-semibold">Total: {PEN(total)}</div>
-          <Button size="sm" className="rounded-full px-5" onClick={openConfirm} disabled={posting}>
-            Confirmar
-          </Button>
+        <div className="lg:hidden fixed bottom-0 inset-x-0 bg-background/95 backdrop-blur border-t shadow-lg z-50">
+          <div className="px-3 py-3">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground">
+                  {Object.keys(cart).length} producto{Object.keys(cart).length > 1 ? "s" : ""}
+                </p>
+                <p className="font-bold text-lg text-primary">{PEN(total)}</p>
+              </div>
+              <Button 
+                size="sm" 
+                className="rounded-full px-6 h-10 shadow-md" 
+                onClick={openConfirm} 
+                disabled={posting}
+              >
+                {posting ? "Enviando..." : "Confirmar"}
+              </Button>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={clearCart}
+              className="w-full h-8 text-xs"
+            >
+              Limpiar carrito
+            </Button>
+          </div>
         </div>
       )}
 
