@@ -619,12 +619,6 @@ export default function FamilyMenuWithDays({
           </div>
         )}
 
-        {/* Historial */}
-        {showHistory && (
-          <div className="mb-6">
-            <FamilyOrderHistory clientCode={client.code} />
-          </div>
-        )}
 
         {/* Mensaje */}
         {message && (

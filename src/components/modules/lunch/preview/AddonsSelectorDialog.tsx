@@ -83,25 +83,25 @@ export default function AddonsSelectorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* p-0 para poder tener header + scroll + footer sticky */}
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
-        {/* Header */}
-        <div className="px-5 pt-5">
+      {/* Modal compacto para móvil */}
+      <DialogContent className="sm:max-w-md p-0 overflow-hidden max-h-[85vh]">
+        {/* Header compacto */}
+        <div className="px-4 pt-4 pb-2">
           <DialogHeader className="p-0">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Plus className="h-5 w-5" />
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <Plus className="h-4 w-4" />
               Agregar extras
             </DialogTitle>
             {productName ? (
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground mt-0.5">
                 Para: <span className="font-medium">{productName}</span>
               </p>
             ) : null}
           </DialogHeader>
         </div>
 
-        {/* Contenido scrollable (dejamos espacio para el footer sticky) */}
-        <div className="px-4 pb-28 pt-4 overflow-y-auto max-h-[70vh]">
+        {/* Contenido scrollable compacto */}
+        <div className="px-3 pb-24 pt-2 overflow-y-auto max-h-[50vh]">
           {activeAddons.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
               Este producto no tiene agregados disponibles
@@ -175,27 +175,29 @@ export default function AddonsSelectorDialog({
           )}
         </div>
 
-        {/* Footer sticky: total + acciones */}
-        <div className="sticky bottom-0 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-t px-4 py-3">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium">Total agregados</span>
+        {/* Footer sticky compacto */}
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-t px-3 py-2.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium">Total agregados</span>
             <span className="text-sm font-semibold text-primary">
               {PEN(totalAddonsPrice)}
             </span>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
-              className="flex-1"
+              size="sm"
+              className="flex-1 h-9"
               onClick={() => onOpenChange(false)}
             >
               Cancelar
             </Button>
             <Button
               type="button"
-              className="flex-1"
+              size="sm"
+              className="flex-1 h-9"
               onClick={onConfirm}
               disabled={!!confirmDisabled}
             >
