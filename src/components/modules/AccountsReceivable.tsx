@@ -245,9 +245,11 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [editingPayment, setEditingPayment] = useState<any>(null);
   const [showEditPaymentDialog, setShowEditPaymentDialog] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [customPaymentAmount, setCustomPaymentAmount] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("efectivo");
   const [paymentDate, setPaymentDate] = useState<Date>(new Date());
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]); // guarda entryId
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showSalesDetailDialog, setShowSalesDetailDialog] = useState(false);
@@ -608,32 +610,45 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   };
 
   /* ===== Procesar pago (marca paid por entryId) ===== */
-  const processPayment = async () => {
-    if (!selectedDebtor || paymentAmount <= 0 || selectedInvoices.length === 0) return;
+  const processPayment = async (isPartialPayment: boolean = false) => {
+    if (!selectedDebtor || selectedInvoices.length === 0) return;
+
+    const amountToPay = isPartialPayment 
+      ? parseFloat(customPaymentAmount) || 0 
+      : paymentAmount;
+
+    if (amountToPay <= 0) {
+      alert("Por favor ingresa un monto válido");
+      return;
+    }
 
     try {
       const paymentData = {
         clientId: selectedDebtor.id,
         clientName: selectedDebtor.name,
-        amount: paymentAmount,
+        amount: amountToPay,
         method: paymentMethod,
         date: paymentDate.toISOString(),
         invoices: selectedInvoices, // entryIds
-        status: "paid",
+        status: isPartialPayment ? "partial" : "paid",
         paidAt: new Date().toISOString(),
         paidBy: "sistema",
+        isPartial: isPartialPayment,
       };
 
       await RTDBHelper.pushData("payments", paymentData);
 
-      const updates: Record<string, any> = {};
-      selectedInvoices.forEach(entryId => {
-        const base = `${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${entryId}`;
-        updates[`${base}/status`] = "paid";
-        updates[`${base}/paidAt`] = new Date().toISOString();
-        updates[`${base}/method`] = paymentMethod;
-      });
-      if (Object.keys(updates).length > 0) await RTDBHelper.updateData(updates);
+      // Solo marcar como pagadas si es pago completo
+      if (!isPartialPayment) {
+        const updates: Record<string, any> = {};
+        selectedInvoices.forEach(entryId => {
+          const base = `${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${entryId}`;
+          updates[`${base}/status`] = "paid";
+          updates[`${base}/paidAt`] = new Date().toISOString();
+          updates[`${base}/method`] = paymentMethod;
+        });
+        if (Object.keys(updates).length > 0) await RTDBHelper.updateData(updates);
+      }
 
       // Recargar datos
       const [updatedDebtors, updatedPaid] = await Promise.all([
@@ -646,7 +661,9 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       setShowPaymentDialog(false);
       setShowCXCDialog(false);
       setPaymentAmount(0);
+      setCustomPaymentAmount("");
       setSelectedInvoices([]);
+      setLastSelectedIndex(null);
     } catch (error) {
       console.error("Error processing payment:", error);
     }
@@ -1294,12 +1311,12 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* CXC Dialog - Estilo Excel con selección múltiple */}
+      {/* CXC Dialog - Estilo Excel con selección múltiple y Shift */}
       <Dialog open={showCXCDialog} onOpenChange={setShowCXCDialog}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Cuentas por Cobrar - {selectedDebtor?.name}</DialogTitle>
-            <DialogDescription>Selecciona las facturas y procesa el pago</DialogDescription>
+            <DialogDescription>Selecciona las facturas y procesa el pago (Shift+Click para rango)</DialogDescription>
           </DialogHeader>
 
           {selectedDebtor && (
@@ -1324,6 +1341,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   onClick={() => {
                     setSelectedInvoices([]);
                     setPaymentAmount(0);
+                    setLastSelectedIndex(null);
                   }}
                 >
                   Deseleccionar
@@ -1347,6 +1365,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                               setSelectedInvoices([]);
                               setPaymentAmount(0);
                             }
+                            setLastSelectedIndex(null);
                           }}
                         />
                       </TableHead>
@@ -1359,20 +1378,42 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   <TableBody>
                     {selectedDebtor.invoices
                       .sort((a: any, b: any) => a.dateSort - b.dateSort)
-                      .map((invoice: any) => (
+                      .map((invoice: any, index: number) => (
                         <TableRow
                           key={invoice.entryId}
                           className={cn(
                             "cursor-pointer hover:bg-muted/50",
                             selectedInvoices.includes(invoice.entryId) && "bg-primary/5"
                           )}
-                          onClick={() => {
-                            if (selectedInvoices.includes(invoice.entryId)) {
-                              setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
-                              setPaymentAmount(prev => prev - invoice.amount);
+                          onClick={(e) => {
+                            const sortedInvoices = [...selectedDebtor.invoices].sort((a: any, b: any) => a.dateSort - b.dateSort);
+                            
+                            // Selección con Shift
+                            if (e.shiftKey && lastSelectedIndex !== null) {
+                              const start = Math.min(lastSelectedIndex, index);
+                              const end = Math.max(lastSelectedIndex, index);
+                              const rangeEntryIds = sortedInvoices.slice(start, end + 1).map((inv: any) => inv.entryId);
+                              
+                              // Agregar todos los del rango
+                              const newSelected = [...new Set([...selectedInvoices, ...rangeEntryIds])];
+                              setSelectedInvoices(newSelected);
+                              
+                              // Calcular total
+                              const total = newSelected.reduce((sum, id) => {
+                                const inv = sortedInvoices.find((i: any) => i.entryId === id);
+                                return sum + (inv?.amount || 0);
+                              }, 0);
+                              setPaymentAmount(total);
                             } else {
-                              setSelectedInvoices(prev => [...prev, invoice.entryId]);
-                              setPaymentAmount(prev => prev + invoice.amount);
+                              // Selección normal
+                              if (selectedInvoices.includes(invoice.entryId)) {
+                                setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
+                                setPaymentAmount(prev => prev - invoice.amount);
+                              } else {
+                                setSelectedInvoices(prev => [...prev, invoice.entryId]);
+                                setPaymentAmount(prev => prev + invoice.amount);
+                              }
+                              setLastSelectedIndex(index);
                             }
                           }}
                         >
@@ -1387,6 +1428,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                                   setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
                                   setPaymentAmount(prev => prev - invoice.amount);
                                 }
+                                setLastSelectedIndex(index);
                               }}
                             />
                           </TableCell>
@@ -1458,7 +1500,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                     <span className="font-semibold">{selectedInvoices.length}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Total a pagar:</span>
+                    <span className="text-sm font-medium">Total seleccionado:</span>
                     <span className="text-2xl font-bold text-primary">
                       S/ {paymentAmount.toFixed(2)}
                     </span>
@@ -1467,12 +1509,28 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                     <span>Deuda total del cliente:</span>
                     <span>S/ {selectedDebtor.totalDebt.toFixed(2)}</span>
                   </div>
+
+                  {/* Campo para abono parcial */}
+                  <div className="space-y-2 pt-2 border-t">
+                    <label className="text-sm font-medium">Monto de Abono Parcial (opcional)</label>
+                    <Input
+                      type="number"
+                      placeholder="Ingresa el monto del abono..."
+                      value={customPaymentAmount}
+                      onChange={(e) => setCustomPaymentAmount(e.target.value)}
+                      step="0.01"
+                      min="0"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Deja vacío para pagar el total seleccionado
+                    </p>
+                  </div>
                 </div>
 
                 {/* Botones de acción */}
                 <div className="flex gap-2">
                   <Button
-                    onClick={processPayment}
+                    onClick={() => processPayment(false)}
                     className="flex-1"
                     disabled={selectedInvoices.length === 0}
                   >
@@ -1480,11 +1538,22 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                     Pagar Completo (S/ {paymentAmount.toFixed(2)})
                   </Button>
                   <Button
+                    onClick={() => processPayment(true)}
+                    variant="secondary"
+                    className="flex-1"
+                    disabled={selectedInvoices.length === 0 || !customPaymentAmount || parseFloat(customPaymentAmount) <= 0}
+                  >
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Abonar S/ {customPaymentAmount || "0.00"}
+                  </Button>
+                  <Button
                     variant="outline"
                     onClick={() => {
                       setShowCXCDialog(false);
                       setSelectedInvoices([]);
                       setPaymentAmount(0);
+                      setCustomPaymentAmount("");
+                      setLastSelectedIndex(null);
                     }}
                   >
                     Cancelar
