@@ -83,17 +83,23 @@ export default function AddonsSelectorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Modal compacto para móvil */}
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden max-h-[85vh]">
-        {/* Header compacto */}
-        <div className="px-4 pt-4 pb-2">
-          <DialogHeader className="p-0">
-            <DialogTitle className="flex items-center gap-2 text-sm">
-              <Plus className="h-4 w-4" />
-              Agregar extras
+      {/* Modal más compacto */}
+      <DialogContent
+        className={cn(
+          "p-0 overflow-hidden",
+          // ancho contenido y altura
+          "w-[360px] sm:max-w-[420px] max-h-[80vh] rounded-lg"
+        )}
+      >
+        {/* Header más compacto */}
+        <div className="px-3 pt-3 pb-1">
+          <DialogHeader className="p-0 space-y-0.5">
+            <DialogTitle className="flex items-center gap-1.5 text-sm leading-none tracking-tight">
+              <Plus className="h-3.5 w-3.5" />
+              <span className="font-medium">Agregar extras</span>
             </DialogTitle>
             {productName ? (
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <p className="text-[11px] leading-none text-muted-foreground mt-0.5">
                 Para: <span className="font-medium">{productName}</span>
               </p>
             ) : null}
@@ -118,7 +124,7 @@ export default function AddonsSelectorDialog({
                     key={id}
                     whileTap={{ scale: 0.97 }}
                     className={cn(
-                      "relative border rounded-full px-3 py-2 text-sm",
+                      "relative border rounded-full px-3 py-1.5 text-[13px]",
                       "flex items-center gap-2 select-none shadow-sm",
                       selected
                         ? "border-primary bg-primary/5"
@@ -133,12 +139,15 @@ export default function AddonsSelectorDialog({
                       aria-pressed={selected}
                     >
                       <span className="font-medium">{addon.name}</span>
-                      <Badge variant="secondary" className="text-[11px]">
+                      <Badge
+                        variant="secondary"
+                        className="h-5 px-1.5 text-[11px] leading-none"
+                      >
                         {PEN(addon.price)}
                       </Badge>
                     </button>
 
-                    {/* Controles de cantidad (32px) solo si está seleccionado */}
+                    {/* Controles de cantidad compactos (32px) solo si está seleccionado */}
                     {selected && (
                       <div className="ml-1 flex items-center gap-1">
                         <Button
