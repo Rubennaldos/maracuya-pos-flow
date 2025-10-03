@@ -587,36 +587,26 @@ export default function FamilyMenuWithDays({
     <div className="min-h-screen bg-background pb-20 lg:pb-0">
       {/* Header compacto */}
       <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-7xl mx-auto px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="max-w-7xl mx-auto px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <h1 className="text-base sm:text-lg font-bold truncate">
+              <h1 className="text-lg sm:text-xl font-bold">
                 ¡Hola, {resolvedName}!
               </h1>
-              <p className="text-[10px] sm:text-xs text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Código: {client.code}
               </p>
             </div>
-            <div className="flex gap-1.5 sm:gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2 sm:px-3 text-xs"
-                onClick={() => setShowHistory(!showHistory)}
+            {onLogout && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-9 px-3 sm:px-4 text-xs sm:text-sm" 
+                onClick={onLogout}
               >
-                {showHistory ? "Ocultar" : "Historial"}
+                Salir
               </Button>
-              {onLogout && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 px-2 sm:px-3 text-xs" 
-                  onClick={onLogout}
-                >
-                  Salir
-                </Button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
