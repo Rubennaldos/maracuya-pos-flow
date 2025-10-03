@@ -205,23 +205,7 @@ export default function Familias() {
                 onLogout={handleLogout} 
               />
             ) : (
-              <Card className="w-full max-w-md mx-auto">
-                <CardHeader>
-                  <CardTitle>Módulo no disponible</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    El módulo de pedidos no está disponible en este momento.
-                  </p>
-                  <Button
-                    onClick={handleBackToDashboard}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    Volver al inicio
-                  </Button>
-                </CardContent>
-              </Card>
+              <MaintenancePage whatsappPhone={whatsappPhone} />
             )
           ) : activeModule === "consumo" ? (
             /* Módulo de Detalle de Consumo */
@@ -230,23 +214,7 @@ export default function Familias() {
                 client={{ code: client.code, name: resolvedName }} 
               />
             ) : (
-              <Card className="w-full max-w-md mx-auto">
-                <CardHeader>
-                  <CardTitle>Módulo no disponible</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    El módulo de detalle de consumo no está disponible en este momento.
-                  </p>
-                  <Button
-                    onClick={handleBackToDashboard}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    Volver al inicio
-                  </Button>
-                </CardContent>
-              </Card>
+              <MaintenancePage whatsappPhone={whatsappPhone} />
             )
           ) : (
             /* Dashboard principal con módulos disponibles */
