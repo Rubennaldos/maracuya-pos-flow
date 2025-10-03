@@ -68,6 +68,7 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
   const [portalModules, setPortalModules] = useState({
     portalEnabled: true,
     pedidos: { enabled: true, name: "Pedidos de Almuerzo" },
+    consumo: { enabled: true, name: "Detalle de Consumo" },
   });
   const [loading, setLoading] = useState(false);
 
@@ -1049,6 +1050,32 @@ export default function LunchAdmin({ onBack }: LunchAdminProps = {}) {
                             ...portalModules,
                             pedidos: {
                               ...portalModules.pedidos,
+                              enabled: v,
+                            },
+                          })
+                        }
+                        disabled={!portalModules.portalEnabled}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-base font-medium">
+                          {portalModules.consumo?.name || "Detalle de Consumo"}
+                        </Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Muestra el historial de compras y consumo del estudiante
+                        </p>
+                      </div>
+                      <Switch
+                        checked={portalModules.consumo?.enabled ?? true}
+                        onCheckedChange={(v) =>
+                          setPortalModules({
+                            ...portalModules,
+                            consumo: {
+                              ...portalModules.consumo,
                               enabled: v,
                             },
                           })

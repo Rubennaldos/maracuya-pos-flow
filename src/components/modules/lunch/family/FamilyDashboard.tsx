@@ -2,13 +2,14 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, History, ArrowRight } from "lucide-react";
+import { ShoppingCart, History, ArrowRight, Receipt } from "lucide-react";
 
 type FamilyDashboardProps = {
   clientName: string;
   clientCode: string;
   availableModules: {
     pedidos?: { enabled: boolean; name: string };
+    consumo?: { enabled: boolean; name: string };
   };
   onModuleSelect: (moduleId: string) => void;
   onViewHistory: () => void;
@@ -72,6 +73,28 @@ export default function FamilyDashboard({
                 </CardTitle>
                 <CardDescription>
                   Realiza tus pedidos de almuerzo para la semana
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+
+          {availableModules.consumo?.enabled && (
+            <Card 
+              className="cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-200 group"
+              onClick={() => onModuleSelect("consumo")}
+            >
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="bg-secondary/10 p-3 rounded-lg">
+                    <Receipt className="h-6 w-6 text-secondary" />
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                </div>
+                <CardTitle className="mt-4">
+                  {availableModules.consumo.name}
+                </CardTitle>
+                <CardDescription>
+                  Revisa el historial de consumo y compras
                 </CardDescription>
               </CardHeader>
             </Card>

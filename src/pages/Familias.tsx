@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import FamilyLogin from "@/components/modules/FamilyLogin";
 import FamilyDashboard from "@/components/modules/lunch/family/FamilyDashboard";
 import PedidosModule from "@/components/modules/lunch/family/PedidosModule";
+import ConsumoModule from "@/components/modules/lunch/family/ConsumoModule";
 import FamilyOrderHistory from "@/components/modules/lunch/FamilyOrderHistory";
 import MaintenancePage from "@/components/ui/MaintenancePage";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -31,6 +32,7 @@ export default function Familias() {
   const [portalModules, setPortalModules] = useState({
     portalEnabled: true,
     pedidos: { enabled: true, name: "Pedidos de Almuerzo" },
+    consumo: { enabled: true, name: "Detalle de Consumo" },
   });
   
   // Control de navegación entre dashboard y módulos
@@ -210,6 +212,31 @@ export default function Familias() {
                 <CardContent>
                   <p className="text-muted-foreground mb-4">
                     El módulo de pedidos no está disponible en este momento.
+                  </p>
+                  <Button
+                    onClick={handleBackToDashboard}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Volver al inicio
+                  </Button>
+                </CardContent>
+              </Card>
+            )
+          ) : activeModule === "consumo" ? (
+            /* Módulo de Detalle de Consumo */
+            portalModules.consumo?.enabled ? (
+              <ConsumoModule 
+                client={{ code: client.code, name: resolvedName }} 
+              />
+            ) : (
+              <Card className="w-full max-w-md mx-auto">
+                <CardHeader>
+                  <CardTitle>Módulo no disponible</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground mb-4">
+                    El módulo de detalle de consumo no está disponible en este momento.
                   </p>
                   <Button
                     onClick={handleBackToDashboard}
