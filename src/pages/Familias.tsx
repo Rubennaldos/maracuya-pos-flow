@@ -50,10 +50,16 @@ export default function Familias() {
         setPortalOpen(settings?.isOpen ?? true);
         setWhatsappPhone(settings?.whatsapp?.phone || "");
         
-        // Cargar módulos del portal
+        // Cargar módulos del portal con valores por defecto
         const modulesData = await RTDBHelper.getData<any>("family_portal_modules");
         if (modulesData) {
-          setPortalModules(modulesData);
+          // Combinar con valores por defecto para asegurar que siempre existan todos los módulos
+          setPortalModules({
+            portalEnabled: modulesData.portalEnabled ?? true,
+            pedidos: modulesData.pedidos ?? { enabled: true, name: "Pedidos de Almuerzo" },
+            consumo: modulesData.consumo ?? { enabled: true, name: "Detalle de Consumo" },
+            pagos: modulesData.pagos ?? { enabled: true, name: "Mis Pagos" },
+          });
         }
       } catch (error) {
         console.error("Error loading portal settings:", error);
