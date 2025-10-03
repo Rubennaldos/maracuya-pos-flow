@@ -4,6 +4,7 @@ import FamilyLogin from "@/components/modules/FamilyLogin";
 import FamilyDashboard from "@/components/modules/lunch/family/FamilyDashboard";
 import PedidosModule from "@/components/modules/lunch/family/PedidosModule";
 import ConsumoModule from "@/components/modules/lunch/family/ConsumoModule";
+import PaymentsModule from "@/components/modules/lunch/family/PaymentsModule";
 import FamilyOrderHistory from "@/components/modules/lunch/FamilyOrderHistory";
 import MaintenancePage from "@/components/ui/MaintenancePage";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -33,6 +34,7 @@ export default function Familias() {
     portalEnabled: true,
     pedidos: { enabled: true, name: "Pedidos de Almuerzo" },
     consumo: { enabled: true, name: "Detalle de Consumo" },
+    pagos: { enabled: true, name: "Mis Pagos" },
   });
   
   // Control de navegación entre dashboard y módulos
@@ -245,6 +247,17 @@ export default function Familias() {
             portalModules.consumo?.enabled ? (
               <ConsumoModule 
                 client={{ code: client.code, name: resolvedName }} 
+              />
+            ) : (
+              <MaintenancePage whatsappPhone={whatsappPhone} />
+            )
+          ) : activeModule === "pagos" ? (
+            /* Módulo de Pagos */
+            portalModules.pagos?.enabled ? (
+              <PaymentsModule
+                clientId={client.code}
+                clientName={resolvedName || client.name || client.code}
+                whatsappPhone={whatsappPhone}
               />
             ) : (
               <MaintenancePage whatsappPhone={whatsappPhone} />

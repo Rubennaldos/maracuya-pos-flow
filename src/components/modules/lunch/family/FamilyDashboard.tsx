@@ -2,7 +2,7 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, History, ArrowRight, Receipt } from "lucide-react";
+import { ShoppingCart, History, ArrowRight, Receipt, DollarSign } from "lucide-react";
 
 type FamilyDashboardProps = {
   clientName: string;
@@ -10,6 +10,7 @@ type FamilyDashboardProps = {
   availableModules: {
     pedidos?: { enabled: boolean; name: string };
     consumo?: { enabled: boolean; name: string };
+    pagos?: { enabled: boolean; name: string };
   };
   onModuleSelect: (moduleId: string) => void;
   onViewHistory: () => void;
@@ -87,20 +88,45 @@ export default function FamilyDashboard({
             </CardHeader>
           </Card>
 
-          {/* Placeholder para futuros módulos */}
-          <Card className="border-dashed opacity-50">
-            <CardHeader>
-              <div className="bg-muted p-3 rounded-lg w-fit">
-                <div className="h-6 w-6" />
-              </div>
-              <CardTitle className="mt-4 text-muted-foreground">
-                Próximamente
-              </CardTitle>
-              <CardDescription>
-                Más módulos estarán disponibles pronto
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          {/* Módulo de Pagos */}
+          {availableModules.pagos?.enabled && (
+            <Card 
+              className="cursor-pointer hover:border-primary hover:shadow-lg transition-all duration-200 group"
+              onClick={() => onModuleSelect("pagos")}
+            >
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="bg-green-100 p-3 rounded-lg">
+                    <DollarSign className="h-6 w-6 text-green-600" />
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                </div>
+                <CardTitle className="mt-4">
+                  {availableModules.pagos?.name || "Mis Pagos"}
+                </CardTitle>
+                <CardDescription>
+                  Gestiona tus pagos y deudas pendientes
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+
+          {/* Placeholder para futuros módulos - solo si no hay módulo de pagos */}
+          {!availableModules.pagos?.enabled && (
+            <Card className="border-dashed opacity-50">
+              <CardHeader>
+                <div className="bg-muted p-3 rounded-lg w-fit">
+                  <div className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4 text-muted-foreground">
+                  Próximamente
+                </CardTitle>
+                <CardDescription>
+                  Más módulos estarán disponibles pronto
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
         </div>
       </div>
     </div>
