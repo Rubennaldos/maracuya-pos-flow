@@ -22,6 +22,7 @@ import {
   Printer,
   X,
   CalendarRange,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -34,6 +35,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { SalesImporter } from "./SalesImporter";
 
 /* =========================================
    Types
@@ -106,6 +108,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
   const [selectedSale, setSelectedSale] = useState<UISale | null>(null);
   const [editingSale, setEditingSale] = useState<UISale | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [showImporter, setShowImporter] = useState(false);
 
   useEffect(() => {
     loadSales();
@@ -321,6 +324,10 @@ await RTDBHelper.deleteSaleCascade(saleId, "system");
             </Button>
             <h1 className="text-2xl font-bold text-foreground">Lista de Ventas</h1>
           </div>
+          <Button onClick={() => setShowImporter(true)} className="bg-primary">
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Importar Ventas
+          </Button>
         </div>
       </header>
 
@@ -580,6 +587,16 @@ await RTDBHelper.deleteSaleCascade(saleId, "system");
           </Card>
         </div>
       )}
+
+      {/* Importador de ventas */}
+      <SalesImporter
+        open={showImporter}
+        onClose={() => setShowImporter(false)}
+        onSuccess={() => {
+          setShowImporter(false);
+          loadSales();
+        }}
+      />
 
       {/* Editor */}
       <SalesEditor
