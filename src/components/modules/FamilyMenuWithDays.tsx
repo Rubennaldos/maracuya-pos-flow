@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
 import FamilyOrderHistory from "@/components/modules/lunch/FamilyOrderHistory";
@@ -100,6 +101,36 @@ export default function FamilyMenuWithDays({
 
   // refs para UX móvil
   const cartRef = useRef<HTMLDivElement | null>(null);
+  const categoriesScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Control del carrusel de categorías
+  const scrollCategories = (direction: "left" | "right") => {
+    if (!categoriesScrollRef.current) return;
+    const scrollAmount = 150;
+    const newScrollLeft =
+      categoriesScrollRef.current.scrollLeft +
+      (direction === "right" ? scrollAmount : -scrollAmount);
+    categoriesScrollRef.current.scrollTo({
+      left: newScrollLeft,
+      behavior: "smooth",
+    });
+  };
+
+  // Centrar categoría activa
+  useEffect(() => {
+    if (!categoriesScrollRef.current || !activeCat) return;
+    const activeButton = categoriesScrollRef.current.querySelector(
+      `[data-category="${activeCat}"]`
+    ) as HTMLElement;
+    if (activeButton) {
+      const scrollContainer = categoriesScrollRef.current;
+      const containerWidth = scrollContainer.offsetWidth;
+      const buttonLeft = activeButton.offsetLeft;
+      const buttonWidth = activeButton.offsetWidth;
+      const scrollLeft = buttonLeft - containerWidth / 2 + buttonWidth / 2;
+      scrollContainer.scrollTo({ left: scrollLeft, behavior: "smooth" });
+    }
+  }, [activeCat]);
 
   /* ==== Resolver nombre ==== */
   useEffect(() => {
@@ -633,19 +664,70 @@ export default function FamilyMenuWithDays({
         <div className="grid lg:grid-cols-4 gap-3 lg:gap-6">
           {/* Menú */}
           <div className="lg:col-span-3">
-            {/* Categorías optimizadas */}
-            <div className="flex gap-1.5 mb-3 sm:mb-4 overflow-x-auto pb-2 scrollbar-hide">
-              {categories.map((cat) => (
-                <Button
-                  key={cat.id}
-                  size="sm"
-                  variant={activeCat === cat.id ? "default" : "outline"}
-                  onClick={() => setActiveCat(cat.id)}
-                  className="rounded-full px-3 h-8 text-xs whitespace-nowrap flex-shrink-0"
-                >
-                  {cat.name}
-                </Button>
-              ))}
+            {/* Carrusel de categorías */}
+            <div className="relative mb-4 sm:mb-5">
+              {/* Botón scroll izquierda */}
+              <button
+                onClick={() => scrollCategories("left")}
+                className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 items-center justify-center rounded-full bg-background/80 backdrop-blur border shadow-sm hover:bg-background transition-colors"
+                aria-label="Scroll izquierda"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              {/* Contenedor de categorías */}
+              <div
+                ref={categoriesScrollRef}
+                className="flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth px-1 py-2"
+                style={{
+                  scrollbarWidth: "none",
+                  msOverflowStyle: "none",
+                }}
+              >
+                {categories.map((cat) => (
+                  <Button
+                    key={cat.id}
+                    data-category={cat.id}
+                    size="sm"
+                    variant={activeCat === cat.id ? "default" : "outline"}
+                    onClick={() => setActiveCat(cat.id)}
+                    className={`
+                      rounded-full px-4 h-9 text-xs font-medium whitespace-nowrap flex-shrink-0
+                      transition-all duration-200
+                      ${
+                        activeCat === cat.id
+                          ? "shadow-md scale-105"
+                          : "hover:scale-105 hover:shadow-sm"
+                      }
+                    `}
+                  >
+                    {cat.name}
+                  </Button>
+                ))}
+              </div>
+
+              {/* Botón scroll derecha */}
+              <button
+                onClick={() => scrollCategories("right")}
+                className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 items-center justify-center rounded-full bg-background/80 backdrop-blur border shadow-sm hover:bg-background transition-colors"
+                aria-label="Scroll derecha"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+
+              {/* Indicador de scroll (móvil) */}
+              <div className="sm:hidden flex justify-center gap-1 mt-2">
+                {categories.map((cat, idx) => (
+                  <div
+                    key={cat.id}
+                    className={`h-1 rounded-full transition-all duration-200 ${
+                      activeCat === cat.id
+                        ? "w-6 bg-primary"
+                        : "w-1.5 bg-muted-foreground/30"
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
 
             {/* Productos en lista compacta */}

@@ -259,6 +259,14 @@
   overflow: hidden;
 }
 
+  /* Ocultar scrollbar pero mantener funcionalidad */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 
   .scroll-x-snap {
     scroll-snap-type: x mandatory;
