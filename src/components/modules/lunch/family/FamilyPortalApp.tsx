@@ -282,20 +282,19 @@ export default function FamilyPortalApp({
   };
 
   const addToCart = (product: ProductT) => {
-    console.log("🛒 addToCart called:", { 
-      name: product.name, 
-      type: product.type,
-      hasAddons: !!(product.addons && product.addons.length > 0)
-    });
+    // Normalizar el tipo del producto para manejar diferentes variaciones
+    const productType = ((product as any).type || product.type || "").toLowerCase();
+    const isVariedType = productType === "varied" || productType === "variado";
+    const isPromotionType = productType === "promotion" || productType === "promocion" || productType === "promoción";
+    const hasAddons = !!(product.addons && product.addons.length > 0);
     
     // Abrimos selector si es "varied", "promotion" o si tiene agregados
-    if (product.type === "varied" || product.type === "promotion" || (product.addons && product.addons.length > 0)) {
-      console.log("✅ Opening day/addons selector");
+    if (isVariedType || isPromotionType || hasAddons) {
       handleVariedProduct(product);
       return;
     }
     
-    console.log("➕ Adding directly to cart");
+    // Agregar directamente al carrito para productos normales
     setCart((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) {
@@ -562,9 +561,12 @@ export default function FamilyPortalApp({
                         {settings?.showPrices && typeof product.price === "number" && (
                           <div className="mt-1 text-sm font-semibold text-primary">
                             {PEN(product.price)}
-                            {(product.type === "varied" || product.type === "promotion") && (
-                              <span className="ml-1 text-[11px] text-muted-foreground">/día</span>
-                            )}
+                            {(() => {
+                              const productType = ((product as any).type || product.type || "").toLowerCase();
+                              const showPerDay = productType === "varied" || productType === "variado" || 
+                                                productType === "promotion" || productType === "promocion" || productType === "promoción";
+                              return showPerDay && <span className="ml-1 text-[11px] text-muted-foreground">/día</span>;
+                            })()}
                           </div>
                         )}
 
