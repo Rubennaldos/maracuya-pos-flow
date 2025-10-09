@@ -1579,8 +1579,54 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               Deuda total: S/ {selectedDebtor?.totalDebt.toFixed(2)} | {selectedDebtor?.invoices.length} facturas
             </SheetDescription>
           </SheetHeader>
+
+          {/* Resumen sticky con acciones */}
+          <div className="sticky top-0 bg-background z-10 py-4 space-y-3 border-b mb-4">
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Seleccionado</p>
+                    <p className="text-3xl font-bold text-primary">S/ {paymentAmount.toFixed(2)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-muted-foreground">Facturas Seleccionadas</p>
+                    <p className="text-2xl font-bold">{selectedInvoices.length} / {selectedDebtor?.invoices.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => {
+                  const allEntryIds = selectedDebtor.invoices.map((inv: any) => inv.entryId);
+                  setSelectedInvoices(allEntryIds);
+                  setPaymentAmount(selectedDebtor.totalDebt);
+                }}
+              >
+                <CheckCircle className="w-4 h-4 mr-1" />
+                Seleccionar Todo
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => {
+                  setSelectedInvoices([]);
+                  setPaymentAmount(0);
+                  setLastSelectedIndex(null);
+                }}
+              >
+                Deseleccionar
+              </Button>
+            </div>
+          </div>
           
-          <div className="mt-6 space-y-3">
+          <div className="space-y-3 pb-6">
             {selectedDebtor?.invoices
               .sort((a: any, b: any) => a.dateSort - b.dateSort)
               .map((invoice: any, index: number) => {
