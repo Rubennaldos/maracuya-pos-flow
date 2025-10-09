@@ -10,13 +10,14 @@ import {
   runTransaction,
   DataSnapshot,
 } from "firebase/database";
-import { rtdb, RTDB_PATHS } from "./rtdb";
+import { rtdb, RTDB_PATHS, authReady } from "./rtdb";
 
 // Helpers genéricos para RTDB
 export class RTDBHelper {
   // Get data
   static async getData<T = any>(path: string): Promise<T | null> {
     try {
+      await authReady;
       const snapshot = await get(ref(rtdb, path));
       return snapshot.exists() ? (snapshot.val() as T) : null;
     } catch (error) {
@@ -28,6 +29,7 @@ export class RTDBHelper {
   // Set data (replace)
   static async setData<T = any>(path: string, data: T): Promise<void> {
     try {
+      await authReady;
       await set(ref(rtdb, path), data as any);
     } catch (error) {
       console.error("Error setting data:", error);
@@ -41,6 +43,7 @@ export class RTDBHelper {
     data: T
   ): Promise<string> {
     try {
+      await authReady;
       const newRef = push(ref(rtdb, path));
       const key = newRef.key!;
       const payload =
@@ -53,9 +56,10 @@ export class RTDBHelper {
     }
   }
 
-  // Update múltiples rutas (fan-out)
+  // Update múltiples rutas (fan-out) — hace update en la raíz
   static async updateData(updates: Record<string, any>): Promise<void> {
     try {
+      await authReady;
       await update(ref(rtdb), updates);
     } catch (error) {
       console.error("Error updating data:", error);
@@ -66,6 +70,7 @@ export class RTDBHelper {
   // Remove (single path)
   static async removeData(path: string): Promise<void> {
     try {
+      await authReady;
       await remove(ref(rtdb, path));
     } catch (error) {
       console.error("Error removing data:", error);
@@ -83,7 +88,7 @@ export class RTDBHelper {
       const data = snapshot.exists() ? (snapshot.val() as T) : null;
       callback(data);
     });
-    return unsubscribe; // onValue v9 devuelve fn de cleanup
+    return unsubscribe; // en v9 devuelve la función de cleanup
   }
 
   // Transacción segura (contadores, correlativos)
@@ -92,6 +97,7 @@ export class RTDBHelper {
     updateFunction: (currentData: T | null) => T | undefined
   ): Promise<T> {
     try {
+      await authReady;
       const result = await runTransaction(ref(rtdb, path), updateFunction as any);
       return result.snapshot.val() as T;
     } catch (error) {
@@ -144,7 +150,7 @@ export class RTDBHelper {
       return `${prefix}-${String(used).padStart(pad, "0")}`;
     }
 
-    // Fallback (no debería suceder con la lógica anterior)
+    // Fallback (no debería suceder)
     const prefix = type === "sale" ? "B001" : type === "lunch" ? "A001" : "VH001";
     const used = Number(val || 1);
     return `${prefix}-${String(used).padStart(5, "0")}`;
@@ -233,12 +239,7 @@ export class RTDBHelper {
     }
   }
 
-  /**
-   * 🔥 Eliminación en cascada (a la papelera) de una venta:
-   *  - Mueve /sales/{saleId} -> /deleted_sales/{saleId} con metadatos
-   *  - Borra entradas en /accounts_receivable/{clientId}/entries/{saleId|autoId} que apunten a esa venta
-   *  - Borra espejo plano legado /accounts_receivable/{saleId}
-   */
+  // Eliminación en cascada (papelera) de una venta
   static async deleteSaleCascade(
     saleId: string,
     deletedBy: string = "system"
@@ -253,7 +254,7 @@ export class RTDBHelper {
 
     const updates: Record<string, any> = {};
 
-    // 1) Mover a papelera con metadatos
+    // 1) Mover a papelera
     const deletedSaleData = {
       ...sale,
       deletedAt: new Date().toISOString(),
@@ -276,7 +277,6 @@ export class RTDBHelper {
       if (!entries) return;
 
       for (const [entryKey, entryVal] of Object.entries(entries)) {
-        // borrar si la key es el saleId o si el payload referencia saleId
         if (entryKey === saleId || (entryVal as any)?.saleId === saleId) {
           updates[`${entriesPath}/${entryKey}`] = null;
         }
@@ -286,7 +286,6 @@ export class RTDBHelper {
     if (clientId) {
       await removeEntriesForClient(clientId);
     } else {
-      // Fallback: escanear todo AR para encontrar referencias (seguro y simple)
       const arRoot = await this.getData<Record<string, any>>(
         RTDB_PATHS.accounts_receivable
       );
@@ -306,10 +305,8 @@ export class RTDBHelper {
       }
     }
 
-    // Fan-out single update
     await this.updateData(updates);
 
-    // Log best-effort
     await this.logAction(
       deletedBy,
       "sale_moved_to_trash",
@@ -319,10 +316,7 @@ export class RTDBHelper {
     );
   }
 
-  /**
-   * 🗂 Si usas aún /historical_sales, también puedes moverlas a papelera.
-   * (Ojo: tus ventas históricas actuales se guardan en /sales con type:"historical")
-   */
+  // Papelera para ventas históricas (si las usas)
   static async deleteHistoricalSale(
     saleId: string,
     deletedBy: string = "system"
@@ -337,7 +331,6 @@ export class RTDBHelper {
 
     const updates: Record<string, any> = {};
 
-    // mover venta histórica a papelera
     const deletedSaleData = {
       ...sale,
       type: "historical",
@@ -345,8 +338,6 @@ export class RTDBHelper {
       deletedBy,
     };
     updates[`${RTDB_PATHS.deleted_sales}/${saleId}`] = deletedSaleData;
-
-    // borrar venta histórica original
     updates[salePath] = null;
 
     await this.updateData(updates);
@@ -369,3 +360,4 @@ export const rtdbUpdate = RTDBHelper.updateData;
 export const rtdbRemove = RTDBHelper.removeData;
 export const rtdbListen = RTDBHelper.listenToData;
 export const rtdbTransaction = RTDBHelper.runTransaction;
+export { RTDB_PATHS } from "./rtdb";
