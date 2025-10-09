@@ -282,11 +282,20 @@ export default function FamilyPortalApp({
   };
 
   const addToCart = (product: ProductT) => {
+    console.log("🛒 addToCart called:", { 
+      name: product.name, 
+      type: product.type,
+      hasAddons: !!(product.addons && product.addons.length > 0)
+    });
+    
     // Abrimos selector si es "varied", "promotion" o si tiene agregados
     if (product.type === "varied" || product.type === "promotion" || (product.addons && product.addons.length > 0)) {
+      console.log("✅ Opening day/addons selector");
       handleVariedProduct(product);
       return;
     }
+    
+    console.log("➕ Adding directly to cart");
     setCart((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) {
