@@ -234,10 +234,14 @@ export default function PedidosModule({
     return weekDays.filter((day) => enabledDayNames.includes(day.day));
   }, [settings]);
 
-  // total (incluye agregados en varied)
+  // total (incluye agregados en varied y promociones)
   const total = useMemo(() => {
     return Object.values(cart).reduce((acc, item) => {
-      if (item.type === "varied" && item.selectedDays?.length) {
+      const itemType = ((item as any).type || item.type || "").toLowerCase();
+      const isVariedOrPromo = itemType === "varied" || itemType === "variado" || 
+                              itemType === "promotion" || itemType === "promocion" || itemType === "promoción";
+      
+      if (isVariedOrPromo && item.selectedDays?.length) {
         const perDay = (item.price || 0) + (item.addonsPrice || 0);
         return acc + perDay * item.qty * item.selectedDays.length;
       }
@@ -277,7 +281,8 @@ export default function PedidosModule({
     }
 
     const addonsPrice = computeAddonsPrice(selectedProduct.addons, selectedAddons);
-    const cartKey = `${selectedProduct.id}_varied`;
+    const productType = ((selectedProduct as any).type || selectedProduct.type || "varied").toLowerCase();
+    const cartKey = `${selectedProduct.id}_${productType}`;
 
     setCart((prev) => {
       const existing = prev[cartKey];
@@ -332,7 +337,11 @@ export default function PedidosModule({
         return rest;
       }
       let newSubtotal = 0;
-      if (existing.type === "varied" && existing.selectedDays?.length) {
+      const itemType = ((existing as any).type || existing.type || "").toLowerCase();
+      const isVariedOrPromo = itemType === "varied" || itemType === "variado" || 
+                              itemType === "promotion" || itemType === "promocion" || itemType === "promoción";
+      
+      if (isVariedOrPromo && existing.selectedDays?.length) {
         const perDay = (existing.price || 0) + (existing.addonsPrice || 0);
         newSubtotal = perDay * newQty * existing.selectedDays.length;
       } else {
@@ -419,14 +428,20 @@ export default function PedidosModule({
     try {
       const orderCode = await RTDBHelper.getNextCorrelative("lunch");
 
-      const items: OrderItem[] = Object.values(cart).map((item) => ({
-        id: item.id,
-        name: item.name,
-        qty: item.qty,
-        price: item.price,
-        ...(item.type === "lunch" ? { specificDate: item.specificDate } : {}),
-        ...(item.type === "varied" ? { selectedDays: item.selectedDays } : {}),
-      }));
+      const items: OrderItem[] = Object.values(cart).map((item) => {
+        const itemType = ((item as any).type || item.type || "").toLowerCase();
+        const isVariedOrPromo = itemType === "varied" || itemType === "variado" || 
+                                itemType === "promotion" || itemType === "promocion" || itemType === "promoción";
+        
+        return {
+          id: item.id,
+          name: item.name,
+          qty: item.qty,
+          price: item.price,
+          ...(item.type === "lunch" ? { specificDate: item.specificDate } : {}),
+          ...(isVariedOrPromo ? { selectedDays: item.selectedDays } : {}),
+        };
+      });
 
       const orderDate = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Lima",
@@ -469,8 +484,16 @@ export default function PedidosModule({
   /* ===== Tarjeta de producto ===== */
   const ProductCard: React.FC<{ p: ProductT }> = ({ p }) => {
     const handleAddToCart = () => {
-      if (p.type === "varied") handleVariedProduct(p);
-      else addLunchToCart(p); // ahora funciona con o sin specificDate
+      // Normalizar el tipo del producto para manejar diferentes variaciones
+      const productType = ((p as any).type || p.type || "").toLowerCase();
+      const isVariedType = productType === "varied" || productType === "variado";
+      const isPromotionType = productType === "promotion" || productType === "promocion" || productType === "promoción";
+      
+      if (isVariedType || isPromotionType) {
+        handleVariedProduct(p);
+      } else {
+        addLunchToCart(p); // ahora funciona con o sin specificDate
+      }
     };
 
     return (
@@ -493,9 +516,12 @@ export default function PedidosModule({
               <h3 className="font-semibold text-sm leading-tight line-clamp-1">{p.name}</h3>
               <div className="flex items-baseline gap-2">
                 <span className="font-bold text-primary text-base">{PEN(p.price)}</span>
-                {p.type === "varied" && (
-                  <span className="text-[10px] text-muted-foreground">/ día</span>
-                )}
+                {(() => {
+                  const productType = ((p as any).type || p.type || "").toLowerCase();
+                  const showPerDay = productType === "varied" || productType === "variado" || 
+                                    productType === "promotion" || productType === "promocion" || productType === "promoción";
+                  return showPerDay && <span className="text-[10px] text-muted-foreground">/ día</span>;
+                })()}
               </div>
 
               {p.type === "lunch" && p.specificDate && (
