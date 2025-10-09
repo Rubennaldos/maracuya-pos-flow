@@ -1,4 +1,3 @@
-// src/pages/Familias.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import FamilyLogin from "@/components/modules/FamilyLogin";
 import FamilyDashboard from "@/components/modules/lunch/family/FamilyDashboard";
