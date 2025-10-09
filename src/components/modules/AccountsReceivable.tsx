@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle,
   CheckCircle, Clock, FileText, Receipt, Download, Edit2, Trash2,
-  Calendar as CalendarIcon, Filter
+  Calendar as CalendarIcon, Filter, ChevronDown, ChevronRight
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -263,6 +263,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [dateTo, setDateTo] = useState<Date>();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("pending");
+  const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -1348,103 +1349,127 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 </Button>
               </div>
 
-              {/* Tabla estilo Excel */}
-              <div className="border rounded-lg overflow-hidden flex-1 overflow-y-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-muted z-10">
-                    <TableRow>
-                      <TableHead className="w-12">
-                        <Checkbox
-                          checked={selectedInvoices.length === selectedDebtor.invoices.length}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              const allEntryIds = selectedDebtor.invoices.map((inv: any) => inv.entryId);
-                              setSelectedInvoices(allEntryIds);
-                              setPaymentAmount(selectedDebtor.totalDebt);
-                            } else {
-                              setSelectedInvoices([]);
-                              setPaymentAmount(0);
-                            }
-                            setLastSelectedIndex(null);
-                          }}
-                        />
-                      </TableHead>
-                      <TableHead>Correlativo</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead className="text-right">Monto</TableHead>
-                      <TableHead>Productos</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedDebtor.invoices
-                      .sort((a: any, b: any) => a.dateSort - b.dateSort)
-                      .map((invoice: any, index: number) => (
-                        <TableRow
-                          key={invoice.entryId}
-                          className={cn(
-                            "cursor-pointer hover:bg-muted/50",
-                            selectedInvoices.includes(invoice.entryId) && "bg-primary/5"
-                          )}
-                          onClick={(e) => {
-                            const sortedInvoices = [...selectedDebtor.invoices].sort((a: any, b: any) => a.dateSort - b.dateSort);
-                            
-                            // Selección con Shift
-                            if (e.shiftKey && lastSelectedIndex !== null) {
-                              const start = Math.min(lastSelectedIndex, index);
-                              const end = Math.max(lastSelectedIndex, index);
-                              const rangeEntryIds = sortedInvoices.slice(start, end + 1).map((inv: any) => inv.entryId);
+              {/* Lista de boletas mejorada */}
+              <div className="flex-1 overflow-y-auto space-y-3">
+                {selectedDebtor.invoices
+                  .sort((a: any, b: any) => a.dateSort - b.dateSort)
+                  .map((invoice: any, index: number) => {
+                    const isExpanded = expandedInvoice === invoice.entryId;
+                    const isSelected = selectedInvoices.includes(invoice.entryId);
+                    
+                    return (
+                      <Card 
+                        key={invoice.entryId}
+                        className={cn(
+                          "transition-all",
+                          isSelected && "border-primary bg-primary/5"
+                        )}
+                      >
+                        <CardContent className="p-4">
+                          {/* Fila principal con checkbox y datos básicos */}
+                          <div 
+                            className="flex items-center gap-4 cursor-pointer"
+                            onClick={(e) => {
+                              const sortedInvoices = [...selectedDebtor.invoices].sort((a: any, b: any) => a.dateSort - b.dateSort);
                               
-                              // Agregar todos los del rango
-                              const newSelected = [...new Set([...selectedInvoices, ...rangeEntryIds])];
-                              setSelectedInvoices(newSelected);
-                              
-                              // Calcular total
-                              const total = newSelected.reduce((sum, id) => {
-                                const inv = sortedInvoices.find((i: any) => i.entryId === id);
-                                return sum + (inv?.amount || 0);
-                              }, 0);
-                              setPaymentAmount(total);
-                            } else {
-                              // Selección normal
-                              if (selectedInvoices.includes(invoice.entryId)) {
-                                setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
-                                setPaymentAmount(prev => prev - invoice.amount);
+                              // Selección con Shift
+                              if (e.shiftKey && lastSelectedIndex !== null) {
+                                const start = Math.min(lastSelectedIndex, index);
+                                const end = Math.max(lastSelectedIndex, index);
+                                const rangeEntryIds = sortedInvoices.slice(start, end + 1).map((inv: any) => inv.entryId);
+                                
+                                const newSelected = [...new Set([...selectedInvoices, ...rangeEntryIds])];
+                                setSelectedInvoices(newSelected);
+                                
+                                const total = newSelected.reduce((sum, id) => {
+                                  const inv = sortedInvoices.find((i: any) => i.entryId === id);
+                                  return sum + (inv?.amount || 0);
+                                }, 0);
+                                setPaymentAmount(total);
                               } else {
-                                setSelectedInvoices(prev => [...prev, invoice.entryId]);
-                                setPaymentAmount(prev => prev + invoice.amount);
-                              }
-                              setLastSelectedIndex(index);
-                            }
-                          }}
-                        >
-                          <TableCell onClick={(e) => e.stopPropagation()}>
-                            <Checkbox
-                              checked={selectedInvoices.includes(invoice.entryId)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setSelectedInvoices(prev => [...prev, invoice.entryId]);
-                                  setPaymentAmount(prev => prev + invoice.amount);
-                                } else {
+                                // Selección normal
+                                if (selectedInvoices.includes(invoice.entryId)) {
                                   setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
                                   setPaymentAmount(prev => prev - invoice.amount);
+                                } else {
+                                  setSelectedInvoices(prev => [...prev, invoice.entryId]);
+                                  setPaymentAmount(prev => prev + invoice.amount);
                                 }
                                 setLastSelectedIndex(index);
+                              }
+                            }}
+                          >
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedInvoices(prev => [...prev, invoice.entryId]);
+                                    setPaymentAmount(prev => prev + invoice.amount);
+                                  } else {
+                                    setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
+                                    setPaymentAmount(prev => prev - invoice.amount);
+                                  }
+                                  setLastSelectedIndex(index);
+                                }}
+                              />
+                            </div>
+                            
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedInvoice(isExpanded ? null : invoice.entryId);
                               }}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium">{invoice.correlative}</TableCell>
-                          <TableCell>{invoice.date}</TableCell>
-                          <TableCell className="text-right font-semibold">
-                            S/ {invoice.amount.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                            {invoice.products.join(", ") || "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    }
-                  </TableBody>
-                </Table>
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                            
+                            <div className="flex-1 grid grid-cols-3 gap-4">
+                              <div>
+                                <p className="text-sm text-muted-foreground">Correlativo</p>
+                                <p className="font-semibold">{invoice.correlative}</p>
+                              </div>
+                              
+                              <div>
+                                <p className="text-sm text-muted-foreground">Fecha</p>
+                                <p className="font-medium">{invoice.date}</p>
+                              </div>
+                              
+                              <div>
+                                <p className="text-sm text-muted-foreground">Monto</p>
+                                <p className="font-bold text-lg text-primary">
+                                  S/ {invoice.amount.toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Sección expandible con productos */}
+                          {isExpanded && invoice.products.length > 0 && (
+                            <div className="mt-4 pt-4 border-t">
+                              <p className="text-sm font-medium mb-2">Productos:</p>
+                              <ul className="space-y-1">
+                                {invoice.products.map((product: string, idx: number) => (
+                                  <li key={idx} className="text-sm text-muted-foreground flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+                                    {product}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                }
               </div>
 
               {/* Resumen y opciones de pago */}
