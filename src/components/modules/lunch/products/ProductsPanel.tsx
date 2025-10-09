@@ -54,7 +54,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     description: "",
     price: "",
     categoryId: "",
-    type: "lunch" as "lunch" | "varied",
+    type: "lunch" as "lunch" | "varied" | "promotion",
     specificDate: "",
     image: "",
     // Campos específicos para almuerzo
@@ -62,7 +62,19 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     segundo: "",
     postre: "",
     refresco: "Refresco del día",
+    // Campos específicos para promoción
+    promotionValidityType: "24hours" as "24hours" | "custom",
+    promotionStartDate: "",
+    promotionEndDate: "",
   });
+
+  // Estado para productos de promoción
+  const [promotionProducts, setPromotionProducts] = useState<Array<{
+    id: string;
+    productId: string;
+    name: string;
+    price: string;
+  }>>([]);
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [addons, setAddons] = useState<AddonForm[]>([]);
@@ -82,10 +94,14 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       segundo: "",
       postre: "",
       refresco: "Refresco del día",
+      promotionValidityType: "24hours",
+      promotionStartDate: "",
+      promotionEndDate: "",
     });
     setSelectedDate(undefined);
     setAddons([]);
     setAddonsError(null);
+    setPromotionProducts([]);
     setErrors({});
     setEditing(null);
     setShowForm(false);
@@ -158,6 +174,9 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       segundo: (product as any).segundo || "",
       postre: (product as any).postre || "",
       refresco: (product as any).refresco || "Refresco del día",
+      promotionValidityType: (product as any).promotionValidityType || "24hours",
+      promotionStartDate: (product as any).promotionStartDate || "",
+      promotionEndDate: (product as any).promotionEndDate || "",
     });
 
     // Cargar agregados existentes
@@ -168,6 +187,15 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       name: addon.name,
       priceStr: String(addon.price),
       active: addon.active !== false
+    })));
+
+    // Cargar productos de promoción existentes
+    const existingPromotionProducts = (product as any).promotionProducts || [];
+    setPromotionProducts(existingPromotionProducts.map((prod: any) => ({
+      id: crypto.randomUUID(),
+      productId: prod.id || "",
+      name: prod.name || "",
+      price: String(prod.price || 0),
     })));
 
     if ((product as any).specificDate) {
@@ -203,6 +231,22 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     }
     if (formData.type === "lunch" && !formData.specificDate) {
       newErrors.specificDate = "Debe seleccionar una fecha para productos de almuerzo";
+    }
+
+    // Validar promociones
+    if (formData.type === "promotion") {
+      if (promotionProducts.length < 2) {
+        newErrors.promotionProducts = "Debe agregar al menos 2 productos a la promoción";
+      }
+      const invalidPromoProducts = promotionProducts.filter(p => !p.name.trim() || !p.price || isNaN(Number(p.price)));
+      if (invalidPromoProducts.length > 0) {
+        newErrors.promotionProducts = "Todos los productos deben tener nombre y precio válido";
+      }
+      if (formData.promotionValidityType === "custom") {
+        if (!formData.promotionStartDate || !formData.promotionEndDate) {
+          newErrors.promotionDates = "Debe seleccionar fechas de inicio y fin para la promoción";
+        }
+      }
     }
 
     // Validar agregados para productos variados
@@ -242,6 +286,24 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
           active: a.active !== false
         }));
 
+      // Calcular totales para promoción
+      let promotionTotalPrice = 0;
+      let validPromotionProducts: Array<{ id: string; name: string; price: number }> = [];
+      
+      if (formData.type === "promotion") {
+        validPromotionProducts = promotionProducts
+          .filter(p => p.name.trim() && p.price && !isNaN(Number(p.price)))
+          .map(p => {
+            const price = Number(p.price);
+            promotionTotalPrice += price;
+            return {
+              id: p.productId || crypto.randomUUID(),
+              name: p.name.trim(),
+              price: price,
+            };
+          });
+      }
+
       // arma payload sin undefined
       const productData = stripUndefined<Partial<ProductT>>({
         name: formData.name.trim(),
@@ -267,6 +329,20 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
           segundo: formData.segundo.trim() || undefined,
           postre: formData.postre.trim() || undefined,
           refresco: formData.refresco.trim() || "Refresco del día",
+        }),
+        // Campos específicos para promoción
+        ...(formData.type === "promotion" && {
+          promotionProducts: validPromotionProducts,
+          promotionTotalPrice: promotionTotalPrice,
+          promotionPrice: Number(formData.price),
+          promotionValidityType: formData.promotionValidityType,
+          ...(formData.promotionValidityType === "24hours" ? {
+            promotionStartDate: new Date().toISOString(),
+            promotionEndDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          } : {
+            promotionStartDate: formData.promotionStartDate,
+            promotionEndDate: formData.promotionEndDate,
+          }),
         }),
       });
 
@@ -493,17 +569,143 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
               <div>
                 <Label htmlFor="type">Tipo de Producto *</Label>
-                <Select value={formData.type} onValueChange={(value: "lunch" | "varied") => setFormData((prev) => ({ ...prev, type: value }))}>
+                <Select value={formData.type} onValueChange={(value: "lunch" | "varied" | "promotion") => setFormData((prev) => ({ ...prev, type: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="lunch">Almuerzo (día específico)</SelectItem>
                     <SelectItem value="varied">Variado (selección de días)</SelectItem>
+                    <SelectItem value="promotion">Promoción</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            {/* Campos específicos para promociones */}
+            {formData.type === "promotion" && (
+              <div className="space-y-4 border-t pt-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Productos de la Promoción *</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPromotionProducts([...promotionProducts, {
+                          id: crypto.randomUUID(),
+                          productId: "",
+                          name: "",
+                          price: "",
+                        }]);
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Agregar Producto
+                    </Button>
+                  </div>
+
+                  {promotionProducts.map((product, index) => (
+                    <div key={product.id} className="flex gap-2 items-start">
+                      <div className="flex-1">
+                        <Input
+                          placeholder="Nombre del producto"
+                          value={product.name}
+                          onChange={(e) => {
+                            const updated = [...promotionProducts];
+                            updated[index].name = e.target.value;
+                            setPromotionProducts(updated);
+                          }}
+                        />
+                      </div>
+                      <div className="w-32">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="Precio"
+                          value={product.price}
+                          onChange={(e) => {
+                            const updated = [...promotionProducts];
+                            updated[index].price = e.target.value;
+                            setPromotionProducts(updated);
+                          }}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setPromotionProducts(promotionProducts.filter(p => p.id !== product.id));
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  {errors.promotionProducts && (
+                    <p className="text-xs text-destructive">{errors.promotionProducts}</p>
+                  )}
+
+                  {promotionProducts.length > 0 && (
+                    <div className="bg-muted/30 p-3 rounded-lg">
+                      <p className="text-sm font-medium">
+                        Total de precios reales: S/ {promotionProducts.reduce((sum, p) => sum + (Number(p.price) || 0), 0).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        El precio de promoción se configura en el campo "Precio" arriba
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <Label>Vigencia de la Promoción *</Label>
+                  <Select 
+                    value={formData.promotionValidityType} 
+                    onValueChange={(value: "24hours" | "custom") => setFormData((prev) => ({ ...prev, promotionValidityType: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24hours">24 horas desde ahora</SelectItem>
+                      <SelectItem value="custom">Personalizado (seleccionar fechas)</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {formData.promotionValidityType === "custom" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="promotionStartDate">Fecha y Hora de Inicio</Label>
+                        <Input
+                          id="promotionStartDate"
+                          type="datetime-local"
+                          value={formData.promotionStartDate}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, promotionStartDate: e.target.value }))}
+                          className={errors.promotionDates ? 'border-destructive' : ''}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="promotionEndDate">Fecha y Hora de Fin</Label>
+                        <Input
+                          id="promotionEndDate"
+                          type="datetime-local"
+                          value={formData.promotionEndDate}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, promotionEndDate: e.target.value }))}
+                          className={errors.promotionDates ? 'border-destructive' : ''}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {errors.promotionDates && (
+                    <p className="text-xs text-destructive">{errors.promotionDates}</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Campos específicos para productos de almuerzo */}
             {formData.type === "lunch" && (
@@ -695,10 +897,14 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                        <div className="flex items-start gap-3">
                          <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab mt-1" />
                          <div className="flex-1">
-                           <div className="flex items-center gap-2">
+                         <div className="flex items-center gap-2">
                           <h4 className="font-medium">{product.name}</h4>
-                          <span className={`px-2 py-1 text-xs rounded ${product.type === "lunch" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}`}>
-                            {product.type === "lunch" ? "Almuerzo" : "Variado"}
+                          <span className={`px-2 py-1 text-xs rounded ${
+                            product.type === "lunch" ? "bg-blue-100 text-blue-800" : 
+                            product.type === "promotion" ? "bg-purple-100 text-purple-800" :
+                            "bg-green-100 text-green-800"
+                          }`}>
+                            {product.type === "lunch" ? "Almuerzo" : product.type === "promotion" ? "Promoción" : "Variado"}
                           </span>
                         </div>
 
@@ -737,8 +943,45 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                           </div>
                         )}
 
+                        {/* Detalle de promoción */}
+                        {product.type === "promotion" && (
+                          <div className="mt-2 space-y-2">
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Productos incluidos:</span>
+                              <div className="mt-1 space-y-1">
+                                {product.promotionProducts?.map((p: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between text-xs">
+                                    <span>• {p.name}</span>
+                                    <span>S/ {Number(p.price).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              {product.promotionTotalPrice && (
+                                <div className="mt-2 pt-2 border-t flex justify-between text-sm font-medium">
+                                  <span>Total normal:</span>
+                                  <span>S/ {Number(product.promotionTotalPrice).toFixed(2)}</span>
+                                </div>
+                              )}
+                            </div>
+                            {product.promotionStartDate && product.promotionEndDate && (
+                              <div className="text-xs text-muted-foreground">
+                                Vigencia: {new Date(product.promotionStartDate).toLocaleString('es-PE', { 
+                                  dateStyle: 'short', 
+                                  timeStyle: 'short' 
+                                })} - {new Date(product.promotionEndDate).toLocaleString('es-PE', { 
+                                  dateStyle: 'short', 
+                                  timeStyle: 'short' 
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-4 mt-2">
-                          <span className="font-semibold">S/ {Number(product.price).toFixed(2)}</span>
+                          <span className="font-semibold">
+                            {product.type === "promotion" ? "Precio Promo: " : ""}
+                            S/ {Number(product.price).toFixed(2)}
+                          </span>
                           {product.type === "lunch" && product.specificDate && (
                             <span className="text-sm text-muted-foreground">
                               {format(new Date(product.specificDate + "T12:00:00"), "dd/MM/yyyy")}
