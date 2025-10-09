@@ -282,8 +282,8 @@ export default function FamilyPortalApp({
   };
 
   const addToCart = (product: ProductT) => {
-    // Abrimos selector si es "varied" o si tiene agregados
-    if (product.type === "varied" || (product.addons && product.addons.length > 0)) {
+    // Abrimos selector si es "varied", "promotion" o si tiene agregados
+    if (product.type === "varied" || product.type === "promotion" || (product.addons && product.addons.length > 0)) {
       handleVariedProduct(product);
       return;
     }
@@ -553,7 +553,7 @@ export default function FamilyPortalApp({
                         {settings?.showPrices && typeof product.price === "number" && (
                           <div className="mt-1 text-sm font-semibold text-primary">
                             {PEN(product.price)}
-                            {product.type === "varied" && (
+                            {(product.type === "varied" || product.type === "promotion") && (
                               <span className="ml-1 text-[11px] text-muted-foreground">/día</span>
                             )}
                           </div>
