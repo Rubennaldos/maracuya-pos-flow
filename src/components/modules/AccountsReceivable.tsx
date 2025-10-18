@@ -613,7 +613,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
   /* ===== Procesar pago (marca paid por entryId) ===== */
   const processPayment = async (isPartialPayment: boolean = false) => {
-    if (!selectedDebtor || selectedInvoices.length === 0) return;
+    if (!selectedDebtor) return;
 
     const amountToPay = isPartialPayment 
       ? parseFloat(customPaymentAmount) || 0 
@@ -625,25 +625,106 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     }
 
     try {
-      const paymentData = {
-        clientId: selectedDebtor.id,
-        clientName: selectedDebtor.name,
-        amount: amountToPay,
-        method: paymentMethod,
-        date: paymentDate.toISOString(),
-        invoices: selectedInvoices, // entryIds
-        status: isPartialPayment ? "partial" : "paid",
-        paidAt: new Date().toISOString(),
-        paidBy: "sistema",
-        isPartial: isPartialPayment,
-      };
+      // Determinar las facturas a pagar
+      let invoicesToPay = selectedInvoices;
+      
+      // Si no hay facturas seleccionadas, usar la más antigua
+      if (invoicesToPay.length === 0) {
+        const sortedInvoices = [...selectedDebtor.invoices].sort((a: any, b: any) => a.dateSort - b.dateSort);
+        if (sortedInvoices.length > 0) {
+          invoicesToPay = [sortedInvoices[0].entryId];
+        } else {
+          alert("No hay facturas disponibles para pagar");
+          return;
+        }
+      }
 
-      await RTDBHelper.pushData("payments", paymentData);
+      // Calcular el monto total de las facturas seleccionadas
+      const totalSelectedInvoices = invoicesToPay.reduce((sum, entryId) => {
+        const invoice = selectedDebtor.invoices.find((inv: any) => inv.entryId === entryId);
+        return sum + (invoice?.amount || 0);
+      }, 0);
 
-      // Solo marcar como pagadas si es pago completo
-      if (!isPartialPayment) {
+      // Si es abono parcial, distribuir el monto
+      if (isPartialPayment) {
+        let remainingAmount = amountToPay;
         const updates: Record<string, any> = {};
-        selectedInvoices.forEach(entryId => {
+        
+        // Ordenar facturas de más antigua a más reciente
+        const sortedSelectedInvoices = invoicesToPay
+          .map(entryId => selectedDebtor.invoices.find((inv: any) => inv.entryId === entryId))
+          .filter(Boolean)
+          .sort((a: any, b: any) => a.dateSort - b.dateSort);
+
+        for (const invoice of sortedSelectedInvoices) {
+          if (remainingAmount <= 0) break;
+
+          const base = `${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${invoice.entryId}`;
+          
+          if (remainingAmount >= invoice.amount) {
+            // Pagar factura completa
+            updates[`${base}/status`] = "paid";
+            updates[`${base}/paidAt`] = new Date().toISOString();
+            updates[`${base}/method`] = paymentMethod;
+            updates[`${base}/paidAmount`] = invoice.amount;
+            remainingAmount -= invoice.amount;
+          } else {
+            // Abono parcial a esta factura
+            const currentPaid = invoice.paidAmount || 0;
+            const newPaidAmount = currentPaid + remainingAmount;
+            
+            updates[`${base}/paidAmount`] = newPaidAmount;
+            updates[`${base}/method`] = paymentMethod;
+            updates[`${base}/lastPaymentAt`] = new Date().toISOString();
+            
+            // Si se completó el pago de esta factura
+            if (newPaidAmount >= invoice.amount) {
+              updates[`${base}/status`] = "paid";
+              updates[`${base}/paidAt`] = new Date().toISOString();
+            }
+            
+            remainingAmount = 0;
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await RTDBHelper.updateData(updates);
+        }
+
+        // Registrar el abono
+        const paymentData = {
+          clientId: selectedDebtor.id,
+          clientName: selectedDebtor.name,
+          amount: amountToPay,
+          method: paymentMethod,
+          date: paymentDate.toISOString(),
+          invoices: invoicesToPay,
+          status: "partial",
+          paidAt: new Date().toISOString(),
+          paidBy: "sistema",
+          isPartial: true,
+        };
+        await RTDBHelper.pushData("payments", paymentData);
+      } else {
+        // Pago completo
+        const paymentData = {
+          clientId: selectedDebtor.id,
+          clientName: selectedDebtor.name,
+          amount: amountToPay,
+          method: paymentMethod,
+          date: paymentDate.toISOString(),
+          invoices: invoicesToPay,
+          status: "paid",
+          paidAt: new Date().toISOString(),
+          paidBy: "sistema",
+          isPartial: false,
+        };
+
+        await RTDBHelper.pushData("payments", paymentData);
+
+        // Marcar todas las facturas seleccionadas como pagadas
+        const updates: Record<string, any> = {};
+        invoicesToPay.forEach(entryId => {
           const base = `${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${entryId}`;
           updates[`${base}/status`] = "paid";
           updates[`${base}/paidAt`] = new Date().toISOString();
@@ -666,8 +747,11 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       setCustomPaymentAmount("");
       setSelectedInvoices([]);
       setLastSelectedIndex(null);
+      
+      alert(`Pago procesado exitosamente: S/ ${amountToPay.toFixed(2)}`);
     } catch (error) {
       console.error("Error processing payment:", error);
+      alert("Error al procesar el pago. Por favor intenta nuevamente.");
     }
   };
 
@@ -1475,7 +1559,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                     onClick={() => processPayment(true)}
                     variant="secondary"
                     className="flex-1"
-                    disabled={selectedInvoices.length === 0 || !customPaymentAmount || parseFloat(customPaymentAmount) <= 0}
+                    disabled={!customPaymentAmount || parseFloat(customPaymentAmount) <= 0}
                   >
                     <DollarSign className="w-4 h-4 mr-2" />
                     Abonar S/ {customPaymentAmount || "0.00"}
