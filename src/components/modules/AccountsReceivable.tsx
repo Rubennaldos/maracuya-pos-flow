@@ -135,6 +135,8 @@ const loadDebtors = async () => {
         entryId: string;         // 🔑 clave real del entry en RTDB
         correlative: string;     // lo que se muestra al usuario
         amount: number;
+        paidAmount?: number;     // monto ya pagado (para abonos parciales)
+        remainingAmount?: number; // monto pendiente
         date: string;
         dateSort: number;
         type?: string;
@@ -169,20 +171,28 @@ const loadDebtors = async () => {
           if ((entry as any)?.status === "pending") {
             const d = ensureDebtor(clientId, (entry as any).clientName);
             const amount = Number((entry as any).amount || 0);
-            d.totalDebt += amount;
+            const paidAmount = Number((entry as any).paidAmount || 0);
+            const remainingAmount = amount - paidAmount;
+            
+            // Solo agregar si tiene deuda pendiente
+            if (remainingAmount > 0) {
+              d.totalDebt += remainingAmount;
 
-            const dObj = toLocalDateSafe((entry as any).date);
-            d.invoices.push({
-              entryId, // 🔑 importante
-              correlative: (entry as any).correlative || (entry as any).saleId || entryId,
-              amount,
-              date: format(dObj, "dd/MM/yyyy"),
-              dateSort: dObj.getTime(),
-              type: (entry as any).type,
-              products: Array.isArray((entry as any).items)
-                ? (entry as any).items.map((it: any) => it?.name).filter(Boolean)
-                : [],
-            });
+              const dObj = toLocalDateSafe((entry as any).date);
+              d.invoices.push({
+                entryId, // 🔑 importante
+                correlative: (entry as any).correlative || (entry as any).saleId || entryId,
+                amount,
+                paidAmount,
+                remainingAmount,
+                date: format(dObj, "dd/MM/yyyy"),
+                dateSort: dObj.getTime(),
+                type: (entry as any).type,
+                products: Array.isArray((entry as any).items)
+                  ? (entry as any).items.map((it: any) => it?.name).filter(Boolean)
+                  : [],
+              });
+            }
           }
         });
       }
@@ -198,21 +208,29 @@ const loadDebtors = async () => {
         const clientId = flat.clientId || "varios";
         const d = ensureDebtor(clientId, flat.clientName);
         const amount = Number(flat.amount || 0);
-        d.totalDebt += amount;
+        const paidAmount = Number(flat.paidAmount || 0);
+        const remainingAmount = amount - paidAmount;
+        
+        // Solo agregar si tiene deuda pendiente
+        if (remainingAmount > 0) {
+          d.totalDebt += remainingAmount;
 
-        const dObj = toLocalDateSafe(flat.date);
-        const entryId = flat.saleId || key; // mejor esfuerzo
-        d.invoices.push({
-          entryId,
-          correlative: flat.correlative || flat.saleId || key,
-          amount,
-          date: format(dObj, "dd/MM/yyyy"),
-          dateSort: dObj.getTime(),
-          type: flat.type,
-          products: Array.isArray(flat.items)
-            ? flat.items.map((it: any) => it?.name).filter(Boolean)
-            : [],
-        });
+          const dObj = toLocalDateSafe(flat.date);
+          const entryId = flat.saleId || key; // mejor esfuerzo
+          d.invoices.push({
+            entryId,
+            correlative: flat.correlative || flat.saleId || key,
+            amount,
+            paidAmount,
+            remainingAmount,
+            date: format(dObj, "dd/MM/yyyy"),
+            dateSort: dObj.getTime(),
+            type: flat.type,
+            products: Array.isArray(flat.items)
+              ? flat.items.map((it: any) => it?.name).filter(Boolean)
+              : [],
+          });
+        }
       }
     });
 
@@ -639,10 +657,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         }
       }
 
-      // Calcular el monto total de las facturas seleccionadas
+      // Calcular el monto total pendiente de las facturas seleccionadas
       const totalSelectedInvoices = invoicesToPay.reduce((sum, entryId) => {
         const invoice = selectedDebtor.invoices.find((inv: any) => inv.entryId === entryId);
-        return sum + (invoice?.amount || 0);
+        return sum + (invoice?.remainingAmount || invoice?.amount || 0);
       }, 0);
 
       // Si es abono parcial, distribuir el monto
@@ -660,24 +678,26 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           if (remainingAmount <= 0) break;
 
           const base = `${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${invoice.entryId}`;
+          const currentPaid = invoice.paidAmount || 0;
+          const invoiceRemaining = invoice.remainingAmount || (invoice.amount - currentPaid);
           
-          if (remainingAmount >= invoice.amount) {
-            // Pagar factura completa
+          if (remainingAmount >= invoiceRemaining) {
+            // Pagar el resto de la factura (completa)
+            const newPaidAmount = currentPaid + invoiceRemaining;
             updates[`${base}/status`] = "paid";
             updates[`${base}/paidAt`] = new Date().toISOString();
             updates[`${base}/method`] = paymentMethod;
-            updates[`${base}/paidAmount`] = invoice.amount;
-            remainingAmount -= invoice.amount;
+            updates[`${base}/paidAmount`] = newPaidAmount;
+            remainingAmount -= invoiceRemaining;
           } else {
             // Abono parcial a esta factura
-            const currentPaid = invoice.paidAmount || 0;
             const newPaidAmount = currentPaid + remainingAmount;
             
             updates[`${base}/paidAmount`] = newPaidAmount;
             updates[`${base}/method`] = paymentMethod;
             updates[`${base}/lastPaymentAt`] = new Date().toISOString();
             
-            // Si se completó el pago de esta factura
+            // Si se completó el pago de esta factura (por si acaso)
             if (newPaidAmount >= invoice.amount) {
               updates[`${base}/status`] = "paid";
               updates[`${base}/paidAt`] = new Date().toISOString();
@@ -1769,10 +1789,21 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                           />
                         </div>
                         
-                        <div className="flex-1 space-y-1">
+                         <div className="flex-1 space-y-1">
                           <div className="flex items-center justify-between">
                             <p className="font-semibold">{invoice.correlative}</p>
-                            <p className="font-bold text-primary">S/ {invoice.amount.toFixed(2)}</p>
+                            <div className="text-right">
+                              {invoice.paidAmount > 0 ? (
+                                <>
+                                  <p className="font-bold text-primary">S/ {(invoice.remainingAmount || invoice.amount).toFixed(2)}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Pagado: S/ {invoice.paidAmount.toFixed(2)} de S/ {invoice.amount.toFixed(2)}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="font-bold text-primary">S/ {invoice.amount.toFixed(2)}</p>
+                              )}
+                            </div>
                           </div>
                           
                           <p className="text-sm text-muted-foreground">{invoice.date}</p>
