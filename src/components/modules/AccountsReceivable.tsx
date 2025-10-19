@@ -1571,6 +1571,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   size="sm"
                   onClick={() => {
                     setSelectedInvoices([]);
+                    setSelectedProducts({});
                     setPaymentAmount(0);
                     setLastSelectedIndex(null);
                   }}
@@ -1589,13 +1590,51 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Total seleccionado</p>
-                      <p className="text-2xl font-bold text-primary">S/ {paymentAmount.toFixed(2)}</p>
+                      <p className="text-2xl font-bold text-primary">
+                        S/ {(() => {
+                          const selectedProductsTotal = calculateSelectedProductsAmount();
+                          return selectedProductsTotal > 0 ? selectedProductsTotal.toFixed(2) : paymentAmount.toFixed(2);
+                        })()}
+                      </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Deuda total del cliente</p>
                       <p className="text-2xl font-bold">S/ {selectedDebtor.totalDebt.toFixed(2)}</p>
                     </div>
                   </div>
+                  
+                  {/* Mostrar productos seleccionados */}
+                  {Object.keys(selectedProducts).some(key => selectedProducts[key].length > 0) && (
+                    <div className="mt-4 pt-4 border-t">
+                      <p className="text-sm font-medium text-muted-foreground mb-2">Productos seleccionados para cancelar:</p>
+                      <div className="space-y-2">
+                        {Object.entries(selectedProducts).map(([entryId, products]) => {
+                          if (products.length === 0) return null;
+                          const invoice = selectedDebtor.invoices.find((inv: any) => inv.entryId === entryId);
+                          const totalProducts = invoice?.products.length || 1;
+                          const productValue = (invoice?.remainingAmount || invoice?.amount || 0) / totalProducts;
+                          const selectedProductsAmount = productValue * products.length;
+                          
+                          return (
+                            <div key={entryId} className="bg-primary/10 p-2 rounded-md">
+                              <p className="text-xs font-semibold mb-1">{invoice?.correlative}</p>
+                              <div className="flex flex-wrap gap-1 mb-1">
+                                {products.map((product: string, idx: number) => (
+                                  <Badge key={idx} variant="default" className="text-xs">
+                                    {product}
+                                  </Badge>
+                                ))}
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">Monto a pagar:</span>
+                                <span className="font-bold text-primary">S/ {selectedProductsAmount.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1654,7 +1693,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Total seleccionado:</span>
                     <span className="text-2xl font-bold text-primary">
-                      S/ {paymentAmount.toFixed(2)}
+                      S/ {(() => {
+                        const selectedProductsTotal = calculateSelectedProductsAmount();
+                        return selectedProductsTotal > 0 ? selectedProductsTotal.toFixed(2) : paymentAmount.toFixed(2);
+                      })()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-sm text-muted-foreground">
@@ -1684,10 +1726,13 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   <Button
                     onClick={() => processPayment(false)}
                     className="flex-1"
-                    disabled={selectedInvoices.length === 0}
+                    disabled={selectedInvoices.length === 0 && Object.keys(selectedProducts).every(key => selectedProducts[key].length === 0)}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
-                    Pagar Completo (S/ {paymentAmount.toFixed(2)})
+                    Pagar Completo (S/ {(() => {
+                      const selectedProductsTotal = calculateSelectedProductsAmount();
+                      return selectedProductsTotal > 0 ? selectedProductsTotal.toFixed(2) : paymentAmount.toFixed(2);
+                    })()})
                   </Button>
                   <Button
                     onClick={() => processPayment(true)}
