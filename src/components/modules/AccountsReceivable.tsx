@@ -603,7 +603,12 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
         const body = items.map((item: any) => {
           const rowTotal = Number(item.total || 0);
-          grandTotal += rowTotal;
+          // Si es un ABONO PARCIAL, el total debe ser negativo para restarlo del total general
+          if (item.productName === "ABONO PARCIAL") {
+            grandTotal -= Math.abs(rowTotal);
+          } else {
+            grandTotal += rowTotal;
+          }
           return [
             item.correlative || "",
             format(toLocalDateSafe(item.date), "dd/MM/yyyy"),
@@ -611,7 +616,9 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
             item.productName || "",
             String(item.quantity ?? 0),
             `S/ ${Number(item.price || 0).toFixed(2)}`,
-            `S/ ${rowTotal.toFixed(2)}`
+            item.productName === "ABONO PARCIAL" 
+              ? `-S/ ${Math.abs(rowTotal).toFixed(2)}`
+              : `S/ ${rowTotal.toFixed(2)}`
           ];
         });
 
@@ -631,7 +638,13 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
         const lastY = (doc as any).lastAutoTable.finalY || cursorY + 10;
 
-        const daySubtotal = items.reduce((s: number, it: any) => s + Number(it.total || 0), 0);
+        const daySubtotal = items.reduce((s: number, it: any) => {
+          const total = Number(it.total || 0);
+          if (it.productName === "ABONO PARCIAL") {
+            return s - Math.abs(total);
+          }
+          return s + total;
+        }, 0);
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
         doc.text(`Subtotal ${day}: S/ ${daySubtotal.toFixed(2)}`, pageW - 20, lastY + 6, {
