@@ -385,7 +385,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     window.open(url, "_blank");
   };
 
-  /* ===== Detalle de ventas pendientes (solo productos no pagados) ===== */
+    /* ===== Detalle de ventas pendientes (solo productos no pagados) ===== */
   const loadSalesDetail = async (clientId: string) => {
     try {
       // Obtener solo las cuentas por cobrar pendientes del cliente
@@ -399,10 +399,11 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       if (clientArData && clientArData.entries) {
         // Formato nuevo (agrupado por cliente)
         Object.entries(clientArData.entries).forEach(([entryId, entry]: [string, any]) => {
-          if (entry?.status === "pending") {
+          if (entry?.status === "pending" || entry?.paidAmount > 0) {
             const items = Array.isArray(entry.items) ? entry.items : [];
             const sellerRaw = entry.userName || entry.seller || entry.user || entry.cashier || "Sistema";
             const paidProducts = Array.isArray(entry.paidProducts) ? entry.paidProducts : [];
+            const paidAmount = entry.paidAmount || 0;
 
             if (items.length > 0) {
               items.forEach((item: any) => {
@@ -419,25 +420,51 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                     price: item.price || 0,
                     total: (item.quantity || 1) * (item.price || 0),
                     paymentMethod: entry.paymentMethod || "crédito",
-                    status: "pendiente"
+                    status: "pendiente",
+                    paidAmount: 0, // Productos pendientes
+                    invoiceTotal: entry.amount || 0
                   });
                 }
               });
+              
+              // Si hay abono sin productos seleccionados, mostrar el abono
+              if (paidAmount > 0 && paidProducts.length === 0) {
+                clientDebtDetails.push({
+                  saleId: entry.saleId || entryId,
+                  correlative: entry.correlative || entry.saleId || entryId,
+                  date: entry.date || entry.createdAt,
+                  sellerRaw,
+                  clientName: entry.clientName || "Cliente",
+                  productName: "ABONO PARCIAL",
+                  quantity: 1,
+                  price: paidAmount,
+                  total: paidAmount,
+                  paymentMethod: entry.method || "crédito",
+                  status: "abonado",
+                  paidAmount,
+                  invoiceTotal: entry.amount || 0
+                });
+              }
             } else {
               // Si no hay items detallados, mostrar la entrada como un solo item
-              clientDebtDetails.push({
-                saleId: entry.saleId || entryId,
-                correlative: entry.correlative || entry.saleId || entryId,
-                date: entry.date || entry.createdAt,
-                sellerRaw,
-                clientName: entry.clientName || "Cliente",
-                productName: entry.description || "Venta a crédito",
-                quantity: 1,
-                price: entry.amount || 0,
-                total: entry.amount || 0,
-                paymentMethod: entry.paymentMethod || "crédito",
-                status: "pendiente"
-              });
+              const remainingAmount = (entry.amount || 0) - paidAmount;
+              if (remainingAmount > 0) {
+                clientDebtDetails.push({
+                  saleId: entry.saleId || entryId,
+                  correlative: entry.correlative || entry.saleId || entryId,
+                  date: entry.date || entry.createdAt,
+                  sellerRaw,
+                  clientName: entry.clientName || "Cliente",
+                  productName: entry.description || "Venta a crédito",
+                  quantity: 1,
+                  price: entry.amount || 0,
+                  total: entry.amount || 0,
+                  paymentMethod: entry.paymentMethod || "crédito",
+                  status: "pendiente",
+                  paidAmount: 0,
+                  invoiceTotal: entry.amount || 0
+                });
+              }
             }
           }
         });
@@ -642,6 +669,25 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   };
 
   /* ===== Procesar pago (marca paid por entryId o productos específicos) ===== */
+  /* ===== Calcular el monto total de productos seleccionados ===== */
+  const calculateSelectedProductsAmount = () => {
+    let total = 0;
+    
+    Object.entries(selectedProducts).forEach(([entryId, products]) => {
+      if (products.length > 0) {
+        const invoice = selectedDebtor?.invoices.find((inv: any) => inv.entryId === entryId);
+        if (invoice) {
+          // Distribución proporcional basada en cantidad de productos
+          const totalProducts = invoice.products.length;
+          const productValue = (invoice.remainingAmount || invoice.amount) / totalProducts;
+          total += productValue * products.length;
+        }
+      }
+    });
+    
+    return total;
+  };
+
   const processPayment = async (isPartialPayment: boolean = false) => {
     if (!selectedDebtor) return;
 
@@ -676,16 +722,9 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         
         // Si hay productos específicos seleccionados, calcular solo esos
         if (selectedProdsForInvoice.length > 0) {
-          const selectedProductsTotal = invoice?.products.reduce((pSum: number, prodName: string) => {
-            if (selectedProdsForInvoice.includes(prodName)) {
-              // Aquí necesitamos el precio individual del producto
-              // Por ahora usamos distribución proporcional
-              const totalProducts = invoice.products.length;
-              return pSum + ((invoice.amount || 0) / totalProducts);
-            }
-            return pSum;
-          }, 0) || 0;
-          return sum + selectedProductsTotal;
+          const totalProducts = invoice.products.length;
+          const productValue = (invoice.remainingAmount || invoice.amount) / totalProducts;
+          return sum + (productValue * selectedProdsForInvoice.length);
         }
         
         return sum + (invoice?.remainingAmount || invoice?.amount || 0);
@@ -1441,19 +1480,33 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                       <TableHead>Cantidad</TableHead>
                       <TableHead>Precio</TableHead>
                       <TableHead>Total</TableHead>
+                      <TableHead>Estado</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredSalesDetail.length > 0 ? (
                       filteredSalesDetail.map((item, index) => (
-                        <TableRow key={index}>
+                        <TableRow key={index} className={item.status === "abonado" ? "bg-green-50 dark:bg-green-950/20" : ""}>
                           <TableCell className="font-medium">{item.correlative}</TableCell>
                           <TableCell>{format(toLocalDateSafe(item.date), "dd/MM/yyyy")}</TableCell>
                           <TableCell>{item.sellerShown}</TableCell>
-                          <TableCell>{item.productName}</TableCell>
+                          <TableCell className={item.status === "abonado" ? "font-bold text-green-600 dark:text-green-400" : ""}>
+                            {item.productName}
+                          </TableCell>
                           <TableCell className="text-center">{item.quantity}</TableCell>
                           <TableCell className="text-right">S/ {Number(item.price || 0).toFixed(2)}</TableCell>
-                          <TableCell className="text-right font-medium">S/ {Number(item.total || 0).toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {item.status === "abonado" ? (
+                              <span className="text-green-600 dark:text-green-400">-S/ {Number(item.total || 0).toFixed(2)}</span>
+                            ) : (
+                              <span>S/ {Number(item.total || 0).toFixed(2)}</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={item.status === "abonado" ? "default" : "secondary"}>
+                              {item.status === "abonado" ? "Abono" : "Pendiente"}
+                            </Badge>
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -1749,17 +1802,36 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           {/* Resumen sticky con acciones */}
           <div className="sticky top-0 bg-background z-10 py-4 space-y-3 border-b mb-4">
             <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="p-4">
+              <CardContent className="p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">Total Seleccionado</p>
-                    <p className="text-3xl font-bold text-primary">S/ {paymentAmount.toFixed(2)}</p>
+                    <p className="text-3xl font-bold text-primary">
+                      S/ {(() => {
+                        const selectedProductsTotal = calculateSelectedProductsAmount();
+                        return selectedProductsTotal > 0 ? selectedProductsTotal.toFixed(2) : paymentAmount.toFixed(2);
+                      })()}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">Facturas Seleccionadas</p>
                     <p className="text-2xl font-bold">{selectedInvoices.length} / {selectedDebtor?.invoices.length}</p>
                   </div>
                 </div>
+                {Object.keys(selectedProducts).some(key => selectedProducts[key].length > 0) && (
+                  <div className="pt-2 border-t border-primary/20">
+                    <p className="text-xs text-muted-foreground mb-1">Productos seleccionados:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(selectedProducts).map(([entryId, products]) => 
+                        products.map((product: string, idx: number) => (
+                          <Badge key={`${entryId}-${idx}`} variant="default" className="text-xs">
+                            {product}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1798,6 +1870,11 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               .sort((a: any, b: any) => a.dateSort - b.dateSort)
               .map((invoice: any, index: number) => {
                 const isSelected = selectedInvoices.includes(invoice.entryId);
+                const selectedProdsForInvoice = selectedProducts[invoice.entryId] || [];
+                const totalProducts = invoice.products.length;
+                const productValue = totalProducts > 0 ? (invoice.remainingAmount || invoice.amount) / totalProducts : 0;
+                const selectedProductsAmount = productValue * selectedProdsForInvoice.length;
+                const remainingAfterProductSelection = (invoice.remainingAmount || invoice.amount) - selectedProductsAmount;
                 
                 return (
                   <Card 
@@ -1819,16 +1896,16 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                         
                         const total = newSelected.reduce((sum, id) => {
                           const inv = sortedInvoices.find((i: any) => i.entryId === id);
-                          return sum + (inv?.amount || 0);
+                          return sum + (inv?.remainingAmount || inv?.amount || 0);
                         }, 0);
                         setPaymentAmount(total);
                       } else {
                         if (selectedInvoices.includes(invoice.entryId)) {
                           setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
-                          setPaymentAmount(prev => prev - invoice.amount);
+                          setPaymentAmount(prev => prev - (invoice.remainingAmount || invoice.amount));
                         } else {
                           setSelectedInvoices(prev => [...prev, invoice.entryId]);
-                          setPaymentAmount(prev => prev + invoice.amount);
+                          setPaymentAmount(prev => prev + (invoice.remainingAmount || invoice.amount));
                         }
                         setLastSelectedIndex(index);
                       }
@@ -1842,10 +1919,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                             onCheckedChange={(checked) => {
                               if (checked) {
                                 setSelectedInvoices(prev => [...prev, invoice.entryId]);
-                                setPaymentAmount(prev => prev + invoice.amount);
+                                setPaymentAmount(prev => prev + (invoice.remainingAmount || invoice.amount));
                               } else {
                                 setSelectedInvoices(prev => prev.filter(id => id !== invoice.entryId));
-                                setPaymentAmount(prev => prev - invoice.amount);
+                                setPaymentAmount(prev => prev - (invoice.remainingAmount || invoice.amount));
                               }
                               setLastSelectedIndex(index);
                             }}
@@ -1870,6 +1947,20 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                           </div>
                           
                           <p className="text-sm text-muted-foreground">{invoice.date}</p>
+                          
+                          {/* Mostrar monto de productos seleccionados y saldo restante */}
+                          {selectedProdsForInvoice.length > 0 && (
+                            <div className="bg-primary/10 p-2 rounded-md space-y-1">
+                              <div className="flex justify-between text-xs">
+                                <span className="font-medium text-primary">Monto seleccionado:</span>
+                                <span className="font-bold text-primary">S/ {selectedProductsAmount.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">Quedaría por pagar:</span>
+                                <span className="font-semibold">S/ {remainingAfterProductSelection.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          )}
                           
                            {invoice.products.length > 0 && (
                             <div className="pt-2">
