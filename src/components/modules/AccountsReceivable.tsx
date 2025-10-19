@@ -147,7 +147,7 @@ const loadDebtors = async () => {
       lastReminder?: string;
     };
 
-    const debtorMap = new Map<string, Debtor>();
+      const debtorMap = new Map<string, Debtor>();
     const ensureDebtor = (clientId: string, clientName?: string): Debtor => {
       if (!debtorMap.has(clientId)) {
         debtorMap.set(clientId, {
@@ -160,6 +160,13 @@ const loadDebtors = async () => {
         });
       }
       return debtorMap.get(clientId)!;
+    };
+
+    // Helper para obtener productos pagados de una factura
+    const getPaidProducts = (clientId: string, entryId: string): string[] => {
+      const arPath = `${RTDB_PATHS.accounts_receivable}/${clientId}/entries/${entryId}/paidProducts`;
+      // Esta es síncrona, por lo que necesitaremos cargarla en el proceso
+      return [];
     };
 
     // A) Formato NUEVO (agrupado por cliente)
@@ -269,6 +276,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [paymentDate, setPaymentDate] = useState<Date>(new Date());
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]); // guarda entryId
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<Record<string, string[]>>({}); // { entryId: [productNames] }
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showSalesDetailDialog, setShowSalesDetailDialog] = useState(false);
@@ -377,7 +385,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     window.open(url, "_blank");
   };
 
-  /* ===== Detalle de ventas pendientes (solo deudas) ===== */
+  /* ===== Detalle de ventas pendientes (solo productos no pagados) ===== */
   const loadSalesDetail = async (clientId: string) => {
     try {
       // Obtener solo las cuentas por cobrar pendientes del cliente
@@ -394,22 +402,26 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           if (entry?.status === "pending") {
             const items = Array.isArray(entry.items) ? entry.items : [];
             const sellerRaw = entry.userName || entry.seller || entry.user || entry.cashier || "Sistema";
+            const paidProducts = Array.isArray(entry.paidProducts) ? entry.paidProducts : [];
 
             if (items.length > 0) {
               items.forEach((item: any) => {
-                clientDebtDetails.push({
-                  saleId: entry.saleId || entryId,
-                  correlative: entry.correlative || entry.saleId || entryId,
-                  date: entry.date || entry.createdAt,
-                  sellerRaw,
-                  clientName: entry.clientName || "Cliente",
-                  productName: item.name || "Producto",
-                  quantity: item.quantity || 1,
-                  price: item.price || 0,
-                  total: (item.quantity || 1) * (item.price || 0),
-                  paymentMethod: entry.paymentMethod || "crédito",
-                  status: "pendiente"
-                });
+                // Solo agregar si el producto NO está en la lista de productos pagados
+                if (!paidProducts.includes(item.name)) {
+                  clientDebtDetails.push({
+                    saleId: entry.saleId || entryId,
+                    correlative: entry.correlative || entry.saleId || entryId,
+                    date: entry.date || entry.createdAt,
+                    sellerRaw,
+                    clientName: entry.clientName || "Cliente",
+                    productName: item.name || "Producto",
+                    quantity: item.quantity || 1,
+                    price: item.price || 0,
+                    total: (item.quantity || 1) * (item.price || 0),
+                    paymentMethod: entry.paymentMethod || "crédito",
+                    status: "pendiente"
+                  });
+                }
               });
             } else {
               // Si no hay items detallados, mostrar la entrada como un solo item
@@ -629,7 +641,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     }
   };
 
-  /* ===== Procesar pago (marca paid por entryId) ===== */
+  /* ===== Procesar pago (marca paid por entryId o productos específicos) ===== */
   const processPayment = async (isPartialPayment: boolean = false) => {
     if (!selectedDebtor) return;
 
@@ -657,9 +669,25 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         }
       }
 
-      // Calcular el monto total pendiente de las facturas seleccionadas
+      // Calcular el monto total considerando productos seleccionados
       const totalSelectedInvoices = invoicesToPay.reduce((sum, entryId) => {
         const invoice = selectedDebtor.invoices.find((inv: any) => inv.entryId === entryId);
+        const selectedProdsForInvoice = selectedProducts[entryId] || [];
+        
+        // Si hay productos específicos seleccionados, calcular solo esos
+        if (selectedProdsForInvoice.length > 0) {
+          const selectedProductsTotal = invoice?.products.reduce((pSum: number, prodName: string) => {
+            if (selectedProdsForInvoice.includes(prodName)) {
+              // Aquí necesitamos el precio individual del producto
+              // Por ahora usamos distribución proporcional
+              const totalProducts = invoice.products.length;
+              return pSum + ((invoice.amount || 0) / totalProducts);
+            }
+            return pSum;
+          }, 0) || 0;
+          return sum + selectedProductsTotal;
+        }
+        
         return sum + (invoice?.remainingAmount || invoice?.amount || 0);
       }, 0);
 
@@ -679,31 +707,63 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
           const base = `${RTDB_PATHS.accounts_receivable}/${selectedDebtor.id}/entries/${invoice.entryId}`;
           const currentPaid = invoice.paidAmount || 0;
-          const invoiceRemaining = invoice.remainingAmount || (invoice.amount - currentPaid);
+          const selectedProdsForInvoice = selectedProducts[invoice.entryId] || [];
           
-          if (remainingAmount >= invoiceRemaining) {
-            // Pagar el resto de la factura (completa)
-            const newPaidAmount = currentPaid + invoiceRemaining;
-            updates[`${base}/status`] = "paid";
-            updates[`${base}/paidAt`] = new Date().toISOString();
-            updates[`${base}/method`] = paymentMethod;
-            updates[`${base}/paidAmount`] = newPaidAmount;
-            remainingAmount -= invoiceRemaining;
-          } else {
-            // Abono parcial a esta factura
-            const newPaidAmount = currentPaid + remainingAmount;
+          // Si hay productos específicos seleccionados
+          if (selectedProdsForInvoice.length > 0) {
+            // Marcar productos como pagados
+            const currentPaidProducts = Array.isArray((invoice as any).paidProducts) 
+              ? [...(invoice as any).paidProducts] 
+              : [];
+            const newPaidProducts = [...new Set([...currentPaidProducts, ...selectedProdsForInvoice])];
+            updates[`${base}/paidProducts`] = newPaidProducts;
             
-            updates[`${base}/paidAmount`] = newPaidAmount;
-            updates[`${base}/method`] = paymentMethod;
-            updates[`${base}/lastPaymentAt`] = new Date().toISOString();
+            // Recalcular remaining amount
+            const totalProducts = invoice.products.length;
+            const paidProductsCount = newPaidProducts.length;
             
-            // Si se completó el pago de esta factura (por si acaso)
-            if (newPaidAmount >= invoice.amount) {
+            if (paidProductsCount >= totalProducts) {
+              // Todos los productos están pagados
               updates[`${base}/status`] = "paid";
               updates[`${base}/paidAt`] = new Date().toISOString();
+              updates[`${base}/paidAmount`] = invoice.amount;
+            } else {
+              // Actualizar paidAmount proporcionalmente
+              const proportionalPaid = (paidProductsCount / totalProducts) * invoice.amount;
+              updates[`${base}/paidAmount`] = proportionalPaid;
+              updates[`${base}/method`] = paymentMethod;
+              updates[`${base}/lastPaymentAt`] = new Date().toISOString();
             }
             
-            remainingAmount = 0;
+            remainingAmount = 0; // Los productos seleccionados están pagados
+          } else {
+            // Lógica normal sin selección de productos
+            const invoiceRemaining = invoice.remainingAmount || (invoice.amount - currentPaid);
+            
+            if (remainingAmount >= invoiceRemaining) {
+              // Pagar el resto de la factura (completa)
+              const newPaidAmount = currentPaid + invoiceRemaining;
+              updates[`${base}/status`] = "paid";
+              updates[`${base}/paidAt`] = new Date().toISOString();
+              updates[`${base}/method`] = paymentMethod;
+              updates[`${base}/paidAmount`] = newPaidAmount;
+              remainingAmount -= invoiceRemaining;
+            } else {
+              // Abono parcial a esta factura
+              const newPaidAmount = currentPaid + remainingAmount;
+              
+              updates[`${base}/paidAmount`] = newPaidAmount;
+              updates[`${base}/method`] = paymentMethod;
+              updates[`${base}/lastPaymentAt`] = new Date().toISOString();
+              
+              // Si se completó el pago de esta factura (por si acaso)
+              if (newPaidAmount >= invoice.amount) {
+                updates[`${base}/status`] = "paid";
+                updates[`${base}/paidAt`] = new Date().toISOString();
+              }
+              
+              remainingAmount = 0;
+            }
           }
         }
 
@@ -766,6 +826,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       setPaymentAmount(0);
       setCustomPaymentAmount("");
       setSelectedInvoices([]);
+      setSelectedProducts({});
       setLastSelectedIndex(null);
       
       alert(`Pago procesado exitosamente: S/ ${amountToPay.toFixed(2)}`);
@@ -1586,13 +1647,14 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setShowCXCDialog(false);
-                      setSelectedInvoices([]);
-                      setPaymentAmount(0);
-                      setCustomPaymentAmount("");
-                      setLastSelectedIndex(null);
-                    }}
+                  onClick={() => {
+                    setShowCXCDialog(false);
+                    setSelectedInvoices([]);
+                    setSelectedProducts({});
+                    setPaymentAmount(0);
+                    setCustomPaymentAmount("");
+                    setLastSelectedIndex(null);
+                  }}
                   >
                     Cancelar
                   </Button>
@@ -1721,6 +1783,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 className="flex-1"
                 onClick={() => {
                   setSelectedInvoices([]);
+                  setSelectedProducts({});
                   setPaymentAmount(0);
                   setLastSelectedIndex(null);
                 }}
@@ -1808,16 +1871,41 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                           
                           <p className="text-sm text-muted-foreground">{invoice.date}</p>
                           
-                          {invoice.products.length > 0 && (
+                           {invoice.products.length > 0 && (
                             <div className="pt-2">
                               <p className="text-xs font-medium text-muted-foreground mb-1">Productos:</p>
                               <div className="flex flex-wrap gap-1">
-                                {invoice.products.map((product: string, idx: number) => (
-                                  <Badge key={idx} variant="secondary" className="text-xs">
-                                    {product}
-                                  </Badge>
-                                ))}
+                                {invoice.products.map((product: string, idx: number) => {
+                                  const isProductSelected = (selectedProducts[invoice.entryId] || []).includes(product);
+                                  return (
+                                    <Badge 
+                                      key={idx} 
+                                      variant={isProductSelected ? "default" : "secondary"} 
+                                      className="text-xs cursor-pointer hover:scale-105 transition-transform"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedProducts(prev => {
+                                          const current = prev[invoice.entryId] || [];
+                                          const newProducts = current.includes(product)
+                                            ? current.filter(p => p !== product)
+                                            : [...current, product];
+                                          return {
+                                            ...prev,
+                                            [invoice.entryId]: newProducts
+                                          };
+                                        });
+                                      }}
+                                    >
+                                      {product}
+                                    </Badge>
+                                  );
+                                })}
                               </div>
+                              {(selectedProducts[invoice.entryId] || []).length > 0 && (
+                                <p className="text-xs text-primary mt-1 font-medium">
+                                  {(selectedProducts[invoice.entryId] || []).length} producto(s) seleccionado(s) para cancelar
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
