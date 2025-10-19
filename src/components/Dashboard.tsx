@@ -185,37 +185,61 @@ export const Dashboard = ({ onModuleSelect }: DashboardProps) => {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-foreground mb-2">
+      <main className="container mx-auto px-4 py-6 md:py-8">
+        <div className="text-center mb-6 md:mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
             Panel de Control
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-sm md:text-base text-muted-foreground">
             Seleccione el módulo que desea utilizar
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Mobile: Circular Bubbles */}
+        <div className="grid grid-cols-3 gap-4 md:hidden">
+          {userModules.map((module) => {
+            const IconComponent = module.icon;
+            return (
+              <button
+                key={module.id}
+                onClick={() => onModuleSelect(module.id)}
+                className="group flex flex-col items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-xl p-2 transition-all duration-300 hover:scale-105 active:scale-95"
+              >
+                <div
+                  className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br ${module.color} flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-110`}
+                >
+                  <IconComponent className="w-7 h-7 sm:w-9 sm:h-9 text-white" />
+                </div>
+                <span className="text-[10px] sm:text-xs font-medium text-foreground text-center leading-tight px-1">
+                  {module.title}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Desktop/Tablet: Card Grid */}
+        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
           {userModules.map((module) => {
             const IconComponent = module.icon;
             return (
               <Card
                 key={module.id}
-                className="group cursor-pointer transition-all duration-300 hover:shadow-medium hover:scale-105 border-border/50"
+                className="group cursor-pointer transition-all duration-300 hover:shadow-medium hover:scale-105 border-border/50 overflow-hidden"
                 onClick={() => onModuleSelect(module.id)}
               >
-                <CardHeader className="text-center pb-4">
+                <CardHeader className="text-center pb-3 pt-6">
                   <div
-                    className={`w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br ${module.color} flex items-center justify-center group-hover:scale-110 transition-transform`}
+                    className={`w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br ${module.color} flex items-center justify-center group-hover:scale-110 transition-transform shadow-md`}
                   >
                     <IconComponent className="w-8 h-8 text-white" />
                   </div>
-                  <CardTitle className="text-lg text-foreground group-hover:text-primary transition-colors">
+                  <CardTitle className="text-base lg:text-lg text-foreground group-hover:text-primary transition-colors">
                     {module.title}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="text-center">
-                  <p className="text-sm text-muted-foreground">
+                <CardContent className="text-center pb-6">
+                  <p className="text-xs lg:text-sm text-muted-foreground line-clamp-2">
                     {module.description}
                   </p>
                 </CardContent>
