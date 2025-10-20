@@ -128,28 +128,32 @@ export default function OrdersByDayView() {
 
         // Determinar fechas de entrega según items / selectedDays / fallback
         const deliveryDates = new Set<string>();
-        let hasLunchItems = false;
-        let hasWeeklyPromotion = false;
+        let hasSpecificDates = false;
 
         if (order.items && order.items.length > 0) {
           order.items.forEach((item: any) => {
+            // Items con fecha específica (almuerzos normales)
             if (item.specificDate) {
               deliveryDates.add(item.specificDate);
-              hasLunchItems = true;
+              hasSpecificDates = true;
             }
-            // Si el item tiene selectedDays (promoción semanal o varied), agregar todas las fechas
+            // Items con selectedDays (promoción semanal o varied)
+            // SOLO se deben mostrar en los días configurados, NO en el día del pedido
             if (item.selectedDays && Array.isArray(item.selectedDays) && item.selectedDays.length > 0) {
               item.selectedDays.forEach((d: string) => deliveryDates.add(d));
-              hasWeeklyPromotion = true;
+              hasSpecificDates = true;
             }
           });
         }
 
-        // Solo usar selectedDays del pedido si no hay items con fechas específicas ni promociones
-        if (order.selectedDays && order.selectedDays.length > 0 && !hasLunchItems && !hasWeeklyPromotion) {
+        // Solo usar selectedDays del pedido si no hay items con fechas específicas
+        if (order.selectedDays && order.selectedDays.length > 0 && !hasSpecificDates) {
           order.selectedDays.forEach((d: string) => deliveryDates.add(d));
+          hasSpecificDates = true;
         }
 
+        // Solo usar la fecha de creación como fallback si no hay NINGUNA fecha específica
+        // (esto evita que las promociones semanales aparezcan en el día del pedido)
         if (deliveryDates.size === 0) {
           const created = new Date(
             typeof order.createdAt === "number" ? order.createdAt : Date.parse(order.createdAt || Date.now())
