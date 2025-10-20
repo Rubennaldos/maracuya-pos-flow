@@ -527,14 +527,36 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                 onKeyDown={(e) => {
                   if (step !== "productos") return;
                   
-                  if (e.key === "ArrowDown") {
+                  // Calculate grid columns based on screen size
+                  const getColumnsCount = () => {
+                    const width = window.innerWidth;
+                    if (width >= 1536) return 5; // 2xl
+                    if (width >= 1280) return 4; // xl
+                    if (width >= 1024) return 3; // lg
+                    if (width >= 768) return 4;  // md
+                    if (width >= 640) return 3;  // sm
+                    return 2; // mobile
+                  };
+                  
+                  const columns = getColumnsCount();
+                  const maxIndex = filteredProducts.length - 1;
+                  
+                  if (e.key === "ArrowRight") {
                     e.preventDefault();
                     setHighlightedProductIndex((prev) => 
-                      Math.min(prev + 1, filteredProducts.length - 1)
+                      prev < maxIndex ? prev + 1 : prev
+                    );
+                  } else if (e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    setHighlightedProductIndex((prev) => Math.max(prev - 1, 0));
+                  } else if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setHighlightedProductIndex((prev) => 
+                      Math.min(prev + columns, maxIndex)
                     );
                   } else if (e.key === "ArrowUp") {
                     e.preventDefault();
-                    setHighlightedProductIndex((prev) => Math.max(prev - 1, 0));
+                    setHighlightedProductIndex((prev) => Math.max(prev - columns, 0));
                   } else if (e.key === "Enter" && filteredProducts.length > 0) {
                     e.preventDefault();
                     const product = filteredProducts[highlightedProductIndex];
