@@ -129,6 +129,7 @@ export default function OrdersByDayView() {
         // Determinar fechas de entrega según items / selectedDays / fallback
         const deliveryDates = new Set<string>();
         let hasLunchItems = false;
+        let hasWeeklyPromotion = false;
 
         if (order.items && order.items.length > 0) {
           order.items.forEach((item: any) => {
@@ -136,10 +137,16 @@ export default function OrdersByDayView() {
               deliveryDates.add(item.specificDate);
               hasLunchItems = true;
             }
+            // Si el item tiene selectedDays (promoción semanal o varied), agregar todas las fechas
+            if (item.selectedDays && Array.isArray(item.selectedDays) && item.selectedDays.length > 0) {
+              item.selectedDays.forEach((d: string) => deliveryDates.add(d));
+              hasWeeklyPromotion = true;
+            }
           });
         }
 
-        if (order.selectedDays && order.selectedDays.length > 0 && !hasLunchItems) {
+        // Solo usar selectedDays del pedido si no hay items con fechas específicas ni promociones
+        if (order.selectedDays && order.selectedDays.length > 0 && !hasLunchItems && !hasWeeklyPromotion) {
           order.selectedDays.forEach((d: string) => deliveryDates.add(d));
         }
 
@@ -158,22 +165,40 @@ export default function OrdersByDayView() {
 
         deliveryDates.forEach((deliveryDate) => {
           const filteredItems = (order.items || []).filter((item: any) => {
+            // Si el item tiene fecha específica, solo incluirlo en ese día
             if (item.specificDate) return item.specificDate === deliveryDate;
+            
+            // Si el item tiene selectedDays (promoción semanal o varied), incluirlo si este día está en la lista
+            if (item.selectedDays && Array.isArray(item.selectedDays)) {
+              return item.selectedDays.includes(deliveryDate);
+            }
+            
+            // Si el pedido tiene selectedDays pero el item no, incluirlo en todos los días del pedido
             if (order.selectedDays && order.selectedDays.includes(deliveryDate)) return true;
+            
+            // Items sin fecha específica ni selectedDays
             return !item.specificDate && (!order.selectedDays || order.selectedDays.length === 0);
+          });
+
+          // Para promociones semanales, dividir el precio entre los días
+          let totalForDay = 0;
+          filteredItems.forEach((item: any) => {
+            const itemPrice = Number(item.price || 0);
+            const itemQty = Number(item.qty || 0);
+            
+            // Si es promoción semanal (tiene selectedDays), dividir el precio entre los días
+            if (item.selectedDays && Array.isArray(item.selectedDays) && item.selectedDays.length > 0) {
+              totalForDay += (itemPrice / item.selectedDays.length) * itemQty;
+            } else {
+              totalForDay += itemPrice * itemQty;
+            }
           });
 
           orders.push({
             ...baseOrder,
             orderDate: deliveryDate,
             items: filteredItems,
-            total:
-              filteredItems.length > 0
-                ? filteredItems.reduce(
-                    (sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 0)),
-                    0
-                  )
-                : order.total || 0,
+            total: filteredItems.length > 0 ? totalForDay : order.total || 0,
           });
         });
       });
