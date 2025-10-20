@@ -110,7 +110,7 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const [saleType, setSaleType] = useState<"normal" | "scheduled" | "lunch">("normal");
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
+  const [highlightedProductIndex, setHighlightedProductIndex] = useState(-1);
   const productRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Flujo visual (modales)
@@ -182,9 +182,13 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       product.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Reset highlighted index when search changes
+  // Activate highlighted index only when user types something
   useEffect(() => {
-    setHighlightedProductIndex(0);
+    if (searchTerm.trim() !== "") {
+      setHighlightedProductIndex(0);
+    } else {
+      setHighlightedProductIndex(-1);
+    }
   }, [searchTerm]);
 
   // Scroll to highlighted product
@@ -543,29 +547,54 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                   
                   if (e.key === "ArrowRight") {
                     e.preventDefault();
-                    setHighlightedProductIndex((prev) => 
-                      prev < maxIndex ? prev + 1 : prev
-                    );
+                    // Activate navigation if not active
+                    if (highlightedProductIndex < 0) {
+                      setHighlightedProductIndex(0);
+                    } else {
+                      setHighlightedProductIndex((prev) => 
+                        prev < maxIndex ? prev + 1 : prev
+                      );
+                    }
                   } else if (e.key === "ArrowLeft") {
                     e.preventDefault();
-                    setHighlightedProductIndex((prev) => Math.max(prev - 1, 0));
+                    if (highlightedProductIndex < 0) {
+                      setHighlightedProductIndex(0);
+                    } else {
+                      setHighlightedProductIndex((prev) => Math.max(prev - 1, 0));
+                    }
                   } else if (e.key === "ArrowDown") {
                     e.preventDefault();
-                    setHighlightedProductIndex((prev) => 
-                      Math.min(prev + columns, maxIndex)
-                    );
+                    if (highlightedProductIndex < 0) {
+                      setHighlightedProductIndex(0);
+                    } else {
+                      setHighlightedProductIndex((prev) => 
+                        Math.min(prev + columns, maxIndex)
+                      );
+                    }
                   } else if (e.key === "ArrowUp") {
                     e.preventDefault();
-                    setHighlightedProductIndex((prev) => Math.max(prev - columns, 0));
-                  } else if (e.key === "Enter" && filteredProducts.length > 0) {
-                    e.preventDefault();
-                    const product = filteredProducts[highlightedProductIndex];
-                    if (product) {
-                      addToCart(product);
-                      setSearchTerm("");
+                    if (highlightedProductIndex < 0) {
                       setHighlightedProductIndex(0);
-                      // Return focus to search after adding to cart
-                      setTimeout(() => searchInputRef.current?.focus(), 100);
+                    } else {
+                      setHighlightedProductIndex((prev) => Math.max(prev - columns, 0));
+                    }
+                  } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    // If no product is highlighted and cart has items, proceed to next step
+                    if (highlightedProductIndex < 0 || filteredProducts.length === 0) {
+                      if (cart.length > 0) {
+                        goNext();
+                      }
+                    } else {
+                      // Add highlighted product to cart
+                      const product = filteredProducts[highlightedProductIndex];
+                      if (product) {
+                        addToCart(product);
+                        setSearchTerm("");
+                        setHighlightedProductIndex(-1);
+                        // Return focus to search after adding to cart
+                        setTimeout(() => searchInputRef.current?.focus(), 100);
+                      }
                     }
                   }
                 }}
@@ -582,14 +611,14 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                   productRefs.current[index] = el;
                 }}
                 className={`cursor-pointer hover:shadow-medium transition-all duration-200 group border-2 ${
-                  index === highlightedProductIndex && step === "productos"
+                  index === highlightedProductIndex && step === "productos" && highlightedProductIndex >= 0
                     ? "border-primary ring-2 ring-primary ring-offset-2"
                     : "hover:border-primary"
                 }`}
                 onClick={() => {
                   addToCart(p);
                   setSearchTerm("");
-                  setHighlightedProductIndex(0);
+                  setHighlightedProductIndex(-1);
                   setTimeout(() => searchInputRef.current?.focus(), 100);
                 }}
               >
