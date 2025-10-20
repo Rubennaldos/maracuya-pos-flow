@@ -1,5 +1,5 @@
 // src/components/modules/Clients.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
   Download,
   Upload,
   FileSpreadsheet,
+  AlertTriangle,
 } from "lucide-react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -92,6 +93,7 @@ const LEVEL_OPTIONS: { value: Exclude<Client["level"], "">; label: string }[] = 
 export const Clients = ({ onBack }: ClientsProps) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   // Load clients from RTDB
   useEffect(() => {
@@ -155,13 +157,40 @@ export const Clients = ({ onBack }: ClientsProps) => {
     });
   }, [newClient.isStaff]);
 
-  const filteredClients = clients.filter(
-    (client) =>
-      client.names.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.lastNames.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.classroom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Detectar duplicados
+  const duplicateGroups = useMemo(() => {
+    const nameMap = new Map<string, Client[]>();
+    clients.forEach(client => {
+      const fullName = `${client.names} ${client.lastNames}`.trim().toUpperCase();
+      if (!nameMap.has(fullName)) {
+        nameMap.set(fullName, []);
+      }
+      nameMap.get(fullName)!.push(client);
+    });
+    
+    // Solo retornar grupos con más de 1 cliente
+    return Array.from(nameMap.entries())
+      .filter(([_, group]) => group.length > 1)
+      .map(([name, group]) => ({ name, clients: group }));
+  }, [clients]);
+
+  const filteredClients = useMemo(() => {
+    if (showDuplicates) {
+      // Mostrar solo clientes duplicados
+      const duplicateIds = new Set(
+        duplicateGroups.flatMap(g => g.clients.map(c => c.id))
+      );
+      return clients.filter(c => duplicateIds.has(c.id));
+    }
+    
+    return clients.filter(
+      (client) =>
+        client.names.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.lastNames.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.classroom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [clients, searchTerm, showDuplicates, duplicateGroups]);
 
   const generateClientId = () => {
     const timestamp = Date.now().toString().slice(-6);
@@ -738,6 +767,27 @@ export const Clients = ({ onBack }: ClientsProps) => {
       </header>
 
       <div className="p-6">
+        {/* Alerta de duplicados */}
+        {duplicateGroups.length > 0 && (
+          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
+                <p className="text-sm font-semibold text-destructive">
+                  Se detectaron {duplicateGroups.length} grupos de clientes duplicados ({duplicateGroups.reduce((acc, g) => acc + g.clients.length, 0)} registros)
+                </p>
+              </div>
+              <Button
+                variant={showDuplicates ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowDuplicates(!showDuplicates)}
+              >
+                {showDuplicates ? "Mostrar Todos" : "Ver Duplicados"}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Search */}
         <div className="mb-6">
           <div className="relative max-w-md">
