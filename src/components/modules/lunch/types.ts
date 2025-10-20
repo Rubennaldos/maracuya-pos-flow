@@ -52,8 +52,8 @@ export type ProductT = {
   image?: string;       // data URL (webp) opcional
   active?: boolean;     // true por defecto
 
-  // Tipo de producto: almuerzo (día específico), variado (selección de días) o promoción
-  type?: "lunch" | "varied" | "promotion";
+  // Tipo de producto: almuerzo (día específico), variado (selección de días), promoción o promoción semanal
+  type?: "lunch" | "varied" | "promotion" | "weekly_promotion";
 
   // Para productos tipo "lunch": fecha específica (YYYY-MM-DD)
   specificDate?: string;
@@ -69,6 +69,11 @@ export type ProductT = {
   promotionValidityType?: "24hours" | "custom"; // tipo de vigencia
   promotionStartDate?: string; // YYYY-MM-DD HH:mm
   promotionEndDate?: string; // YYYY-MM-DD HH:mm
+
+  // Para productos tipo "weekly_promotion": promoción de 5 días de almuerzo
+  weeklyPromotionDates?: string[]; // Array de 5 fechas YYYY-MM-DD
+  weeklyPromotionRegularPrice?: number; // precio regular (5 almuerzos × precio unitario)
+  weeklyPromotionDiscountedPrice?: number; // precio con descuento
 
   // Ordenamiento
   position?: number | string; // campo preferido

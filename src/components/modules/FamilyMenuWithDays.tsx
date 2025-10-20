@@ -214,6 +214,11 @@ export default function FamilyMenuWithDays({
     const all = Object.values(menu?.products || {}).filter((p) => {
       if (!p || p.active === false) return false;
       if (p.type === "lunch" && p.specificDate && isDatePast(p.specificDate)) return false;
+      // Para promociones semanales, ocultar si todas las fechas ya pasaron
+      if (p.type === "weekly_promotion" && p.weeklyPromotionDates) {
+        const allPast = p.weeklyPromotionDates.every(dateStr => isDatePast(dateStr));
+        if (allPast) return false;
+      }
       return true;
     });
     for (const p of all) {
@@ -322,6 +327,24 @@ export default function FamilyMenuWithDays({
     });
   };
 
+  /* ==== Weekly Promotion ==== */
+  const addWeeklyPromotionToCart = (product: ProductT) => {
+    if (!product.weeklyPromotionDates || product.weeklyPromotionDates.length !== 5) return;
+    setCart((prev) => {
+      const existing = prev[product.id];
+      const newQty = (existing?.qty ?? 0) + 1;
+      return {
+        ...prev,
+        [product.id]: {
+          ...product,
+          qty: newQty,
+          selectedDays: product.weeklyPromotionDates, // Auto-select the 5 days
+          subtotal: (product.price || 0) * newQty,
+        },
+      };
+    });
+  };
+
   const removeFromCart = (key: string) => {
     setCart((prev) => {
       const existing = prev[key];
@@ -351,17 +374,28 @@ export default function FamilyMenuWithDays({
   const makeWaMessage = () => {
     const lines = Object.values(cart).map((i) => {
       const base = `• ${i.name} (x${i.qty})`;
-      const days =
-        i.selectedDays && i.selectedDays.length
-          ? ` – Días: ${i.selectedDays
-              .map((d) =>
-                new Date(d + "T12:00:00").toLocaleDateString("es-PE", {
-                  weekday: "short",
-                  day: "2-digit",
-                })
-              )
-              .join(", ")}`
-          : "";
+      let days = "";
+      
+      if (i.type === "weekly_promotion" && i.selectedDays && i.selectedDays.length) {
+        days = ` – Promoción 5 días: ${i.selectedDays
+          .map((d) =>
+            new Date(d + "T12:00:00").toLocaleDateString("es-PE", {
+              weekday: "short",
+              day: "2-digit",
+            })
+          )
+          .join(", ")}`;
+      } else if (i.selectedDays && i.selectedDays.length) {
+        days = ` – Días: ${i.selectedDays
+          .map((d) =>
+            new Date(d + "T12:00:00").toLocaleDateString("es-PE", {
+              weekday: "short",
+              day: "2-digit",
+            })
+          )
+          .join(", ")}`;
+      }
+      
       return base + days;
     });
 
@@ -425,7 +459,7 @@ export default function FamilyMenuWithDays({
         qty: item.qty,
         price: item.price,
         ...(item.type === "lunch" ? { specificDate: item.specificDate } : {}),
-        ...(item.type === "varied" ? { selectedDays: item.selectedDays } : {}),
+        ...(item.type === "varied" || item.type === "weekly_promotion" ? { selectedDays: item.selectedDays } : {}),
       }));
 
       const orderDate = new Intl.DateTimeFormat("en-CA", {
@@ -470,6 +504,7 @@ export default function FamilyMenuWithDays({
   const ProductCard: React.FC<{ p: ProductT }> = ({ p }) => {
     const handleAddToCart = () => {
       if (p.type === "varied") handleVariedProduct(p);
+      else if (p.type === "weekly_promotion") addWeeklyPromotionToCart(p);
       else addLunchToCart(p);
     };
 
@@ -496,9 +531,15 @@ export default function FamilyMenuWithDays({
               
               {/* Precio y fecha */}
               <div className="flex items-baseline gap-2">
+                {p.type === "weekly_promotion" && p.weeklyPromotionRegularPrice && (
+                  <span className="text-xs text-muted-foreground line-through">{PEN(p.weeklyPromotionRegularPrice)}</span>
+                )}
                 <span className="font-bold text-primary text-base">{PEN(p.price)}</span>
                 {p.type === "varied" && (
                   <span className="text-[10px] text-muted-foreground">/ día</span>
+                )}
+                {p.type === "weekly_promotion" && (
+                  <Badge variant="secondary" className="text-[9px] h-4 px-1.5">5 días</Badge>
                 )}
               </div>
 
@@ -510,6 +551,22 @@ export default function FamilyMenuWithDays({
                     month: "short",
                   })}
                 </p>
+              )}
+
+              {p.type === "weekly_promotion" && p.weeklyPromotionDates && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {p.weeklyPromotionDates.slice(0, 3).map((dateStr, idx) => (
+                    <span key={idx} className="text-[9px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                      {new Date(dateStr + "T12:00:00").toLocaleDateString("es-PE", {
+                        weekday: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  ))}
+                  {p.weeklyPromotionDates.length > 3 && (
+                    <span className="text-[9px] text-muted-foreground">+{p.weeklyPromotionDates.length - 3}</span>
+                  )}
+                </div>
               )}
 
               {/* Descripción breve solo en desktop */}
@@ -750,8 +807,20 @@ export default function FamilyMenuWithDays({
                               {item.qty} × {PEN(item.price)}
                               {item.type === "varied" && item.selectedDays?.length ? (
                                 <span> × {item.selectedDays.length}d</span>
+                              ) : item.type === "weekly_promotion" ? (
+                                <Badge variant="secondary" className="ml-1 h-4 text-[9px] px-1">5 días</Badge>
                               ) : null}
                             </p>
+                            {item.type === "weekly_promotion" && item.selectedDays && (
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {item.selectedDays.map(d => 
+                                  new Date(d + "T12:00:00").toLocaleDateString("es-PE", { 
+                                    weekday: "short", 
+                                    day: "numeric" 
+                                  })
+                                ).join(", ")}
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center gap-1.5">
                             <span className="font-medium text-sm whitespace-nowrap">

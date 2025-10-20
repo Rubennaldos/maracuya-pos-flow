@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, Plus, Edit, Trash2, Save, X, Upload, GripVertical } from "lucide-react";
@@ -54,7 +55,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     description: "",
     price: "",
     categoryId: "",
-    type: "lunch" as "lunch" | "varied" | "promotion",
+    type: "lunch" as "lunch" | "varied" | "promotion" | "weekly_promotion",
     specificDate: "",
     image: "",
     // Campos específicos para almuerzo
@@ -66,6 +67,8 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     promotionValidityType: "24hours" as "24hours" | "custom",
     promotionStartDate: "",
     promotionEndDate: "",
+    // Campos para promoción semanal
+    weeklyPromotionRegularPrice: "",
   });
 
   // Estado para productos de promoción
@@ -79,6 +82,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [addons, setAddons] = useState<AddonForm[]>([]);
   const [addonsError, setAddonsError] = useState<string | null>(null);
+  const [weeklyPromotionDates, setWeeklyPromotionDates] = useState<Date[]>([]);
 
   // Reset form
   const resetForm = () => {
@@ -97,11 +101,13 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       promotionValidityType: "24hours",
       promotionStartDate: "",
       promotionEndDate: "",
+      weeklyPromotionRegularPrice: "",
     });
     setSelectedDate(undefined);
     setAddons([]);
     setAddonsError(null);
     setPromotionProducts([]);
+    setWeeklyPromotionDates([]);
     setErrors({});
     setEditing(null);
     setShowForm(false);
@@ -177,6 +183,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       promotionValidityType: (product as any).promotionValidityType || "24hours",
       promotionStartDate: (product as any).promotionStartDate || "",
       promotionEndDate: (product as any).promotionEndDate || "",
+      weeklyPromotionRegularPrice: String((product as any).weeklyPromotionRegularPrice || ""),
     });
 
     // Cargar agregados existentes
@@ -197,6 +204,10 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
       name: prod.name || "",
       price: String(prod.price || 0),
     })));
+
+    // Cargar fechas de promoción semanal
+    const existingWeeklyDates = (product as any).weeklyPromotionDates || [];
+    setWeeklyPromotionDates(existingWeeklyDates.map((dateStr: string) => new Date(dateStr + "T12:00:00")));
 
     if ((product as any).specificDate) {
       setSelectedDate(new Date((product as any).specificDate + "T12:00:00"));
@@ -231,6 +242,14 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
     }
     if (formData.type === "lunch" && !formData.specificDate) {
       newErrors.specificDate = "Debe seleccionar una fecha para productos de almuerzo";
+    }
+    if (formData.type === "weekly_promotion") {
+      if (weeklyPromotionDates.length !== 5) {
+        newErrors.weeklyPromotionDates = "Debe seleccionar exactamente 5 días para la promoción semanal";
+      }
+      if (!formData.weeklyPromotionRegularPrice || isNaN(Number(formData.weeklyPromotionRegularPrice))) {
+        newErrors.weeklyPromotionRegularPrice = "Debe ingresar el precio regular de 5 almuerzos";
+      }
     }
 
     // Validar promociones
@@ -343,6 +362,12 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
             promotionStartDate: formData.promotionStartDate,
             promotionEndDate: formData.promotionEndDate,
           }),
+        }),
+        // Campos específicos para promoción semanal
+        ...(formData.type === "weekly_promotion" && {
+          weeklyPromotionDates: weeklyPromotionDates.map(d => formatDateForPeru(d)),
+          weeklyPromotionRegularPrice: Number(formData.weeklyPromotionRegularPrice),
+          weeklyPromotionDiscountedPrice: Number(formData.price),
         }),
       });
 
@@ -569,7 +594,7 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
 
               <div>
                 <Label htmlFor="type">Tipo de Producto *</Label>
-                <Select value={formData.type} onValueChange={(value: "lunch" | "varied" | "promotion") => setFormData((prev) => ({ ...prev, type: value }))}>
+                <Select value={formData.type} onValueChange={(value: "lunch" | "varied" | "promotion" | "weekly_promotion") => setFormData((prev) => ({ ...prev, type: value }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -577,10 +602,111 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                     <SelectItem value="lunch">Almuerzo (día específico)</SelectItem>
                     <SelectItem value="varied">Variado (selección de días)</SelectItem>
                     <SelectItem value="promotion">Promoción</SelectItem>
+                    <SelectItem value="weekly_promotion">Promoción Semanal (5 días)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            {/* Campos específicos para promoción semanal */}
+            {formData.type === "weekly_promotion" && (
+              <div className="space-y-4 border-t pt-4">
+                <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">Promoción Semanal - 5 Días de Almuerzo</h4>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Configura 5 fechas específicas para esta promoción. Al seleccionarla en el portal, automáticamente se aplica a los 5 días.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="weeklyPromotionRegularPrice">Precio Regular (5 almuerzos) *</Label>
+                    <Input
+                      id="weeklyPromotionRegularPrice"
+                      type="number"
+                      step="0.01"
+                      value={formData.weeklyPromotionRegularPrice}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, weeklyPromotionRegularPrice: e.target.value }))}
+                      placeholder="Ej: 75.00"
+                      className={errors.weeklyPromotionRegularPrice ? 'border-destructive' : ''}
+                    />
+                    {errors.weeklyPromotionRegularPrice && (
+                      <p className="text-xs text-destructive mt-1">{errors.weeklyPromotionRegularPrice}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">Precio sin descuento</p>
+                  </div>
+
+                  <div>
+                    <Label>Precio con Descuento *</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.price}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))}
+                      placeholder="Ej: 70.00"
+                      className={errors.price ? 'border-destructive' : ''}
+                    />
+                    {formData.weeklyPromotionRegularPrice && formData.price && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                        Ahorro: S/ {(Number(formData.weeklyPromotionRegularPrice) - Number(formData.price)).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className={errors.weeklyPromotionDates ? 'text-destructive' : ''}>
+                    Selecciona 5 Días para la Promoción * ({weeklyPromotionDates.length}/5 seleccionados)
+                  </Label>
+                  <div className="mt-2 border rounded-lg p-4">
+                    <Calendar
+                      mode="multiple"
+                      selected={weeklyPromotionDates}
+                      onSelect={(dates) => {
+                        if (dates && dates.length <= 5) {
+                          setWeeklyPromotionDates(dates);
+                        }
+                      }}
+                      disabled={(date) => {
+                        // No permitir fechas pasadas
+                        if (date < new Date()) return true;
+                        // Si ya hay 5 seleccionados y esta fecha no está seleccionada, deshabilitar
+                        if (weeklyPromotionDates.length >= 5 && !weeklyPromotionDates.some(d => d.toDateString() === date.toDateString())) {
+                          return true;
+                        }
+                        return false;
+                      }}
+                      className="rounded-md border-0"
+                    />
+                  </div>
+                  {errors.weeklyPromotionDates && (
+                    <p className="text-xs text-destructive mt-1">{errors.weeklyPromotionDates}</p>
+                  )}
+                  
+                  {weeklyPromotionDates.length > 0 && (
+                    <div className="mt-3 p-3 bg-muted/30 rounded-lg">
+                      <p className="text-sm font-medium mb-2">Días seleccionados:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {weeklyPromotionDates.sort((a, b) => a.getTime() - b.getTime()).map((date, idx) => (
+                          <div key={idx} className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded text-xs">
+                            {format(date, "EEE dd/MMM", { locale: es })}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWeeklyPromotionDates(weeklyPromotionDates.filter(d => d !== date));
+                              }}
+                              className="ml-1 hover:text-destructive"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Campos específicos para promociones */}
             {formData.type === "promotion" && (
@@ -900,11 +1026,15 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                          <div className="flex items-center gap-2">
                           <h4 className="font-medium">{product.name}</h4>
                           <span className={`px-2 py-1 text-xs rounded ${
-                            product.type === "lunch" ? "bg-blue-100 text-blue-800" : 
-                            product.type === "promotion" ? "bg-purple-100 text-purple-800" :
-                            "bg-green-100 text-green-800"
+                            product.type === "lunch" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" : 
+                            product.type === "promotion" ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" :
+                            product.type === "weekly_promotion" ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" :
+                            "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                           }`}>
-                            {product.type === "lunch" ? "Almuerzo" : product.type === "promotion" ? "Promoción" : "Variado"}
+                            {product.type === "lunch" ? "Almuerzo" : 
+                             product.type === "promotion" ? "Promoción" : 
+                             product.type === "weekly_promotion" ? "Promoción Semanal" : 
+                             "Variado"}
                           </span>
                         </div>
 
@@ -977,9 +1107,37 @@ export default function ProductsPanel({ menu, onMenuUpdate }: Props) {
                           </div>
                         )}
 
+                        {/* Detalle de promoción semanal */}
+                        {product.type === "weekly_promotion" && (
+                          <div className="mt-2 space-y-2">
+                            <div className="text-sm">
+                              <div className="flex justify-between items-center">
+                                <span className="text-muted-foreground">Precio regular:</span>
+                                <span className="line-through">S/ {Number(product.weeklyPromotionRegularPrice || 0).toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between items-center font-medium text-green-600 dark:text-green-400">
+                                <span>Ahorro:</span>
+                                <span>S/ {(Number(product.weeklyPromotionRegularPrice || 0) - Number(product.price)).toFixed(2)}</span>
+                              </div>
+                            </div>
+                            {product.weeklyPromotionDates && product.weeklyPromotionDates.length > 0 && (
+                              <div className="text-xs">
+                                <span className="text-muted-foreground">Días incluidos ({product.weeklyPromotionDates.length}):</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {product.weeklyPromotionDates.map((dateStr: string, idx: number) => (
+                                    <span key={idx} className="bg-primary/10 text-primary px-2 py-0.5 rounded">
+                                      {format(new Date(dateStr + "T12:00:00"), "EEE dd/MMM", { locale: es })}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-4 mt-2">
                           <span className="font-semibold">
-                            {product.type === "promotion" ? "Precio Promo: " : ""}
+                            {product.type === "promotion" || product.type === "weekly_promotion" ? "Precio Promo: " : ""}
                             S/ {Number(product.price).toFixed(2)}
                           </span>
                           {product.type === "lunch" && product.specificDate && (
