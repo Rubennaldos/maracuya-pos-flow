@@ -94,6 +94,57 @@ export const Clients = ({ onBack }: ClientsProps) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [clientDebts, setClientDebts] = useState<Record<string, number>>({});
+
+  // Load client debts from accounts_receivable
+  const loadClientDebts = async () => {
+    try {
+      const arData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.accounts_receivable);
+      if (!arData) return {};
+
+      const debts: Record<string, number> = {};
+
+      // Calcular deuda por cliente
+      Object.entries(arData).forEach(([clientId, clientData]) => {
+        const cData = clientData as any;
+        if (cData && typeof cData === "object" && cData.entries) {
+          let totalDebt = 0;
+          Object.values(cData.entries).forEach((entry: any) => {
+            if (entry?.status === "pending") {
+              const amount = Number(entry.amount || 0);
+              const paidAmount = Number(entry.paidAmount || 0);
+              totalDebt += (amount - paidAmount);
+            }
+          });
+          if (totalDebt > 0) {
+            debts[clientId] = totalDebt;
+          }
+        }
+      });
+
+      // Formato legado/plano
+      Object.entries(arData).forEach(([key, value]) => {
+        const flat = value as any;
+        const looksEntry = flat && typeof flat === "object" && flat.status && (flat.amount !== undefined) && !flat.entries;
+        
+        if (looksEntry && flat.status === "pending") {
+          const clientId = flat.clientId || "varios";
+          const amount = Number(flat.amount || 0);
+          const paidAmount = Number(flat.paidAmount || 0);
+          const remainingAmount = amount - paidAmount;
+          
+          if (remainingAmount > 0) {
+            debts[clientId] = (debts[clientId] || 0) + remainingAmount;
+          }
+        }
+      });
+
+      return debts;
+    } catch (error) {
+      console.error("Error loading client debts:", error);
+      return {};
+    }
+  };
 
   // Load clients from RTDB
   useEffect(() => {
@@ -102,7 +153,11 @@ export const Clients = ({ onBack }: ClientsProps) => {
 
   const loadClients = async () => {
     try {
-      const clientsData = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
+      const [clientsData, debtsData] = await Promise.all([
+        RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients),
+        loadClientDebts()
+      ]);
+      
       if (clientsData) {
         const clientsArray = Object.entries(clientsData).map(([id, client]) => ({
           ...client,
@@ -110,6 +165,8 @@ export const Clients = ({ onBack }: ClientsProps) => {
         }));
         setClients(clientsArray);
       }
+      
+      setClientDebts(debtsData);
     } catch (error) {
       console.error("Error loading clients:", error);
     }
@@ -918,9 +975,9 @@ export const Clients = ({ onBack }: ClientsProps) => {
                   {isDuplicate && (
                     <div className="mb-3 p-2 bg-muted/50 rounded border border-border">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Deuda:</span>
-                        <span className={`font-semibold ${client.debt && client.debt > 0 ? 'text-destructive' : 'text-success'}`}>
-                          S/ {(client.debt || 0).toFixed(2)}
+                        <span className="text-muted-foreground">Deuda Real:</span>
+                        <span className={`font-semibold ${clientDebts[client.id] && clientDebts[client.id] > 0 ? 'text-destructive' : 'text-success'}`}>
+                          S/ {(clientDebts[client.id] || 0).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs mt-1">
