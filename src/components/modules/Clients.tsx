@@ -884,23 +884,60 @@ export const Clients = ({ onBack }: ClientsProps) => {
                   ? `${levelLabel}`
                   : `${client.grade}° ${levelLabel}`
                 : "";
+            
+            // Detectar si este cliente está duplicado
+            const duplicateGroup = duplicateGroups.find(g => 
+              g.clients.some(c => c.id === client.id)
+            );
+            const isDuplicate = !!duplicateGroup;
 
             return (
               <Card
                 key={client.id}
-                className={`transition-all duration-200 ${!client.isActive ? "opacity-60" : ""}`}
+                className={`transition-all duration-200 ${!client.isActive ? "opacity-60" : ""} ${isDuplicate ? "border-destructive/50" : ""}`}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">
                       {client.names} {client.lastNames}
                     </CardTitle>
-                    <Badge variant="outline" className="text-xs">
-                      {client.id}
-                    </Badge>
+                    <div className="flex gap-1">
+                      {isDuplicate && (
+                        <Badge variant="destructive" className="text-xs">
+                          DUPLICADO
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-xs">
+                        {client.id}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {/* Mostrar info de deuda y estado si es duplicado */}
+                  {isDuplicate && (
+                    <div className="mb-3 p-2 bg-muted/50 rounded border border-border">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Deuda:</span>
+                        <span className={`font-semibold ${client.debt && client.debt > 0 ? 'text-destructive' : 'text-success'}`}>
+                          S/ {(client.debt || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs mt-1">
+                        <span className="text-muted-foreground">Estado:</span>
+                        <span className={`font-semibold ${client.isActive ? 'text-success' : 'text-muted-foreground'}`}>
+                          {client.isActive ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs mt-1">
+                        <span className="text-muted-foreground">Tiene cuenta:</span>
+                        <span className={`font-semibold ${client.hasAccount ? 'text-primary' : 'text-muted-foreground'}`}>
+                          {client.hasAccount ? 'Sí' : 'No'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {client.id !== "VARIOS" && (
                     <>
                       <div className="flex items-center space-x-2">
