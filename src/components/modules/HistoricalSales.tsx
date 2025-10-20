@@ -58,9 +58,15 @@ const loadClients = async (): Promise<ClientRow[]> => {
       .filter(([_, client]) => client.active !== false)
       .map(([id, client]) => {
         const name = `${client.names || ''} ${client.lastNames || ''}`.trim() || client.fullName || "Cliente";
-        return { id, name };
+        return { id, name: name.toUpperCase() };
       });
-    return list
+    
+    // Deduplica por nombre
+    const uniqueByName = list.filter((v, i, arr) => 
+      arr.findIndex((x) => x.name === v.name) === i
+    );
+    
+    return uniqueByName
       .filter((x) => x.id !== "varios")
       .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
   } catch (e) {

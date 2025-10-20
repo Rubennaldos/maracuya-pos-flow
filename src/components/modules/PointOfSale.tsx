@@ -211,12 +211,15 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
         .filter(([_, client]) => client.active !== false) // Solo clientes activos
         .map(([id, client]) => {
           const name = `${client.names || ''} ${client.lastNames || ''}`.trim() || client.fullName || "Cliente";
-          return { id, name };
+          return { id, name: name.toUpperCase() }; // Normalizar a mayúsculas
         });
 
-      // Deduplica por ID y ordena
-      const uniqueList = list.filter((v, i, arr) => arr.findIndex((x) => x.id === v.id) === i);
-      const withVarios = [{ id: "varios", name: "Cliente Varios" }, ...uniqueList]
+      // Deduplica por nombre (mantiene el primer registro encontrado)
+      const uniqueByName = list.filter((v, i, arr) => 
+        arr.findIndex((x) => x.name === v.name) === i
+      );
+
+      const withVarios = [{ id: "varios", name: "CLIENTE VARIOS" }, ...uniqueByName]
         .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
 
       return withVarios;
