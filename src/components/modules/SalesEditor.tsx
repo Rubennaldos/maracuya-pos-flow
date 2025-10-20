@@ -96,15 +96,11 @@ export const SalesEditor = ({ sale, isOpen, onClose, onSave }: SalesEditorProps)
   const loadClients = async () => {
     try {
       const clientsData = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
-      console.log('Clients data loaded:', clientsData);
       if (clientsData) {
         const clientsList = Object.entries(clientsData)
-          .map(([id, client]) => ({ ...client, id }))
-          .filter(client => client.active !== false);
-        console.log('Filtered clients list:', clientsList);
+          .filter(([_, client]) => client.active !== false)
+          .map(([id, client]) => ({ ...client, id }));
         setClients(clientsList);
-      } else {
-        console.log('No clients data found');
       }
     } catch (error) {
       console.error('Error loading clients:', error);

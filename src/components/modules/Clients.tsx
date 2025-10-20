@@ -102,15 +102,10 @@ export const Clients = ({ onBack }: ClientsProps) => {
     try {
       const clientsData = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
       if (clientsData) {
-        // Filtra mocks si hubieran
-        const clientsArray = Object.values(clientsData).filter(
-          (client) =>
-            !client.names.toLowerCase().includes("ana") &&
-            !client.names.toLowerCase().includes("juan") &&
-            !client.lastNames.toLowerCase().includes("pérez") &&
-            !client.lastNames.toLowerCase().includes("díaz") &&
-            !client.grade.includes("3er")
-        );
+        const clientsArray = Object.entries(clientsData).map(([id, client]) => ({
+          ...client,
+          id
+        }));
         setClients(clientsArray);
       }
     } catch (error) {

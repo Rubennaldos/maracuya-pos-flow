@@ -16,6 +16,7 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
+import { Client } from "@/types/client";
 
 /* ---------- Tipos ---------- */
 type Product = {
@@ -51,17 +52,14 @@ const loadProducts = async (): Promise<Product[]> => {
 
 const loadClients = async (): Promise<ClientRow[]> => {
   try {
-    const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
+    const clientsData = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
     if (!clientsData) return [];
-    const list = Object.entries(clientsData).map(([id, c]: [string, any]) => {
-      const name =
-        c?.fullName ||
-        [c?.names, c?.lastNames].filter(Boolean).join(" ") ||
-        c?.name ||
-        c?.code ||
-        "Cliente";
-      return { id, name: String(name).trim() || "Cliente" };
-    });
+    const list = Object.entries(clientsData)
+      .filter(([_, client]) => client.active !== false)
+      .map(([id, client]) => {
+        const name = `${client.names || ''} ${client.lastNames || ''}`.trim() || client.fullName || "Cliente";
+        return { id, name };
+      });
     return list
       .filter((x) => x.id !== "varios")
       .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));

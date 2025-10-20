@@ -204,22 +204,19 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   /* ---------------- Clientes ---------------- */
   const loadClients = async (): Promise<ClientRow[]> => {
     try {
-      const clientsData = await RTDBHelper.getData<Record<string, any>>(RTDB_PATHS.clients);
+      const clientsData = await RTDBHelper.getData<Record<string, Client>>(RTDB_PATHS.clients);
       if (!clientsData) return [{ id: "varios", name: "Cliente Varios" }];
 
-      const list = Object.entries(clientsData).map(([id, c]: [string, any]) => {
-        const name =
-          (typeof c === "string" && c) ||
-          c?.fullName ||
-          [c?.names, c?.lastNames].filter(Boolean).join(" ") ||
-          c?.name ||
-          c?.code ||
-          "Cliente";
-        return { id, name: String(name).trim() || "Cliente" };
-      });
+      const list = Object.entries(clientsData)
+        .filter(([_, client]) => client.active !== false) // Solo clientes activos
+        .map(([id, client]) => {
+          const name = `${client.names || ''} ${client.lastNames || ''}`.trim() || client.fullName || "Cliente";
+          return { id, name };
+        });
 
-      const withVarios = [{ id: "varios", name: "Cliente Varios" }, ...list]
-        .filter((v, i, arr) => arr.findIndex((x) => x.id === v.id) === i)
+      // Deduplica por ID y ordena
+      const uniqueList = list.filter((v, i, arr) => arr.findIndex((x) => x.id === v.id) === i);
+      const withVarios = [{ id: "varios", name: "Cliente Varios" }, ...uniqueList]
         .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
 
       return withVarios;
