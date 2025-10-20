@@ -462,13 +462,6 @@ export default function FamilyMenuWithDays({
         ...(item.type === "varied" || item.type === "weekly_promotion" ? { selectedDays: item.selectedDays } : {}),
       }));
 
-      const orderDate = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "America/Lima",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date());
-
       const payload = {
         id: "",
         code: orderCode,
@@ -481,7 +474,6 @@ export default function FamilyMenuWithDays({
         createdAt: Date.now(),
         channel: "familias",
         studentName: alumno,
-        orderDate,
       };
 
       const orderId = await RTDBHelper.pushData(RTDB_PATHS.lunch_orders, payload);
