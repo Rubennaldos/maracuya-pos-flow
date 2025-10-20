@@ -110,6 +110,8 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
   const [saleType, setSaleType] = useState<"normal" | "scheduled" | "lunch">("normal");
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
+  const productRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Flujo visual (modales)
   const [step, setStep] = useState<Step>("productos");
@@ -179,6 +181,21 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
       product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Reset highlighted index when search changes
+  useEffect(() => {
+    setHighlightedProductIndex(0);
+  }, [searchTerm]);
+
+  // Scroll to highlighted product
+  useEffect(() => {
+    if (filteredProducts.length > 0 && highlightedProductIndex >= 0) {
+      const ref = productRefs.current[highlightedProductIndex];
+      if (ref) {
+        ref.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
+  }, [highlightedProductIndex, filteredProducts.length]);
 
   /* ---------------- Clientes ---------------- */
   const loadClients = async (): Promise<ClientRow[]> => {
@@ -507,17 +524,52 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                 placeholder="Buscar productos..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (step !== "productos") return;
+                  
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setHighlightedProductIndex((prev) => 
+                      Math.min(prev + 1, filteredProducts.length - 1)
+                    );
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setHighlightedProductIndex((prev) => Math.max(prev - 1, 0));
+                  } else if (e.key === "Enter" && filteredProducts.length > 0) {
+                    e.preventDefault();
+                    const product = filteredProducts[highlightedProductIndex];
+                    if (product) {
+                      addToCart(product);
+                      setSearchTerm("");
+                      setHighlightedProductIndex(0);
+                      // Return focus to search after adding to cart
+                      setTimeout(() => searchInputRef.current?.focus(), 100);
+                    }
+                  }
+                }}
                 className="pl-10 text-base sm:text-lg h-10 sm:h-12"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
-            {filteredProducts.map((p: any) => (
+            {filteredProducts.map((p: any, index: number) => (
               <Card
                 key={p.id}
-                className="cursor-pointer hover:shadow-medium transition-all duration-200 group border-2 hover:border-primary"
-                onClick={() => addToCart(p)}
+                ref={(el) => {
+                  productRefs.current[index] = el;
+                }}
+                className={`cursor-pointer hover:shadow-medium transition-all duration-200 group border-2 ${
+                  index === highlightedProductIndex && step === "productos"
+                    ? "border-primary ring-2 ring-primary ring-offset-2"
+                    : "hover:border-primary"
+                }`}
+                onClick={() => {
+                  addToCart(p);
+                  setSearchTerm("");
+                  setHighlightedProductIndex(0);
+                  setTimeout(() => searchInputRef.current?.focus(), 100);
+                }}
               >
                 <CardContent className="p-0">
                   <div className="relative">
@@ -582,23 +634,31 @@ export const PointOfSale = ({ onBack }: PointOfSaleProps) => {
                           <Input
                             type="text"
                             inputMode="decimal"
-                            value={item.price.toFixed(2)}
+                            value={item.price === 0 ? "" : item.price.toFixed(2)}
                             onChange={(e) => {
-                              const val = e.target.value.replace(/[^0-9.]/g, '');
-                              const num = parseFloat(val);
-                              if (!isNaN(num) && num >= 0) {
-                                updatePrice(item.id, num);
-                              } else if (val === '' || val === '.') {
-                                updatePrice(item.id, 0);
+                              const val = e.target.value;
+                              // Allow empty, digits, and one decimal point
+                              if (val === "" || /^\d*\.?\d{0,2}$/.test(val)) {
+                                const num = parseFloat(val);
+                                if (!isNaN(num) && num >= 0) {
+                                  updatePrice(item.id, num);
+                                } else if (val === "" || val === ".") {
+                                  // Keep the current state for partial input
+                                  return;
+                                }
                               }
                             }}
                             onFocus={(e) => {
-                              e.target.value = item.price.toString();
                               e.target.select();
                             }}
                             onBlur={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              updatePrice(item.id, val);
+                              const val = e.target.value;
+                              const num = parseFloat(val);
+                              if (isNaN(num) || num < 0) {
+                                updatePrice(item.id, 0);
+                              } else {
+                                updatePrice(item.id, num);
+                              }
                             }}
                             className="h-6 w-16 text-xs text-center"
                           />
