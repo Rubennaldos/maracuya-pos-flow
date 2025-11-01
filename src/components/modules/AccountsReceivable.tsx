@@ -291,6 +291,12 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("pending");
   const [showInvoicesSheet, setShowInvoicesSheet] = useState(false);
+  
+  // Flash Collection states
+  const [showFlashCollection, setShowFlashCollection] = useState(false);
+  const [flashCollectionData, setFlashCollectionData] = useState<any[]>([]);
+  const [flashMessageTemplate, setFlashMessageTemplate] = useState("Hola {nombre}, te recordamos que tienes un saldo pendiente de {monto} en Maracuyá Villa Gratia. Adjunto encontrarás el detalle. ¡Gracias!");
+  const [collectedClients, setCollectedClients] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -962,6 +968,92 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     }
   };
 
+  // Flash Collection functions
+  const openFlashCollection = async () => {
+    setShowFlashCollection(true);
+    const flashData = debtors.map(debtor => ({
+      ...debtor,
+      customPhone: debtor.phone || "",
+      customMessage: flashMessageTemplate.replace("{nombre}", debtor.name.split(" ")[0]).replace("{monto}", `S/ ${debtor.totalDebt.toFixed(2)}`)
+    }));
+    setFlashCollectionData(flashData);
+  };
+
+  const sendFlashPDF = async (debtor: any) => {
+    try {
+      const data = await loadSalesDetail(debtor.id);
+      if (data.length === 0) {
+        alert("No hay datos para generar el PDF");
+        return;
+      }
+      setSalesDetailData(data);
+      setFilteredSalesDetail(data);
+      exportToPDF(data, debtor.name);
+    } catch (error) {
+      console.error("Error generating flash PDF:", error);
+      alert("Error al generar el PDF");
+    }
+  };
+
+  const sendFlashWhatsApp = (debtor: any) => {
+    const message = encodeURIComponent(debtor.customMessage);
+    const phone = debtor.customPhone.replace(/\D/g, "");
+    const url = `https://wa.me/51${phone}?text=${message}`;
+    window.open(url, "_blank");
+  };
+
+  const toggleFlashCollected = (debtorId: string) => {
+    setCollectedClients(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(debtorId)) {
+        newSet.delete(debtorId);
+      } else {
+        newSet.add(debtorId);
+      }
+      return newSet;
+    });
+  };
+
+  const updateFlashMessage = (debtorId: string, message: string) => {
+    setFlashCollectionData(prev => 
+      prev.map(d => d.id === debtorId ? { ...d, customMessage: message } : d)
+    );
+  };
+
+  const updateFlashPhone = (debtorId: string, phone: string) => {
+    setFlashCollectionData(prev => 
+      prev.map(d => d.id === debtorId ? { ...d, customPhone: phone } : d)
+    );
+  };
+
+  const saveMessageTemplate = () => {
+    // Guardar la plantilla en localStorage
+    localStorage.setItem("flashMessageTemplate", flashMessageTemplate);
+    alert("Plantilla guardada exitosamente");
+  };
+
+  const loadMessageTemplate = () => {
+    const saved = localStorage.getItem("flashMessageTemplate");
+    if (saved) {
+      setFlashMessageTemplate(saved);
+      // Actualizar todos los mensajes con la nueva plantilla
+      setFlashCollectionData(prev => 
+        prev.map(d => ({
+          ...d,
+          customMessage: saved.replace("{nombre}", d.name.split(" ")[0]).replace("{monto}", `S/ ${d.totalDebt.toFixed(2)}`)
+        }))
+      );
+    }
+  };
+
+  useEffect(() => {
+    // Cargar plantilla guardada al inicio
+    const saved = localStorage.getItem("flashMessageTemplate");
+    if (saved) {
+      setFlashMessageTemplate(saved);
+    }
+  }, []);
+
   const clearPaidFilters = () => {
     setPaidSearchFilters({
       client: "",
@@ -985,6 +1077,14 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
             </Button>
             <h1 className="text-2xl font-bold text-foreground">Cuentas por Cobrar</h1>
           </div>
+          <Button
+            onClick={openFlashCollection}
+            className="gap-2"
+            variant="default"
+          >
+            <MessageCircle className="h-4 w-4" />
+            A Cobrar Flash
+          </Button>
         </div>
       </header>
 
@@ -2064,6 +2164,133 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 );
               })
             }
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Flash Collection Sheet */}
+      <Sheet open={showFlashCollection} onOpenChange={setShowFlashCollection}>
+        <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-2xl">Cobro Flash</SheetTitle>
+            <SheetDescription>
+              Envía mensajes y PDFs de manera rápida a todos los deudores
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-4">
+            {/* Plantilla de mensaje */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Plantilla de Mensaje</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  Usa <code className="bg-muted px-1 py-0.5 rounded">{'nombre'}</code> y <code className="bg-muted px-1 py-0.5 rounded">{'monto'}</code> para personalizar
+                </div>
+                <textarea
+                  className="w-full p-3 border rounded-md min-h-[100px] font-sans"
+                  value={flashMessageTemplate}
+                  onChange={(e) => setFlashMessageTemplate(e.target.value)}
+                  placeholder="Escribe tu mensaje aquí..."
+                />
+                <div className="flex gap-2">
+                  <Button onClick={saveMessageTemplate} size="sm" variant="outline">
+                    <Download className="w-4 h-4 mr-2" />
+                    Guardar Plantilla
+                  </Button>
+                  <Button onClick={loadMessageTemplate} size="sm" variant="outline">
+                    Cargar Plantilla
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Lista de deudores */}
+            <div className="space-y-3">
+              {flashCollectionData.map((debtor) => (
+                <Card key={debtor.id} className={cn(
+                  "transition-all",
+                  collectedClients.has(debtor.id) && "opacity-50 bg-green-50 dark:bg-green-950"
+                )}>
+                  <CardContent className="p-4 space-y-3">
+                    {/* Header con nombre y monto */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-lg">{debtor.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Deuda: <span className="font-bold text-destructive">S/ {debtor.totalDebt.toFixed(2)}</span>
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={collectedClients.has(debtor.id)}
+                          onCheckedChange={() => toggleFlashCollected(debtor.id)}
+                        />
+                        <label className="text-sm font-medium">Cobrado</label>
+                      </div>
+                    </div>
+
+                    {/* Input de teléfono */}
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium">Teléfono</label>
+                      <Input
+                        type="tel"
+                        value={debtor.customPhone}
+                        onChange={(e) => updateFlashPhone(debtor.id, e.target.value)}
+                        placeholder="999999999"
+                        className="font-mono"
+                      />
+                    </div>
+
+                    {/* Mensaje personalizado */}
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium">Mensaje Personalizado</label>
+                      <textarea
+                        className="w-full p-2 border rounded-md min-h-[80px] text-sm font-sans"
+                        value={debtor.customMessage}
+                        onChange={(e) => updateFlashMessage(debtor.id, e.target.value)}
+                      />
+                    </div>
+
+                    {/* Botones de acción */}
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => sendFlashPDF(debtor)}
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        Generar PDF
+                      </Button>
+                      <Button
+                        onClick={() => sendFlashWhatsApp(debtor)}
+                        size="sm"
+                        className="flex-1"
+                        disabled={!debtor.customPhone}
+                      >
+                        <MessageCircle className="w-4 h-4 mr-2" />
+                        Enviar WhatsApp
+                      </Button>
+                    </div>
+
+                    {/* Info de facturas */}
+                    <div className="text-xs text-muted-foreground">
+                      {debtor.invoices.length} factura(s) pendiente(s)
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {flashCollectionData.length === 0 && (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <p className="text-muted-foreground">No hay deudores pendientes</p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </SheetContent>
       </Sheet>
