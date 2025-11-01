@@ -971,9 +971,12 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   // Flash Collection functions
   const openFlashCollection = async () => {
     setShowFlashCollection(true);
+    // Cargar números guardados de localStorage
+    const savedPhones = JSON.parse(localStorage.getItem("flashClientPhones") || "{}");
+    
     const flashData = debtors.map(debtor => ({
       ...debtor,
-      customPhone: debtor.phone || "",
+      customPhones: savedPhones[debtor.id] || [debtor.phone || ""],
       customMessage: flashMessageTemplate.replace("{nombre}", debtor.name.split(" ")[0]).replace("{monto}", `S/ ${debtor.totalDebt.toFixed(2)}`)
     }));
     setFlashCollectionData(flashData);
@@ -997,9 +1000,19 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
 
   const sendFlashWhatsApp = (debtor: any) => {
     const message = encodeURIComponent(debtor.customMessage);
-    const phone = debtor.customPhone.replace(/\D/g, "");
-    const url = `https://wa.me/51${phone}?text=${message}`;
-    window.open(url, "_blank");
+    const validPhones = (debtor.customPhones || []).filter((p: string) => p.replace(/\D/g, "").length >= 9);
+    
+    if (validPhones.length === 0) {
+      alert("No hay números de teléfono válidos para enviar");
+      return;
+    }
+    
+    // Enviar a todos los números
+    validPhones.forEach((phone: string) => {
+      const cleanPhone = phone.replace(/\D/g, "");
+      const url = `https://wa.me/51${cleanPhone}?text=${message}`;
+      window.open(url, "_blank");
+    });
   };
 
   const toggleFlashCollected = (debtorId: string) => {
@@ -1020,10 +1033,48 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     );
   };
 
-  const updateFlashPhone = (debtorId: string, phone: string) => {
+  const updateFlashPhone = (debtorId: string, index: number, phone: string) => {
     setFlashCollectionData(prev => 
-      prev.map(d => d.id === debtorId ? { ...d, customPhone: phone } : d)
+      prev.map(d => {
+        if (d.id === debtorId) {
+          const newPhones = [...(d.customPhones || [""])];
+          newPhones[index] = phone;
+          return { ...d, customPhones: newPhones };
+        }
+        return d;
+      })
     );
+  };
+
+  const addFlashPhone = (debtorId: string) => {
+    setFlashCollectionData(prev => 
+      prev.map(d => {
+        if (d.id === debtorId) {
+          return { ...d, customPhones: [...(d.customPhones || [""]), ""] };
+        }
+        return d;
+      })
+    );
+  };
+
+  const removeFlashPhone = (debtorId: string, index: number) => {
+    setFlashCollectionData(prev => 
+      prev.map(d => {
+        if (d.id === debtorId) {
+          const newPhones = (d.customPhones || [""]).filter((_: any, i: number) => i !== index);
+          return { ...d, customPhones: newPhones.length > 0 ? newPhones : [""] };
+        }
+        return d;
+      })
+    );
+  };
+
+  const saveFlashPhone = (debtorId: string, phones: string[]) => {
+    // Guardar en localStorage
+    const savedPhones = JSON.parse(localStorage.getItem("flashClientPhones") || "{}");
+    savedPhones[debtorId] = phones;
+    localStorage.setItem("flashClientPhones", JSON.stringify(savedPhones));
+    alert("Números guardados exitosamente");
   };
 
   const saveMessageTemplate = () => {
@@ -2231,16 +2282,50 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                       </div>
                     </div>
 
-                    {/* Input de teléfono */}
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">Teléfono</label>
-                      <Input
-                        type="tel"
-                        value={debtor.customPhone}
-                        onChange={(e) => updateFlashPhone(debtor.id, e.target.value)}
-                        placeholder="999999999"
-                        className="font-mono"
-                      />
+                    {/* Inputs de teléfono */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium">Teléfonos</label>
+                        <Button
+                          onClick={() => saveFlashPhone(debtor.id, debtor.customPhones || [])}
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                        >
+                          Guardar números
+                        </Button>
+                      </div>
+                      
+                      {(debtor.customPhones || [""]).map((phone: string, index: number) => (
+                        <div key={index} className="flex gap-2">
+                          <Input
+                            type="tel"
+                            value={phone}
+                            onChange={(e) => updateFlashPhone(debtor.id, index, e.target.value)}
+                            placeholder="999999999"
+                            className="font-mono flex-1"
+                          />
+                          {(debtor.customPhones || [""]).length > 1 && (
+                            <Button
+                              onClick={() => removeFlashPhone(debtor.id, index)}
+                              size="sm"
+                              variant="ghost"
+                              className="h-10 w-10 p-0"
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      
+                      <Button
+                        onClick={() => addFlashPhone(debtor.id)}
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                      >
+                        + Agregar otro número
+                      </Button>
                     </div>
 
                     {/* Mensaje personalizado */}
@@ -2268,10 +2353,10 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                         onClick={() => sendFlashWhatsApp(debtor)}
                         size="sm"
                         className="flex-1"
-                        disabled={!debtor.customPhone}
+                        disabled={!(debtor.customPhones || []).some((p: string) => p.replace(/\D/g, "").length >= 9)}
                       >
                         <MessageCircle className="w-4 h-4 mr-2" />
-                        Enviar WhatsApp
+                        Enviar WhatsApp ({(debtor.customPhones || []).filter((p: string) => p.replace(/\D/g, "").length >= 9).length})
                       </Button>
                     </div>
 
