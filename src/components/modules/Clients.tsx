@@ -224,7 +224,8 @@ export const Clients = ({ onBack }: ClientsProps) => {
   const duplicateGroups = useMemo(() => {
     const nameMap = new Map<string, Client[]>();
     clients.forEach(client => {
-      const fullName = `${client.names} ${client.lastNames}`.trim().toUpperCase();
+      // Normalizar nombre: quitar espacios extra, acentos, y convertir a mayúsculas
+      const fullName = `${client.names || ''} ${client.lastNames || ''}`.trim().toUpperCase().replace(/\s+/g, ' ');
       if (!nameMap.has(fullName)) {
         nameMap.set(fullName, []);
       }
@@ -232,9 +233,20 @@ export const Clients = ({ onBack }: ClientsProps) => {
     });
     
     // Solo retornar grupos con más de 1 cliente
-    return Array.from(nameMap.entries())
+    const groups = Array.from(nameMap.entries())
       .filter(([_, group]) => group.length > 1)
       .map(([name, group]) => ({ name, clients: group }));
+    
+    // Debug: mostrar duplicados encontrados
+    if (groups.length > 0) {
+      console.log('📋 Duplicados detectados:', groups.map(g => ({
+        nombre: g.name,
+        cantidad: g.clients.length,
+        ids: g.clients.map(c => c.id)
+      })));
+    }
+    
+    return groups;
   }, [clients]);
 
   const filteredClients = useMemo(() => {
@@ -1011,24 +1023,44 @@ export const Clients = ({ onBack }: ClientsProps) => {
       </header>
 
       <div className="p-6">
-        {/* Alerta de duplicados */}
+        {/* Alerta de duplicados - SIEMPRE visible cuando hay duplicados */}
         {duplicateGroups.length > 0 && (
-          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-destructive" />
-                <p className="text-sm font-semibold text-destructive">
-                  Se detectaron {duplicateGroups.length} grupos de clientes duplicados ({duplicateGroups.reduce((acc, g) => acc + g.clients.length, 0)} registros)
-                </p>
+          <div className="mb-6 p-4 bg-destructive/10 border-2 border-destructive/50 rounded-lg shadow-sm">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-6 h-6 text-destructive" />
+                <div>
+                  <p className="text-base font-bold text-destructive">
+                    ⚠️ {duplicateGroups.length} grupo{duplicateGroups.length > 1 ? 's' : ''} de clientes duplicados
+                  </p>
+                  <p className="text-sm text-destructive/80">
+                    {duplicateGroups.reduce((acc, g) => acc + g.clients.length, 0)} registros en total - Verifica sus deudas antes de eliminar
+                  </p>
+                </div>
               </div>
               <Button
-                variant={showDuplicates ? "default" : "outline"}
+                variant={showDuplicates ? "default" : "destructive"}
                 size="sm"
                 onClick={() => setShowDuplicates(!showDuplicates)}
+                className="min-w-[140px]"
               >
-                {showDuplicates ? "Mostrar Todos" : "Ver Duplicados"}
+                {showDuplicates ? "Mostrar Todos" : "Ver Solo Duplicados"}
               </Button>
             </div>
+            
+            {/* Lista de grupos duplicados */}
+            {showDuplicates && (
+              <div className="mt-4 pt-4 border-t border-destructive/20">
+                <p className="text-sm font-semibold text-destructive mb-2">Grupos detectados:</p>
+                <div className="space-y-1">
+                  {duplicateGroups.map((group, idx) => (
+                    <div key={idx} className="text-xs text-muted-foreground">
+                      • {group.name} - {group.clients.length} registros ({group.clients.map(c => c.id).join(', ')})
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
