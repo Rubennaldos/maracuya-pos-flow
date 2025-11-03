@@ -21,6 +21,9 @@ import {
   Upload,
   FileSpreadsheet,
   AlertTriangle,
+  Archive,
+  RotateCcw,
+  Trash,
 } from "lucide-react";
 import { RTDBHelper } from "@/lib/rt";
 import { RTDB_PATHS } from "@/lib/rtdb";
@@ -50,6 +53,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 /** ===================== Tipos ===================== **/
 interface Client {
@@ -95,6 +99,8 @@ export const Clients = ({ onBack }: ClientsProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [clientDebts, setClientDebts] = useState<Record<string, number>>({});
+  const [showDeletedClients, setShowDeletedClients] = useState(false);
+  const [deletedClients, setDeletedClients] = useState<Array<{client: Client, deletedAt: number, deletedBy?: string}>>([]);
 
   // Load client debts from accounts_receivable
   const loadClientDebts = async () => {
@@ -347,10 +353,24 @@ export const Clients = ({ onBack }: ClientsProps) => {
 
   const deleteClient = async (clientId: string) => {
     try {
+      const client = clients.find((c) => c.id === clientId);
+      if (!client) return;
+
+      // Mover a deleted_clients en vez de borrar permanentemente
+      const deletedData = {
+        client,
+        deletedAt: Date.now(),
+        deletedBy: "admin", // Aquí podrías poner el usuario actual
+      };
+      
+      await RTDBHelper.setData(`deleted_clients/${clientId}`, deletedData);
       await RTDBHelper.removeData(`${RTDB_PATHS.clients}/${clientId}`);
       setClients((prev) => prev.filter((c) => c.id !== clientId));
+      
+      alert(`Cliente ${client.names} ${client.lastNames} movido a papelera. Puede recuperarlo desde el botón "Ver Clientes Borrados".`);
     } catch (error) {
       console.error("Error deleting client:", error);
+      alert("Error al eliminar cliente");
     }
   };
 
@@ -491,6 +511,67 @@ export const Clients = ({ onBack }: ClientsProps) => {
     (event.target as HTMLInputElement).value = "";
   };
 
+  /** ================== CLIENTES BORRADOS ================== */
+  const loadDeletedClients = async () => {
+    try {
+      const data = await RTDBHelper.getData<Record<string, any>>("deleted_clients");
+      if (!data) {
+        setDeletedClients([]);
+        return;
+      }
+      
+      const deletedList = Object.entries(data).map(([id, entry]) => ({
+        client: { ...entry.client, id } as Client,
+        deletedAt: entry.deletedAt || Date.now(),
+        deletedBy: entry.deletedBy || "unknown",
+      }));
+      
+      // Ordenar por fecha de eliminación, más recientes primero
+      deletedList.sort((a, b) => b.deletedAt - a.deletedAt);
+      setDeletedClients(deletedList);
+    } catch (error) {
+      console.error("Error loading deleted clients:", error);
+      setDeletedClients([]);
+    }
+  };
+
+  const restoreClient = async (clientId: string) => {
+    try {
+      const deletedEntry = deletedClients.find(d => d.client.id === clientId);
+      if (!deletedEntry) return;
+
+      // Restaurar cliente a la lista activa
+      await RTDBHelper.setData(`${RTDB_PATHS.clients}/${clientId}`, deletedEntry.client);
+      await RTDBHelper.removeData(`deleted_clients/${clientId}`);
+      
+      // Actualizar estados
+      setClients((prev) => [...prev, deletedEntry.client]);
+      setDeletedClients((prev) => prev.filter(d => d.client.id !== clientId));
+      
+      alert(`Cliente ${deletedEntry.client.names} ${deletedEntry.client.lastNames} restaurado exitosamente.`);
+    } catch (error) {
+      console.error("Error restoring client:", error);
+      alert("Error al restaurar cliente");
+    }
+  };
+
+  const permanentlyDeleteClient = async (clientId: string) => {
+    try {
+      await RTDBHelper.removeData(`deleted_clients/${clientId}`);
+      setDeletedClients((prev) => prev.filter(d => d.client.id !== clientId));
+      alert("Cliente eliminado permanentemente.");
+    } catch (error) {
+      console.error("Error permanently deleting client:", error);
+      alert("Error al eliminar permanentemente");
+    }
+  };
+
+  useEffect(() => {
+    if (showDeletedClients) {
+      loadDeletedClients();
+    }
+  }, [showDeletedClients]);
+
   /** ================== EXPORTAR TODOS LOS CLIENTES A EXCEL ================== */
   const handleExportAllClients = async () => {
     try {
@@ -568,6 +649,112 @@ export const Clients = ({ onBack }: ClientsProps) => {
           </div>
 
           <div className="flex items-center space-x-2">
+            <Sheet open={showDeletedClients} onOpenChange={setShowDeletedClients}>
+              <SheetTrigger asChild>
+                <Button variant="outline">
+                  <Archive className="w-4 h-4 mr-2" />
+                  Ver Clientes Borrados
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[600px] sm:w-[700px] overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>Clientes Eliminados</SheetTitle>
+                  <SheetDescription>
+                    Aquí puedes ver y restaurar clientes que fueron eliminados.
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="mt-6 space-y-4">
+                  {deletedClients.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Archive className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No hay clientes eliminados</p>
+                    </div>
+                  ) : (
+                    deletedClients.map((entry) => {
+                      const c = entry.client;
+                      const debt = clientDebts[c.id] || 0;
+                      return (
+                        <Card key={c.id}>
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h3 className="font-semibold text-lg">
+                                    {c.names} {c.lastNames}
+                                  </h3>
+                                  <p className="text-sm text-muted-foreground">ID: {c.id}</p>
+                                </div>
+                                <Badge variant="outline">{c.classroom}</Badge>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Teléfono:</span>
+                                  <p className="font-medium">{c.payer1Phone || "N/A"}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Nivel:</span>
+                                  <p className="font-medium">{c.level || "N/A"}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Deuda Real:</span>
+                                  <p className={`font-semibold ${debt > 0 ? 'text-destructive' : 'text-success'}`}>
+                                    S/ {debt.toFixed(2)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">Cuenta:</span>
+                                  <p className="font-medium">{c.hasAccount ? "Sí" : "No"}</p>
+                                </div>
+                              </div>
+
+                              <div className="text-xs text-muted-foreground border-t pt-2">
+                                Eliminado: {new Date(entry.deletedAt).toLocaleString("es-PE")}
+                              </div>
+
+                              <div className="flex gap-2 pt-2">
+                                <Button 
+                                  size="sm" 
+                                  className="flex-1"
+                                  onClick={() => restoreClient(c.id)}
+                                >
+                                  <RotateCcw className="w-4 h-4 mr-2" />
+                                  Restaurar
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button size="sm" variant="destructive">
+                                      <Trash className="w-4 h-4 mr-2" />
+                                      Eliminar Permanentemente
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>¿Eliminar permanentemente?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Esta acción es irreversible. El cliente {c.names} {c.lastNames} será eliminado para siempre.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => permanentlyDeleteClient(c.id)}>
+                                        Eliminar Permanentemente
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+
             <Button variant="outline" onClick={downloadTemplate}>
               <Download className="w-4 h-4 mr-2" />
               Descargar Plantilla
