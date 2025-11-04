@@ -137,6 +137,13 @@ export const SalesList = ({ onBack }: SalesListProps) => {
           if (raw?.note) {
             console.log(`🔍 Venta ${raw?.correlative} tiene observación:`, raw.note);
           }
+          
+          // Debug más detallado para VH001-01161
+          if (raw?.correlative === 'VH001-01161') {
+            console.log('🔎 Datos completos de VH001-01161 desde RTDB:', raw);
+            console.log('🔎 raw.note específico:', raw.note);
+            console.log('🔎 tipo de raw.note:', typeof raw.note);
+          }
 
           return {
             id,
