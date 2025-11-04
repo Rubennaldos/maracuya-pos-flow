@@ -133,6 +133,11 @@ export const SalesList = ({ onBack }: SalesListProps) => {
           const items = Array.isArray(raw?.items) ? raw.items : [];
           const total = Number(raw?.total ?? 0);
 
+          // Debug: Log si hay note
+          if (raw?.note) {
+            console.log(`🔍 Venta ${raw?.correlative} tiene observación:`, raw.note);
+          }
+
           return {
             id,
             correlative: String(raw?.correlative ?? id),
@@ -530,7 +535,15 @@ await RTDBHelper.deleteSaleCascade(saleId, "system");
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Detalle de Venta</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setSelectedSale(null)}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    console.log('📋 Venta seleccionada completa:', selectedSale);
+                    console.log('📝 Observación:', selectedSale.note);
+                    setSelectedSale(null);
+                  }}
+                >
                   ✕
                 </Button>
               </div>

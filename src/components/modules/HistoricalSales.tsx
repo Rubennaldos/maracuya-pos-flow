@@ -392,6 +392,15 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
         ...(hasNote && note.trim() ? { note: note.trim() } : {}),
       };
 
+      console.log('💾 Guardando venta con datos:', {
+        correlative: saleData.correlative,
+        hasNote,
+        note: note,
+        noteTrimmed: note.trim(),
+        willSaveNote: hasNote && note.trim(),
+        finalNote: saleData.note
+      });
+
       // 1) Guardar la venta
       const saleId = await RTDBHelper.pushData(RTDB_PATHS.sales, saleData);
 
