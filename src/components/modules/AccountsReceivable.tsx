@@ -297,6 +297,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   const [flashCollectionData, setFlashCollectionData] = useState<any[]>([]);
   const [flashMessageTemplate, setFlashMessageTemplate] = useState("Hola {nombre}, te recordamos que tienes un saldo pendiente de {monto} en Maracuyá Villa Gratia. Adjunto encontrarás el detalle. ¡Gracias!");
   const [collectedClients, setCollectedClients] = useState<Set<string>>(new Set());
+  const [flashSearchTerm, setFlashSearchTerm] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -976,8 +977,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     
     const flashData = debtors.map(debtor => ({
       ...debtor,
-      customPhones: savedPhones[debtor.id] || [debtor.phone || ""],
-      customMessage: flashMessageTemplate.replace("{nombre}", debtor.name.split(" ")[0]).replace("{monto}", `S/ ${debtor.totalDebt.toFixed(2)}`)
+      customPhones: savedPhones[debtor.id] || [debtor.phone || ""]
     }));
     setFlashCollectionData(flashData);
   };
@@ -999,7 +999,11 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   };
 
   const sendFlashWhatsApp = (debtor: any) => {
-    const message = encodeURIComponent(debtor.customMessage);
+    // Usar la plantilla global y personalizarla para este deudor
+    const personalizedMessage = flashMessageTemplate
+      .replace("{nombre}", debtor.name.split(" ")[0])
+      .replace("{monto}", `S/ ${debtor.totalDebt.toFixed(2)}`);
+    const message = encodeURIComponent(personalizedMessage);
     const validPhones = (debtor.customPhones || []).filter((p: string) => p.replace(/\D/g, "").length >= 9);
     
     if (validPhones.length === 0) {
@@ -1025,12 +1029,6 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       }
       return newSet;
     });
-  };
-
-  const updateFlashMessage = (debtorId: string, message: string) => {
-    setFlashCollectionData(prev => 
-      prev.map(d => d.id === debtorId ? { ...d, customMessage: message } : d)
-    );
   };
 
   const updateFlashPhone = (debtorId: string, index: number, phone: string) => {
@@ -1087,13 +1085,9 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     const saved = localStorage.getItem("flashMessageTemplate");
     if (saved) {
       setFlashMessageTemplate(saved);
-      // Actualizar todos los mensajes con la nueva plantilla
-      setFlashCollectionData(prev => 
-        prev.map(d => ({
-          ...d,
-          customMessage: saved.replace("{nombre}", d.name.split(" ")[0]).replace("{monto}", `S/ ${d.totalDebt.toFixed(2)}`)
-        }))
-      );
+      alert("Plantilla cargada exitosamente");
+    } else {
+      alert("No hay plantilla guardada");
     }
   };
 
@@ -2237,7 +2231,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  Usa <code className="bg-muted px-1 py-0.5 rounded">{'nombre'}</code> y <code className="bg-muted px-1 py-0.5 rounded">{'monto'}</code> para personalizar
+                  Usa <code className="bg-muted px-1 py-0.5 rounded">{'{nombre}'}</code> y <code className="bg-muted px-1 py-0.5 rounded">{'{monto}'}</code> para personalizar
                 </div>
                 <textarea
                   className="w-full p-3 border rounded-md min-h-[100px] font-sans"
@@ -2257,122 +2251,96 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               </CardContent>
             </Card>
 
-            {/* Lista de deudores */}
-            <div className="space-y-3">
-              {flashCollectionData.map((debtor) => (
+            {/* Filtro de búsqueda */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar deudor por nombre..."
+                value={flashSearchTerm}
+                onChange={(e) => setFlashSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {/* Lista compacta de deudores */}
+            <div className="space-y-2">
+              {flashCollectionData
+                .filter(debtor => 
+                  debtor.name.toLowerCase().includes(flashSearchTerm.toLowerCase())
+                )
+                .map((debtor) => (
                 <Card key={debtor.id} className={cn(
                   "transition-all",
                   collectedClients.has(debtor.id) && "opacity-50 bg-green-50 dark:bg-green-950"
                 )}>
-                  <CardContent className="p-4 space-y-3">
-                    {/* Header con nombre y monto */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-bold text-lg">{debtor.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Deuda: <span className="font-bold text-destructive">S/ {debtor.totalDebt.toFixed(2)}</span>
-                        </p>
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      {/* Checkbox de cobrado */}
+                      <Checkbox
+                        checked={collectedClients.has(debtor.id)}
+                        onCheckedChange={() => toggleFlashCollected(debtor.id)}
+                      />
+                      
+                      {/* Info del deudor */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm truncate">{debtor.name}</h3>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{debtor.invoices.length} factura(s)</span>
+                          <span className="font-bold text-destructive">S/ {debtor.totalDebt.toFixed(2)}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={collectedClients.has(debtor.id)}
-                          onCheckedChange={() => toggleFlashCollected(debtor.id)}
-                        />
-                        <label className="text-sm font-medium">Cobrado</label>
-                      </div>
-                    </div>
 
-                    {/* Inputs de teléfono */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium">Teléfonos</label>
+                      {/* Input de teléfono */}
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="tel"
+                          value={(debtor.customPhones || [""])[0]}
+                          onChange={(e) => updateFlashPhone(debtor.id, 0, e.target.value)}
+                          placeholder="999999999"
+                          className="font-mono w-28 h-8 text-xs"
+                        />
+                        {(debtor.customPhones || [""]).length > 1 && (
+                          <Badge variant="secondary" className="text-xs">
+                            +{(debtor.customPhones || [""]).length - 1}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Botones de acción */}
+                      <div className="flex gap-1">
                         <Button
-                          onClick={() => saveFlashPhone(debtor.id, debtor.customPhones || [])}
+                          onClick={() => sendFlashPDF(debtor)}
                           size="sm"
                           variant="outline"
-                          className="h-7 text-xs"
+                          className="h-8 w-8 p-0"
+                          title="Generar PDF"
                         >
-                          Guardar números
+                          <FileText className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          onClick={() => sendFlashWhatsApp(debtor)}
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          disabled={!(debtor.customPhones || []).some((p: string) => p.replace(/\D/g, "").length >= 9)}
+                          title="Enviar WhatsApp"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
                         </Button>
                       </div>
-                      
-                      {(debtor.customPhones || [""]).map((phone: string, index: number) => (
-                        <div key={index} className="flex gap-2">
-                          <Input
-                            type="tel"
-                            value={phone}
-                            onChange={(e) => updateFlashPhone(debtor.id, index, e.target.value)}
-                            placeholder="999999999"
-                            className="font-mono flex-1"
-                          />
-                          {(debtor.customPhones || [""]).length > 1 && (
-                            <Button
-                              onClick={() => removeFlashPhone(debtor.id, index)}
-                              size="sm"
-                              variant="ghost"
-                              className="h-10 w-10 p-0"
-                            >
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                      
-                      <Button
-                        onClick={() => addFlashPhone(debtor.id)}
-                        size="sm"
-                        variant="outline"
-                        className="w-full"
-                      >
-                        + Agregar otro número
-                      </Button>
-                    </div>
-
-                    {/* Mensaje personalizado */}
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium">Mensaje Personalizado</label>
-                      <textarea
-                        className="w-full p-2 border rounded-md min-h-[80px] text-sm font-sans"
-                        value={debtor.customMessage}
-                        onChange={(e) => updateFlashMessage(debtor.id, e.target.value)}
-                      />
-                    </div>
-
-                    {/* Botones de acción */}
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => sendFlashPDF(debtor)}
-                        size="sm"
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        <FileText className="w-4 h-4 mr-2" />
-                        Generar PDF
-                      </Button>
-                      <Button
-                        onClick={() => sendFlashWhatsApp(debtor)}
-                        size="sm"
-                        className="flex-1"
-                        disabled={!(debtor.customPhones || []).some((p: string) => p.replace(/\D/g, "").length >= 9)}
-                      >
-                        <MessageCircle className="w-4 h-4 mr-2" />
-                        Enviar WhatsApp ({(debtor.customPhones || []).filter((p: string) => p.replace(/\D/g, "").length >= 9).length})
-                      </Button>
-                    </div>
-
-                    {/* Info de facturas */}
-                    <div className="text-xs text-muted-foreground">
-                      {debtor.invoices.length} factura(s) pendiente(s)
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
 
-            {flashCollectionData.length === 0 && (
+            {flashCollectionData.filter(debtor => 
+              debtor.name.toLowerCase().includes(flashSearchTerm.toLowerCase())
+            ).length === 0 && (
               <Card>
                 <CardContent className="p-8 text-center">
-                  <p className="text-muted-foreground">No hay deudores pendientes</p>
+                  <p className="text-muted-foreground">
+                    {flashSearchTerm ? "No se encontraron deudores con ese nombre" : "No hay deudores pendientes"}
+                  </p>
                 </CardContent>
               </Card>
             )}
