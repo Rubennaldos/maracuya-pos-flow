@@ -749,7 +749,14 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
             </Button>
             <Button
               ref={confirmBtnRef as any}
-              onClick={processHistoricalSale}
+              onClick={() => {
+                console.log('🔵 ANTES de guardar - Estado actual:', {
+                  hasNote,
+                  note,
+                  noteLength: note.length
+                });
+                processHistoricalSale();
+              }}
               disabled={isSaving}
               type="button"
             >
