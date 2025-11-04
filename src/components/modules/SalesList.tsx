@@ -58,6 +58,7 @@ type UISale = {
   time: string; // formateado
   ts: number; // timestamp en ms
   createdAt?: string;
+  note?: string; // observaciones de la venta
 };
 
 // Ítem que espera el editor
@@ -150,6 +151,7 @@ export const SalesList = ({ onBack }: SalesListProps) => {
             time: rawDate ? d.toLocaleTimeString() : "",
             ts,
             createdAt: raw?.createdAt ?? undefined,
+            note: raw?.note ?? undefined,
           } as UISale;
         })
         .sort((a, b) => b.ts - a.ts);
@@ -578,6 +580,19 @@ await RTDBHelper.deleteSaleCascade(saleId, "system");
               </div>
 
               <Separator />
+
+              {/* Observaciones si existen */}
+              {selectedSale.note && (
+                <>
+                  <div>
+                    <strong className="text-sm">Observaciones:</strong>
+                    <p className="mt-1 text-sm text-muted-foreground bg-muted/50 p-3 rounded-md whitespace-pre-wrap">
+                      {selectedSale.note}
+                    </p>
+                  </div>
+                  <Separator />
+                </>
+              )}
 
               <div className="flex justify-between text-lg font-bold">
                 <span>Total:</span>

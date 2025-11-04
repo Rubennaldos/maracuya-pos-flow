@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft, Search, Plus, Minus, Calendar as CalendarIcon,
   ShoppingCart, Clock, User, DollarSign
@@ -120,6 +122,10 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const confirmBtnRef = useRef<HTMLButtonElement | null>(null);
+  
+  // Observaciones de la venta
+  const [hasNote, setHasNote] = useState(false);
+  const [note, setNote] = useState("");
 
   /* ---------- refs para UX ---------- */
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -383,6 +389,7 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
         createdAt: createdAtIso,
         client: { id: selectedClient.id, fullName: selectedClient.name },
         user: "Sistema",
+        ...(hasNote && note.trim() ? { note: note.trim() } : {}),
       };
 
       // 1) Guardar la venta
@@ -408,6 +415,8 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
 
       clearCart();
       setSelectedClient(null);
+      setHasNote(false);
+      setNote("");
 
       // 🔹 Devuelve el foco al buscador después del alert
       setTimeout(focusSearch, 0);
@@ -683,10 +692,48 @@ export const HistoricalSales = ({ onBack }: HistoricalSalesProps) => {
         onClose={() => setConfirmOpen(false)}
         title="Confirmar venta histórica"
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
           <p><b>Cliente:</b> {selectedClient?.name ?? "—"}</p>
           <p><b>Fecha:</b> {selectedDate ? format(selectedDate, "PPP", { locale: es }) : "—"}</p>
           <p><b>Items:</b> {cart.reduce((s, i) => s + i.quantity, 0)} — <b>Total:</b> S/ {getTotalAmount().toFixed(2)}</p>
+          
+          <Separator />
+          
+          {/* Checkbox para observaciones */}
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="addNote" 
+              checked={hasNote} 
+              onCheckedChange={(checked) => {
+                setHasNote(!!checked);
+                if (!checked) setNote("");
+              }}
+            />
+            <label 
+              htmlFor="addNote" 
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+            >
+              Agregar observación a esta venta
+            </label>
+          </div>
+          
+          {/* Textarea de observaciones */}
+          {hasNote && (
+            <div className="space-y-2">
+              <label htmlFor="noteText" className="text-sm font-medium">
+                Observación:
+              </label>
+              <Textarea
+                id="noteText"
+                placeholder="Escribe alguna nota o comentario sobre esta venta..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="min-h-[100px]"
+                autoFocus
+              />
+            </div>
+          )}
+          
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setConfirmOpen(false)} type="button">
               Volver
