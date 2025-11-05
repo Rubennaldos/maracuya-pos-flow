@@ -268,6 +268,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     maxAmount: ""
   });
   const [selectedDebtor, setSelectedDebtor] = useState<any>(null);
+  const [filterUpToDate, setFilterUpToDate] = useState<Date | undefined>(undefined);
   const [editingPayment, setEditingPayment] = useState<any>(null);
   const [showEditPaymentDialog, setShowEditPaymentDialog] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -336,10 +337,36 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     setFilteredSalesDetail(filtered);
   }, [salesDetailData, salesSearchTerm, dateFrom, dateTo]);
 
-  const filteredDebtors = debtors.filter((debtor) =>
-    debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    debtor.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filtrar deudores por fecha "hasta" y search
+  const filteredDebtors = debtors
+    .map(debtor => {
+      if (!filterUpToDate) return debtor;
+      
+      // Filtrar facturas hasta la fecha seleccionada
+      const filteredInvoices = debtor.invoices.filter((inv: any) => {
+        const invoiceDate = toLocalDateSafe(inv.date);
+        return invoiceDate <= filterUpToDate;
+      });
+      
+      // Recalcular deuda total
+      const filteredTotalDebt = filteredInvoices.reduce((sum: number, inv: any) => 
+        sum + (inv.remainingAmount || inv.amount || 0), 0
+      );
+      
+      return {
+        ...debtor,
+        invoices: filteredInvoices,
+        totalDebt: filteredTotalDebt
+      };
+    })
+    .filter((debtor) => {
+      // Excluir si no tiene deuda después del filtro de fecha
+      if (debtor.totalDebt <= 0) return false;
+      
+      // Filtrar por búsqueda
+      return debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+             debtor.id.toLowerCase().includes(searchTerm.toLowerCase());
+    });
 
   // Filtros inteligentes para boletas pagadas
   const filteredPaidInvoices = paidInvoices.filter((payment) => {
@@ -359,8 +386,8 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     return matchesClient && matchesMethod && matchesDateFrom && matchesDateTo && matchesMinAmount && matchesMaxAmount;
   });
 
-  const totalDebt = debtors.reduce((sum, d) => sum + (d.totalDebt || 0), 0);
-  const urgentCount = debtors.filter((d) => d.urgentCollection).length;
+  const totalDebt = filteredDebtors.reduce((sum, d) => sum + (d.totalDebt || 0), 0);
+  const urgentCount = filteredDebtors.filter((d) => d.urgentCollection).length;
 
   const generateWhatsAppMessage = (debtor: any, type: "simple" | "detailed" | "full") => {
     let message = `Hola ${debtor.name.split(" ")[0]}, `;
@@ -578,11 +605,11 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
         { align: "center" }
       );
 
-      // Rango de fechas
+      // Rango de fechas (considerar el filtro "hasta")
       let cursorY = 55;
-      if (dateFrom || dateTo) {
+      if (dateFrom || dateTo || filterUpToDate) {
         const fromDate = dateFrom ? format(dateFrom, "dd/MM/yyyy") : "Inicio";
-        const toDate = dateTo ? format(dateTo, "dd/MM/yyyy") : "Actual";
+        const toDate = dateTo ? format(dateTo, "dd/MM/yyyy") : (filterUpToDate ? format(filterUpToDate, "dd/MM/yyyy") : "Actual");
         doc.text(`Período: ${fromDate} - ${toDate}`, pageW / 2, 55, { align: "center" });
         cursorY = 65;
       }
@@ -1148,9 +1175,14 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   <CardTitle className="text-sm font-medium">Total por Cobrar</CardTitle>
                   <DollarSign className="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-primary">S/ {totalDebt.toFixed(2)}</div>
-                </CardContent>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">S/ {totalDebt.toFixed(2)}</div>
+                {filterUpToDate && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Hasta {format(filterUpToDate, "dd/MM/yyyy")}
+                  </p>
+                )}
+              </CardContent>
               </Card>
 
               <Card>
@@ -1158,9 +1190,14 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   <CardTitle className="text-sm font-medium">Clientes Deudores</CardTitle>
                   <Users className="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{debtors.length}</div>
-                </CardContent>
+              <CardContent>
+                <div className="text-2xl font-bold">{filteredDebtors.length}</div>
+                {filterUpToDate && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Filtrado por fecha
+                  </p>
+                )}
+              </CardContent>
               </Card>
 
               <Card>
@@ -1174,9 +1211,9 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               </Card>
             </div>
 
-            {/* Search */}
-            <div className="mb-6">
-              <div className="relative max-w-md">
+            {/* Search and Filters */}
+            <div className="mb-6 flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
                   placeholder="Buscar deudores..."
@@ -1184,6 +1221,42 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
+              </div>
+              
+              {/* Filtro "Hasta Fecha" */}
+              <div className="flex gap-2 items-center">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "justify-start text-left font-normal min-w-[200px]",
+                        !filterUpToDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filterUpToDate ? `Hasta ${format(filterUpToDate, "dd/MM/yyyy")}` : "Hasta fecha"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={filterUpToDate}
+                      onSelect={setFilterUpToDate}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {filterUpToDate && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFilterUpToDate(undefined)}
+                  >
+                    Limpiar
+                  </Button>
+                )}
               </div>
             </div>
 
