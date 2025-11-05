@@ -342,10 +342,14 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     .map(debtor => {
       if (!filterUpToDate) return debtor;
       
+      // Normalizar la fecha del filtro a medianoche para comparar solo días
+      const filterDate = new Date(filterUpToDate);
+      filterDate.setHours(23, 59, 59, 999);
+      
       // Filtrar facturas hasta la fecha seleccionada
       const filteredInvoices = debtor.invoices.filter((inv: any) => {
         const invoiceDate = toLocalDateSafe(inv.date);
-        return invoiceDate <= filterUpToDate;
+        return invoiceDate <= filterDate;
       });
       
       // Recalcular deuda total
