@@ -342,18 +342,20 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     .map(debtor => {
       if (!filterUpToDate) return debtor;
       
-      // Normalizar la fecha del filtro a medianoche para comparar solo días
-      const filterDate = new Date(filterUpToDate);
-      filterDate.setHours(23, 59, 59, 999);
+      // Convertir a YYYY-MM-DD para comparar solo fechas sin horas
+      const filterDateStr = format(filterUpToDate, "yyyy-MM-dd");
       
-      console.log("🔍 Filtro hasta fecha:", filterDate.toISOString());
+      console.log("🔍 Filtro hasta fecha (string):", filterDateStr);
       console.log("📊 Procesando deudor:", debtor.name, "con", debtor.invoices.length, "facturas");
       
       // Filtrar facturas hasta la fecha seleccionada
       const filteredInvoices = debtor.invoices.filter((inv: any) => {
+        // Convertir la fecha de la factura a YYYY-MM-DD
         const invoiceDate = toLocalDateSafe(inv.date);
-        const isBeforeOrEqual = invoiceDate <= filterDate;
-        console.log("  📄 Factura", inv.correlative, "fecha:", inv.date, "→", invoiceDate.toISOString(), "incluir:", isBeforeOrEqual);
+        const invoiceDateStr = format(invoiceDate, "yyyy-MM-dd");
+        const isBeforeOrEqual = invoiceDateStr <= filterDateStr;
+        
+        console.log("  📄 Factura", inv.correlative, "fecha original:", inv.date, "→ fecha normalizada:", invoiceDateStr, "incluir:", isBeforeOrEqual);
         return isBeforeOrEqual;
       });
       
