@@ -50,10 +50,20 @@ async function resolveVendorName(vendorField: string): Promise<string> {
 const toLocalDateSafe = (d: string | Date): Date => {
   if (d instanceof Date) return d;
   if (!d) return new Date();
+  
+  // Si es formato DD/MM/YYYY (27/05/2025)
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
+    const [day, month, year] = d.split('/').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  
+  // Si es formato YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
     const local = parse(d, "yyyy-MM-dd", new Date());
     return isValid(local) ? local : new Date();
   }
+  
+  // Intentar parseISO para formatos ISO
   const iso = parseISO(d);
   return isValid(iso) ? iso : new Date();
 };
