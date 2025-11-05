@@ -346,16 +346,25 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       const filterDate = new Date(filterUpToDate);
       filterDate.setHours(23, 59, 59, 999);
       
+      console.log("🔍 Filtro hasta fecha:", filterDate.toISOString());
+      console.log("📊 Procesando deudor:", debtor.name, "con", debtor.invoices.length, "facturas");
+      
       // Filtrar facturas hasta la fecha seleccionada
       const filteredInvoices = debtor.invoices.filter((inv: any) => {
         const invoiceDate = toLocalDateSafe(inv.date);
-        return invoiceDate <= filterDate;
+        const isBeforeOrEqual = invoiceDate <= filterDate;
+        console.log("  📄 Factura", inv.correlative, "fecha:", inv.date, "→", invoiceDate.toISOString(), "incluir:", isBeforeOrEqual);
+        return isBeforeOrEqual;
       });
+      
+      console.log("  ✅ Facturas filtradas:", filteredInvoices.length);
       
       // Recalcular deuda total
       const filteredTotalDebt = filteredInvoices.reduce((sum: number, inv: any) => 
         sum + (inv.remainingAmount || inv.amount || 0), 0
       );
+      
+      console.log("  💰 Deuda total filtrada:", filteredTotalDebt);
       
       return {
         ...debtor,
@@ -365,12 +374,23 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     })
     .filter((debtor) => {
       // Excluir si no tiene deuda después del filtro de fecha
-      if (debtor.totalDebt <= 0) return false;
+      if (debtor.totalDebt <= 0) {
+        console.log("❌ Excluido (sin deuda):", debtor.name);
+        return false;
+      }
       
       // Filtrar por búsqueda
-      return debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch = debtor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
              debtor.id.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      if (!matchesSearch) {
+        console.log("❌ Excluido (no coincide búsqueda):", debtor.name);
+      }
+      
+      return matchesSearch;
     });
+  
+  console.log("📋 Total deudores filtrados:", filteredDebtors.length);
 
   // Filtros inteligentes para boletas pagadas
   const filteredPaidInvoices = paidInvoices.filter((payment) => {
