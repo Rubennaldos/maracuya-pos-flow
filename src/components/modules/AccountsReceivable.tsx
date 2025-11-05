@@ -1038,7 +1038,8 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     // Cargar números guardados de localStorage
     const savedPhones = JSON.parse(localStorage.getItem("flashClientPhones") || "{}");
     
-    const flashData = debtors.map(debtor => ({
+    // Usar filteredDebtors para respetar el filtro de fecha
+    const flashData = filteredDebtors.map(debtor => ({
       ...debtor,
       customPhones: savedPhones[debtor.id] || [debtor.phone || ""]
     }));
