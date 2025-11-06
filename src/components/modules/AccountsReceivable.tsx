@@ -12,12 +12,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle,
   CheckCircle, Clock, FileText, Receipt, Download, Edit2, Trash2,
-  Calendar as CalendarIcon, Filter, Eye
+  Calendar as CalendarIcon, Filter, Eye, FileSpreadsheet
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format, parse, parseISO, isValid } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -1174,6 +1175,77 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     });
   };
 
+  // Función para exportar solo totales
+  const exportTotalsToExcel = () => {
+    const dataToExport = filteredDebtors.map(debtor => ({
+      'Cliente': debtor.name,
+      'ID': debtor.id,
+      'Total Deuda': debtor.totalDebt.toFixed(2),
+      'Número de Facturas': debtor.invoices.length,
+      'Urgente': debtor.urgentCollection ? 'Sí' : 'No'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Totales");
+
+    // Ajustar anchos de columna
+    ws['!cols'] = [
+      { wch: 30 }, // Cliente
+      { wch: 15 }, // ID
+      { wch: 15 }, // Total Deuda
+      { wch: 18 }, // Número de Facturas
+      { wch: 10 }  // Urgente
+    ];
+
+    const dateStr = filterUpToDate ? `_hasta_${format(filterUpToDate, "dd-MM-yyyy")}` : '';
+    const filename = `cuentas_por_cobrar_totales${dateStr}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  };
+
+  // Función para exportar con detalles
+  const exportDetailsToExcel = () => {
+    const dataToExport: any[] = [];
+
+    filteredDebtors.forEach(debtor => {
+      debtor.invoices.forEach((invoice: any) => {
+        const productsStr = invoice.products.join(', ');
+        dataToExport.push({
+          'Cliente': debtor.name,
+          'ID Cliente': debtor.id,
+          'Correlativo': invoice.correlative,
+          'Fecha': invoice.date,
+          'Monto Total': invoice.amount.toFixed(2),
+          'Monto Pagado': invoice.paidAmount ? invoice.paidAmount.toFixed(2) : '0.00',
+          'Monto Pendiente': invoice.remainingAmount.toFixed(2),
+          'Tipo': invoice.type || 'N/A',
+          'Productos': productsStr || 'Sin detalle'
+        });
+      });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Detalles");
+
+    // Ajustar anchos de columna
+    ws['!cols'] = [
+      { wch: 30 }, // Cliente
+      { wch: 15 }, // ID Cliente
+      { wch: 15 }, // Correlativo
+      { wch: 12 }, // Fecha
+      { wch: 15 }, // Monto Total
+      { wch: 15 }, // Monto Pagado
+      { wch: 15 }, // Monto Pendiente
+      { wch: 12 }, // Tipo
+      { wch: 50 }  // Productos
+    ];
+
+    const dateStr = filterUpToDate ? `_hasta_${format(filterUpToDate, "dd-MM-yyyy")}` : '';
+    const filename = `cuentas_por_cobrar_detalles${dateStr}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -1186,14 +1258,34 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
             </Button>
             <h1 className="text-2xl font-bold text-foreground">Cuentas por Cobrar</h1>
           </div>
-          <Button
-            onClick={openFlashCollection}
-            className="gap-2"
-            variant="default"
-          >
-            <MessageCircle className="h-4 w-4" />
-            A Cobrar Flash
-          </Button>
+          <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Exportar Excel
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportTotalsToExcel}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Solo Totales
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportDetailsToExcel}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Con Detalles de Compra
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              onClick={openFlashCollection}
+              className="gap-2"
+              variant="default"
+            >
+              <MessageCircle className="h-4 w-4" />
+              A Cobrar Flash
+            </Button>
+          </div>
         </div>
       </header>
 
