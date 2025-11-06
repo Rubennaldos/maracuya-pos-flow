@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle,
   CheckCircle, Clock, FileText, Receipt, Download, Edit2, Trash2,
-  Calendar as CalendarIcon, Filter, Eye, FileSpreadsheet
+  Calendar as CalendarIcon, Filter, Eye, FileSpreadsheet, Printer
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -993,6 +993,136 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     }
   };
 
+  // Función para imprimir ticket de 80mm
+  const printDebtorTicket = (debtor: any) => {
+    const printWindow = window.open('', '', 'width=302,height=600');
+    if (!printWindow) return;
+
+    const now = new Date();
+    const currentTime = format(now, "dd/MM/yyyy HH:mm:ss");
+    
+    let dateRangeText = '';
+    if (filterFromDate && filterUpToDate) {
+      dateRangeText = `Del ${format(filterFromDate, "dd/MM/yyyy")} al ${format(filterUpToDate, "dd/MM/yyyy")}`;
+    } else if (filterFromDate) {
+      dateRangeText = `Desde ${format(filterFromDate, "dd/MM/yyyy")}`;
+    } else if (filterUpToDate) {
+      dateRangeText = `Hasta ${format(filterUpToDate, "dd/MM/yyyy")}`;
+    } else {
+      dateRangeText = 'Todas las fechas';
+    }
+
+    let ticketContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Ticket - ${debtor.name}</title>
+        <style>
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
+          body {
+            width: 80mm;
+            margin: 0;
+            padding: 5mm;
+            font-family: 'Courier New', monospace;
+            font-size: 10pt;
+            line-height: 1.3;
+          }
+          .center {
+            text-align: center;
+          }
+          .bold {
+            font-weight: bold;
+          }
+          .line {
+            border-top: 1px dashed #000;
+            margin: 3mm 0;
+          }
+          .header {
+            margin-bottom: 3mm;
+          }
+          .invoice {
+            margin-bottom: 2mm;
+            padding: 2mm 0;
+            border-bottom: 1px dotted #ccc;
+          }
+          .total {
+            margin-top: 3mm;
+            padding-top: 3mm;
+            border-top: 2px solid #000;
+          }
+          .small {
+            font-size: 8pt;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="center header">
+          <div class="bold">MARACUYÁ VILLA GRATIA</div>
+          <div>ESTADO DE CUENTA</div>
+          <div class="small">${currentTime}</div>
+        </div>
+        
+        <div class="line"></div>
+        
+        <div class="bold">CLIENTE:</div>
+        <div>${debtor.name}</div>
+        <div class="small">ID: ${debtor.id}</div>
+        
+        <div class="line"></div>
+        
+        <div class="bold">PERÍODO:</div>
+        <div>${dateRangeText}</div>
+        
+        <div class="line"></div>
+        
+        <div class="bold">DETALLE DE CONSUMOS:</div>
+        <div class="small">Total: ${debtor.invoices.length} factura(s)</div>
+        
+        <div class="line"></div>
+    `;
+
+    debtor.invoices.forEach((invoice: any) => {
+      ticketContent += `
+        <div class="invoice">
+          <div><span class="bold">${invoice.correlative}</span> - ${invoice.date}</div>
+          <div class="small">${invoice.products.join(', ') || 'Sin detalle'}</div>
+          <div>Total: S/ ${invoice.amount.toFixed(2)}</div>
+          ${invoice.paidAmount > 0 ? `<div class="small">Pagado: S/ ${invoice.paidAmount.toFixed(2)}</div>` : ''}
+          <div class="bold">Pendiente: S/ ${(invoice.remainingAmount || invoice.amount).toFixed(2)}</div>
+        </div>
+      `;
+    });
+
+    ticketContent += `
+        <div class="total">
+          <div class="center bold">TOTAL ADEUDADO</div>
+          <div class="center" style="font-size: 14pt;">S/ ${debtor.totalDebt.toFixed(2)}</div>
+        </div>
+        
+        <div class="line"></div>
+        
+        <div class="center small">
+          Gracias por su preferencia
+        </div>
+        
+        <script>
+          window.onload = function() {
+            window.print();
+            setTimeout(() => window.close(), 500);
+          }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(ticketContent);
+    printWindow.document.close();
+  };
+
   const deletePayment = async (paymentId: string) => {
     if (!confirm("¿Estás seguro de que deseas eliminar este pago? Esta acción no se puede deshacer.")) {
       return;
@@ -1541,6 +1671,16 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                       >
                         <Receipt className="w-4 h-4 mr-1" />
                         CXC
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => printDebtorTicket(debtor)}
+                        title="Imprimir ticket 80mm"
+                      >
+                        <Printer className="w-4 h-4 mr-1" />
+                        Ticket
                       </Button>
                     </div>
 
