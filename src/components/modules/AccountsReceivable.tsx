@@ -279,6 +279,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     maxAmount: ""
   });
   const [selectedDebtor, setSelectedDebtor] = useState<any>(null);
+  const [filterFromDate, setFilterFromDate] = useState<Date | undefined>(undefined);
   const [filterUpToDate, setFilterUpToDate] = useState<Date | undefined>(undefined);
   const [editingPayment, setEditingPayment] = useState<any>(null);
   const [showEditPaymentDialog, setShowEditPaymentDialog] = useState(false);
@@ -348,26 +349,31 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     setFilteredSalesDetail(filtered);
   }, [salesDetailData, salesSearchTerm, dateFrom, dateTo]);
 
-  // Filtrar deudores por fecha "hasta" y search
+  // Filtrar deudores por fecha "desde" y "hasta" y search
   const filteredDebtors = debtors
     .map(debtor => {
-      if (!filterUpToDate) return debtor;
+      if (!filterFromDate && !filterUpToDate) return debtor;
       
       // Convertir a YYYY-MM-DD para comparar solo fechas sin horas
-      const filterDateStr = format(filterUpToDate, "yyyy-MM-dd");
+      const filterFromDateStr = filterFromDate ? format(filterFromDate, "yyyy-MM-dd") : null;
+      const filterUpToDateStr = filterUpToDate ? format(filterUpToDate, "yyyy-MM-dd") : null;
       
-      console.log("🔍 Filtro hasta fecha (string):", filterDateStr);
+      console.log("🔍 Filtro desde fecha:", filterFromDateStr, "hasta:", filterUpToDateStr);
       console.log("📊 Procesando deudor:", debtor.name, "con", debtor.invoices.length, "facturas");
       
-      // Filtrar facturas hasta la fecha seleccionada
+      // Filtrar facturas en el rango de fechas seleccionado
       const filteredInvoices = debtor.invoices.filter((inv: any) => {
         // Convertir la fecha de la factura a YYYY-MM-DD
         const invoiceDate = toLocalDateSafe(inv.date);
         const invoiceDateStr = format(invoiceDate, "yyyy-MM-dd");
-        const isBeforeOrEqual = invoiceDateStr <= filterDateStr;
         
-        console.log("  📄 Factura", inv.correlative, "fecha original:", inv.date, "→ fecha normalizada:", invoiceDateStr, "incluir:", isBeforeOrEqual);
-        return isBeforeOrEqual;
+        // Verificar si está dentro del rango
+        const isAfterOrEqualFrom = !filterFromDateStr || invoiceDateStr >= filterFromDateStr;
+        const isBeforeOrEqualTo = !filterUpToDateStr || invoiceDateStr <= filterUpToDateStr;
+        const isInRange = isAfterOrEqualFrom && isBeforeOrEqualTo;
+        
+        console.log("  📄 Factura", inv.correlative, "fecha:", invoiceDateStr, "incluir:", isInRange);
+        return isInRange;
       });
       
       console.log("  ✅ Facturas filtradas:", filteredInvoices.length);
@@ -1198,7 +1204,14 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       { wch: 10 }  // Urgente
     ];
 
-    const dateStr = filterUpToDate ? `_hasta_${format(filterUpToDate, "dd-MM-yyyy")}` : '';
+    let dateStr = '';
+    if (filterFromDate && filterUpToDate) {
+      dateStr = `_desde_${format(filterFromDate, "dd-MM-yyyy")}_hasta_${format(filterUpToDate, "dd-MM-yyyy")}`;
+    } else if (filterFromDate) {
+      dateStr = `_desde_${format(filterFromDate, "dd-MM-yyyy")}`;
+    } else if (filterUpToDate) {
+      dateStr = `_hasta_${format(filterUpToDate, "dd-MM-yyyy")}`;
+    }
     const filename = `cuentas_por_cobrar_totales${dateStr}.xlsx`;
     XLSX.writeFile(wb, filename);
   };
@@ -1241,7 +1254,14 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
       { wch: 50 }  // Productos
     ];
 
-    const dateStr = filterUpToDate ? `_hasta_${format(filterUpToDate, "dd-MM-yyyy")}` : '';
+    let dateStr = '';
+    if (filterFromDate && filterUpToDate) {
+      dateStr = `_desde_${format(filterFromDate, "dd-MM-yyyy")}_hasta_${format(filterUpToDate, "dd-MM-yyyy")}`;
+    } else if (filterFromDate) {
+      dateStr = `_desde_${format(filterFromDate, "dd-MM-yyyy")}`;
+    } else if (filterUpToDate) {
+      dateStr = `_hasta_${format(filterUpToDate, "dd-MM-yyyy")}`;
+    }
     const filename = `cuentas_por_cobrar_detalles${dateStr}.xlsx`;
     XLSX.writeFile(wb, filename);
   };
@@ -1306,9 +1326,14 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-primary">S/ {totalDebt.toFixed(2)}</div>
-                {filterUpToDate && (
+                {(filterFromDate || filterUpToDate) && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Hasta {format(filterUpToDate, "dd/MM/yyyy")}
+                    {filterFromDate && filterUpToDate 
+                      ? `${format(filterFromDate, "dd/MM/yyyy")} - ${format(filterUpToDate, "dd/MM/yyyy")}`
+                      : filterFromDate 
+                      ? `Desde ${format(filterFromDate, "dd/MM/yyyy")}`
+                      : `Hasta ${format(filterUpToDate, "dd/MM/yyyy")}`
+                    }
                   </p>
                 )}
               </CardContent>
@@ -1321,7 +1346,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                 </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{filteredDebtors.length}</div>
-                {filterUpToDate && (
+                {(filterFromDate || filterUpToDate) && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Filtrado por fecha
                   </p>
@@ -1350,6 +1375,42 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
+              </div>
+              
+              {/* Filtro "Desde Fecha" */}
+              <div className="flex gap-2 items-center">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "justify-start text-left font-normal min-w-[200px]",
+                        !filterFromDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {filterFromDate ? `Desde ${format(filterFromDate, "dd/MM/yyyy")}` : "Desde fecha"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={filterFromDate}
+                      onSelect={setFilterFromDate}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {filterFromDate && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFilterFromDate(undefined)}
+                  >
+                    Limpiar
+                  </Button>
+                )}
               </div>
               
               {/* Filtro "Hasta Fecha" */}
