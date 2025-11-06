@@ -1186,7 +1186,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     const dataToExport = filteredDebtors.map(debtor => ({
       'Cliente': debtor.name,
       'ID': debtor.id,
-      'Total Deuda': debtor.totalDebt.toFixed(2),
+      'Total Deuda': Number(debtor.totalDebt.toFixed(2)),
       'Número de Facturas': debtor.invoices.length,
       'Urgente': debtor.urgentCollection ? 'Sí' : 'No'
     }));
@@ -1228,9 +1228,9 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
           'ID Cliente': debtor.id,
           'Correlativo': invoice.correlative,
           'Fecha': invoice.date,
-          'Monto Total': invoice.amount.toFixed(2),
-          'Monto Pagado': invoice.paidAmount ? invoice.paidAmount.toFixed(2) : '0.00',
-          'Monto Pendiente': invoice.remainingAmount.toFixed(2),
+          'Monto Total': Number(invoice.amount.toFixed(2)),
+          'Monto Pagado': Number((invoice.paidAmount || 0).toFixed(2)),
+          'Monto Pendiente': Number(invoice.remainingAmount.toFixed(2)),
           'Tipo': invoice.type || 'N/A',
           'Productos': productsStr || 'Sin detalle'
         });
