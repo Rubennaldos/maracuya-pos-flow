@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   ArrowLeft, Search, Users, DollarSign, MessageCircle, AlertTriangle,
   CheckCircle, Clock, FileText, Receipt, Download, Edit2, Trash2,
-  Calendar as CalendarIcon, Filter, Eye, FileSpreadsheet, Printer
+  Calendar as CalendarIcon, Filter, Eye, FileSpreadsheet, Printer, Copy
 } from "lucide-react";
 import { WhatsAppHelper } from "./WhatsAppHelper";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -2655,14 +2655,27 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
             </Card>
 
             {/* Filtro de búsqueda */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar deudor por nombre..."
-                value={flashSearchTerm}
-                onChange={(e) => setFlashSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar deudor por nombre..."
+                  value={flashSearchTerm}
+                  onChange={(e) => setFlashSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button
+                onClick={() => {
+                  navigator.clipboard.writeText(flashMessageTemplate);
+                  alert("¡Mensaje copiado al portapapeles!");
+                }}
+                variant="outline"
+                size="icon"
+                title="Copiar mensaje de plantilla"
+              >
+                <Copy className="w-4 h-4" />
+              </Button>
             </div>
 
             {/* Lista compacta de deudores */}
