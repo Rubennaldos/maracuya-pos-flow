@@ -1200,8 +1200,14 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
   };
 
   const getPersonalizedMessage = (debtor: any) => {
+    const nameParts = debtor.name.split(" ");
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(" ") || "";
+    
     return flashMessageTemplate
-      .replace("{nombre}", debtor.name.split(" ")[0])
+      .replace("{nombre}", firstName)
+      .replace("{apellido}", lastName)
+      .replace("{id}", debtor.id)
       .replace("{monto}", `S/ ${debtor.totalDebt.toFixed(2)}`);
   };
 
@@ -2638,7 +2644,7 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  Usa <code className="bg-muted px-1 py-0.5 rounded">{'{nombre}'}</code> y <code className="bg-muted px-1 py-0.5 rounded">{'{monto}'}</code> para personalizar
+                  Usa <code className="bg-muted px-1 py-0.5 rounded">{'{nombre}'}</code>, <code className="bg-muted px-1 py-0.5 rounded">{'{apellido}'}</code>, <code className="bg-muted px-1 py-0.5 rounded">{'{id}'}</code> y <code className="bg-muted px-1 py-0.5 rounded">{'{monto}'}</code> para personalizar
                 </div>
                 <textarea
                   className="w-full p-3 border rounded-md min-h-[100px] font-sans"
