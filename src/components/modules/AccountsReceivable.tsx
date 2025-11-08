@@ -1204,11 +1204,23 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     const firstName = nameParts[0];
     const lastName = nameParts.slice(1).join(" ") || "";
     
-    return flashMessageTemplate
+    let message = flashMessageTemplate
       .replace("{nombre}", firstName)
       .replace("{apellido}", lastName)
       .replace("{id}", debtor.id)
       .replace("{monto}", `S/ ${debtor.totalDebt.toFixed(2)}`);
+    
+    // Agregar detalle de consumo
+    if (debtor.invoices && debtor.invoices.length > 0) {
+      message += "\n\n*Detalle de consumo:*\n";
+      debtor.invoices.forEach((inv: any) => {
+        const amount = inv.remainingAmount || inv.amount || 0;
+        const products = Array.isArray(inv.products) ? inv.products.join(", ") : "Sin detalle";
+        message += `\n📅 ${fmtDMY(inv.date)}\n💰 S/ ${amount.toFixed(2)}\n🛒 ${products}\n`;
+      });
+    }
+    
+    return message;
   };
 
   const sendFlashWhatsApp = (debtor: any) => {
