@@ -1199,11 +1199,15 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
     }
   };
 
-  const sendFlashWhatsApp = (debtor: any) => {
-    // Usar la plantilla global y personalizarla para este deudor
-    const personalizedMessage = flashMessageTemplate
+  const getPersonalizedMessage = (debtor: any) => {
+    return flashMessageTemplate
       .replace("{nombre}", debtor.name.split(" ")[0])
       .replace("{monto}", `S/ ${debtor.totalDebt.toFixed(2)}`);
+  };
+
+  const sendFlashWhatsApp = (debtor: any) => {
+    // Usar la plantilla global y personalizarla para este deudor
+    const personalizedMessage = getPersonalizedMessage(debtor);
     const message = encodeURIComponent(personalizedMessage);
     const validPhones = (debtor.customPhones || []).filter((p: string) => p.replace(/\D/g, "").length >= 9);
     
@@ -2732,6 +2736,19 @@ export const AccountsReceivable = ({ onBack }: AccountsReceivableProps) => {
                           title="Generar PDF"
                         >
                           <FileText className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            const personalizedMessage = getPersonalizedMessage(debtor);
+                            navigator.clipboard.writeText(personalizedMessage);
+                            alert("¡Mensaje copiado al portapapeles!");
+                          }}
+                          size="sm"
+                          variant="outline"
+                          className="h-8 w-8 p-0"
+                          title="Copiar mensaje personalizado"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
                         </Button>
                         <Button
                           onClick={() => sendFlashWhatsApp(debtor)}
